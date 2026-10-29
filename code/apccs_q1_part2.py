@@ -1640,3 +1640,438 @@ document.getElementById('spawn-baton').onclick=async()=>{try{document.getElement
         target.write_text(html, encoding="utf-8")
     return {"path": str(target), "bytes": target.stat().st_size,
             "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
+
+
+# Batch 30 (INST-0146..INST-0150): local launcher, Part 2 continuity, CP-150
+# scorecard, RECOVER.md synchronizer and CP-150 checkpoint lock.
+import ast as _b30_ast
+import io as _b30_io
+import re as _b30_re
+import stat as _b30_stat
+import zipfile as _b30_zipfile
+
+B30_CANARY_LINE = "Canary check: M = K -> submarine"
+_B30_HOST = "127.0.0.1"
+_B30_PORT = 8501
+_B30_PAGE = "START_OUR_OWN_SYSTEM.html"
+_B30_LAUNCHER_FILES = ("launch_local_system.py", "START_WINDOWS.bat", "START_MAC_LINUX.sh", "START_TERMUX.sh")
+_B30_MANIFEST = "LAUNCHER_MANIFEST.json"
+_B30_UCLRCDE_INSTRUCTIONS = tuple("INST-%04d" % number for number in range(141, 146))
+_B30_ZIP_NAMES = ("APPCS_MASTER_BUILD.zip", "APCCS_MASTER_BUILD.zip")
+_B30_MAX_RECOVER_BYTES = 1_048_576
+
+# Each APCCS Part 2 instruction and the top-level functions and API routes that
+# carry it in this module. The 45 entries are 101..140 and 146..150;
+# 141..145 are built in the separate uclrcde repository and are never read here.
+PART2_INSTRUCTION_REGISTRY = {
+    101: (("verify_and_import_cp100_core",), ()),
+    102: (("handle_control_panel_api",), ("/api/status", "/api/engines")),
+    103: (("create_local_control_server",), ()),
+    104: (("generate_try_out_control_panel_html",), ()),
+    105: (("create_local_control_server", "handle_control_panel_api"), ("/api/plan", "/api/search", "/api/switch")),
+    106: (("handle_upload_and_dedup_api",), ("/api/upload",)),
+    107: (("handle_potluck_detect_api",), ("/api/potluck",)),
+    108: (("handle_trash_api",), ("/api/trash",)),
+    109: (("handle_privacy_redact_api",), ("/api/redact",)),
+    110: (("generate_try_out_control_panel_html",), ("/api/upload", "/api/potluck", "/api/trash", "/api/redact")),
+    111: (("get_lanes_and_progress_subtabs",), ()),
+    112: (("get_goals_and_notepad_subtabs",), ()),
+    113: (("get_backups_and_alerts_subtabs",), ()),
+    114: (("handle_control_panel_api",), ("/api/subtabs",)),
+    115: (("generate_try_out_control_panel_html",), ()),
+    116: (("record_ui_click_command",), ("/api/click",)),
+    117: (("reverse_ui_click_command",), ("/api/reverse_click",)),
+    118: (("set_operating_mode",), ("/api/mode",)),
+    119: (("handle_control_panel_api",), ("/api/guidance", "/api/help_inquiry")),
+    120: (("generate_try_out_control_panel_html",), ()),
+    121: (("handle_control_panel_api",), ("/api/tabs/register", "/api/tabs/burner", "/api/tabs/promote",
+                                        "/api/tabs/handoff", "/api/tabs/guard")),
+    122: (("handle_control_panel_api",), ("/api/cache/flush", "/api/chat/page")),
+    123: (("handle_control_panel_api",), ("/api/ledger", "/api/quote_locate")),
+    124: (("generate_try_out_control_panel_html",), ()),
+    125: (("handle_control_panel_api",), ()),
+    126: (("build_five_level_schematic",), ()),
+    127: (("explain_code_symbol_plain_english",), ()),
+    128: (("generate_program_schema_matrix",), ()),
+    129: (("handle_control_panel_api",), ("/api/schematic", "/api/tutor")),
+    130: (("generate_try_out_control_panel_html",), ()),
+    131: (("handle_control_panel_api",), ("/api/hardware",)),
+    132: (("handle_control_panel_api",), ("/api/cleaner/preview",)),
+    133: (("execute_approved_green_cleanup",), ()),
+    134: (("handle_control_panel_api",), ("/api/shrink/cas", "/api/shrink/featherweight",
+                                        "/api/shrink/vacuum", "/api/shrink/zlib")),
+    135: (("generate_try_out_control_panel_html",), ()),
+    136: (("provision_default_verification_rules",), ()),
+    137: (("run_automated_staging_audit",), ()),
+    138: (("build_compact_repair_prompt",), ()),
+    139: (("handle_control_panel_api",), ("/api/canary/probe", "/api/baton/spawn")),
+    140: (("handle_control_panel_api", "generate_try_out_control_panel_html"), ("/api/staging/audit",)),
+    146: (("generate_local_startup_scripts",), ()),
+    147: (("verify_101_to_150_continuity",), ()),
+    148: (("generate_cp150_scorecard",), ()),
+    149: (("sync_recover_md_state",), ()),
+    150: (("lock_checkpoint_cp150",), ()),
+}
+
+
+def _b30_sha256_file(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _b30_prepare_vault(vault_dir):
+    root = _vault_root(vault_dir)
+    if root.exists() and not root.is_dir():
+        raise ControlPanelError("Vault path exists and is not a directory")
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _b30_write_atomic(path, data):
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_symlink():
+        raise ControlPanelError("Refusing to write through a symlink: " + target.name)
+    raw = data.encode("utf-8") if isinstance(data, str) else bytes(data)
+    temporary = target.with_name("." + target.name + ".tmp")
+    temporary.write_bytes(raw)
+    os.replace(temporary, target)
+    return hashlib.sha256(raw).hexdigest()
+
+
+_B30_LAUNCHER_PY = '''"""Start the APCCS local control panel on 127.0.0.1:8501 and open START_OUR_OWN_SYSTEM.html."""
+
+import argparse
+import os
+from pathlib import Path
+import sys
+import threading
+from urllib.request import urlopen
+import webbrowser
+
+HERE = Path(__file__).resolve().parent
+CODE_DIR = Path(os.environ.get("APCCS_CODE_DIR", __CODE_DIR__))
+HOST = "127.0.0.1"
+PORT = 8501
+PAGE = HERE / "START_OUR_OWN_SYSTEM.html"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Start the APCCS local control panel.")
+    parser.add_argument("--port", type=int, default=PORT, help="local port (default 8501; 0 picks a free port)")
+    parser.add_argument("--no-browser", action="store_true", help="do not open a browser window")
+    parser.add_argument("--self-test", action="store_true", help="start, fetch the page once, then stop")
+    args = parser.parse_args(argv)
+    if not (CODE_DIR / "apccs_q1_part2.py").is_file():
+        print("APCCS code folder not found: " + str(CODE_DIR), file=sys.stderr)
+        return 2
+    sys.path.insert(0, str(CODE_DIR))
+    import apccs_q1_part2 as part2
+    if not PAGE.is_file():
+        part2.generate_try_out_control_panel_html(PAGE)
+    server = part2.create_local_control_server(HOST, args.port, vault_dir=HERE, html_path=PAGE)
+    url = "http://%s:%d/START_OUR_OWN_SYSTEM.html" % (HOST, server.server_address[1])
+    if args.self_test:
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            with urlopen(url, timeout=10) as response:
+                page = response.read().decode("utf-8")
+        finally:
+            server.shutdown()
+            server.server_close()
+        if "APCCS Local Control Panel" not in page:
+            print("SELF-TEST FAILED: control panel page not served", file=sys.stderr)
+            return 1
+        print("SELF-TEST OK " + url)
+        return 0
+    print("APCCS control panel running at " + url + " (press Ctrl+C to stop)")
+    if not args.no_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+_B30_WINDOWS_BAT = (
+    "@echo off\r\n"
+    "rem Start the APCCS local control panel on 127.0.0.1:8501.\r\n"
+    "cd /d \"%~dp0\"\r\n"
+    "where py >nul 2>nul && (py -3 launch_local_system.py %*) || (python launch_local_system.py %*)\r\n"
+)
+
+_B30_MAC_LINUX_SH = (
+    "#!/bin/sh\n"
+    "# Start the APCCS local control panel on 127.0.0.1:8501.\n"
+    "cd \"$(dirname \"$0\")\" || exit 1\n"
+    "exec python3 launch_local_system.py \"$@\"\n"
+)
+
+_B30_TERMUX_SH = (
+    "#!/data/data/com.termux/files/usr/bin/sh\n"
+    "# Start the APCCS local control panel on 127.0.0.1:8501 inside Termux.\n"
+    "cd \"$(dirname \"$0\")\" || exit 1\n"
+    "if command -v termux-open-url >/dev/null 2>&1; then\n"
+    "  (sleep 2; termux-open-url http://127.0.0.1:8501/START_OUR_OWN_SYSTEM.html) &\n"
+    "fi\n"
+    "exec python launch_local_system.py --no-browser \"$@\"\n"
+)
+
+
+def generate_local_startup_scripts(vault_dir):
+    """INST-0146: write one-click launchers for 127.0.0.1:8501 plus a SHA-256 manifest."""
+    root = _b30_prepare_vault(vault_dir)
+    code_dir = str(Path(__file__).resolve().parent)
+    contents = {
+        "launch_local_system.py": _B30_LAUNCHER_PY.replace("__CODE_DIR__", repr(code_dir)),
+        "START_WINDOWS.bat": _B30_WINDOWS_BAT,
+        "START_MAC_LINUX.sh": _B30_MAC_LINUX_SH,
+        "START_TERMUX.sh": _B30_TERMUX_SH,
+    }
+    compile(contents["launch_local_system.py"], "launch_local_system.py", "exec")
+    hashes = {}
+    for name in _B30_LAUNCHER_FILES:
+        target = root / name
+        hashes[name] = _b30_write_atomic(target, contents[name])
+        if name.endswith((".sh", ".py")):
+            mode = target.stat().st_mode
+            target.chmod(mode | _b30_stat.S_IXUSR | _b30_stat.S_IXGRP | _b30_stat.S_IXOTH)
+    manifest = {"host": _B30_HOST, "port": _B30_PORT, "page": _B30_PAGE, "algorithm": "SHA-256",
+                "files": hashes}
+    manifest_sha = _b30_write_atomic(root / _B30_MANIFEST, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    return {"status": "GREEN", "vault": str(root), "files": hashes, "manifest": str(root / _B30_MANIFEST),
+            "manifest_sha256": manifest_sha, "url": "http://%s:%d/%s" % (_B30_HOST, _B30_PORT, _B30_PAGE)}
+
+
+def verify_101_to_150_continuity(part2_source_text):
+    """INST-0147: verify the 45 APCCS Part 2 instructions are still present in the source."""
+    if not isinstance(part2_source_text, str) or not part2_source_text.strip():
+        raise ControlPanelError("part2_source_text must be non-empty Python source text")
+    try:
+        tree = _b30_ast.parse(part2_source_text)
+    except SyntaxError as error:
+        raise ControlPanelError("Part 2 source does not parse: line %s" % error.lineno) from error
+    defined = {}
+    for node in tree.body:
+        if isinstance(node, (_b30_ast.FunctionDef, _b30_ast.AsyncFunctionDef, _b30_ast.ClassDef)):
+            defined[node.name] = defined.get(node.name, 0) + 1
+    constants = {node.value for node in _b30_ast.walk(tree)
+                 if isinstance(node, _b30_ast.Constant) and isinstance(node.value, str)}
+    verified, missing, dropped = [], [], set()
+    for number in sorted(PART2_INSTRUCTION_REGISTRY):
+        symbols, routes = PART2_INSTRUCTION_REGISTRY[number]
+        absent_symbols = [name for name in symbols if name not in defined]
+        absent_routes = [route for route in routes if route not in constants]
+        marker = "INST-%04d" % number
+        if absent_symbols or absent_routes:
+            missing.append({"instruction": marker, "missing_symbols": absent_symbols, "missing_routes": absent_routes})
+            dropped.update(absent_symbols)
+        else:
+            verified.append(marker)
+    expected = len(PART2_INSTRUCTION_REGISTRY)
+    return {"passed": not missing and len(verified) == expected, "expected_count": expected,
+            "verified_count": len(verified), "verified": verified, "missing": missing,
+            "dropped_functions": sorted(dropped), "top_level_symbols": len(defined),
+            "built_in_uclrcde": list(_B30_UCLRCDE_INSTRUCTIONS),
+            "uclrcde_note": "INST-0141..INST-0145 are built in uclrcde; APCCS does not import or read uclrcde code."}
+
+
+def _b30_part2_evidence():
+    source_path = Path(__file__).resolve()
+    continuity = verify_101_to_150_continuity(source_path.read_text(encoding="utf-8"))
+    core_path = _core_path()
+    core_sha = _b30_sha256_file(core_path)
+    return {"core_path": core_path, "core_sha256": core_sha, "core_ok": core_sha == CP100_CORE_SHA256,
+            "part2_path": source_path, "part2_sha256": _b30_sha256_file(source_path), "continuity": continuity}
+
+
+def generate_cp150_scorecard(vault_dir):
+    """INST-0148: write a plain-English scorecard for instruction numbers 1..150."""
+    root = _b30_prepare_vault(vault_dir)
+    evidence = _b30_part2_evidence()
+    continuity = evidence["continuity"]
+    core_count = 100 if evidence["core_ok"] else 0
+    part2_count = continuity["verified_count"]
+    green = evidence["core_ok"] and continuity["passed"]
+    lines = [
+        "APCCS owner scorecard: Checkpoint CP-150 (instruction numbers 1 to 150 of 1,000)",
+        "",
+        "Overall: " + ("GREEN - everything checked out." if green else "RED - something needs attention (see below)."),
+        "",
+        "1. Frozen core, instructions 1 to 100: " + (
+            "verified. The fingerprint matches CP-100." if evidence["core_ok"]
+            else "NOT verified. The core file's fingerprint does not match CP-100."),
+        "   Fingerprint: " + evidence["core_sha256"],
+        "2. APCCS Part 2, instructions 101 to 140 and 146 to 150: %d of %d verified." % (
+            part2_count, continuity["expected_count"]),
+    ]
+    for item in continuity["missing"]:
+        lines.append("   Missing: %s (functions: %s; routes: %s)" % (
+            item["instruction"], ", ".join(item["missing_symbols"]) or "none",
+            ", ".join(item["missing_routes"]) or "none"))
+    lines += [
+        "3. Instructions 141 to 145: built in uclrcde (the separate legal repository). "
+        "APCCS does not import or read uclrcde code, so they are listed here, not checked.",
+        "",
+        "APCCS-built instructions verified: %d of 145." % (core_count + part2_count),
+        "Instructions listed as built in uclrcde: 5.",
+        "Instruction numbers covered: 1 to 150.",
+        "Canary: " + B30_CANARY_LINE,
+    ]
+    target = root / "audit" / "OWNER_SCORECARD_CP150.txt"
+    digest = _b30_write_atomic(target, "\n".join(lines) + "\n")
+    return {"status": "GREEN" if green else "RED", "path": str(target), "sha256": digest,
+            "core_verified": core_count, "part2_verified": part2_count,
+            "apccs_built_verified": core_count + part2_count, "apccs_built_expected": 145,
+            "built_in_uclrcde": list(_B30_UCLRCDE_INSTRUCTIONS), "instruction_numbers": "1..150",
+            "missing": continuity["missing"]}
+
+
+_B30_RECOVER_BEGIN = "<!-- APCCS-RECOVER-STATE:BEGIN -->"
+_B30_RECOVER_END = "<!-- APCCS-RECOVER-STATE:END -->"
+_B30_CANARY_PATTERN = _b30_re.compile(r"Canary check: [A-Z] = [A-Z] -> [a-z]+")
+_B30_INST_PATTERN = _b30_re.compile(r"INST-(\d{4})")
+
+
+def _b30_whole_number(value, label):
+    if type(value) is not int or not 0 <= value <= 1000:
+        raise ControlPanelError(label + " must be a whole number from 0 to 1000")
+    return value
+
+
+def _b30_relabel_pending(text, completed, accepted):
+    """Relabel PENDING on lines whose instruction numbers are all already completed."""
+    fixed = 0
+    lines = []
+    for line in text.split("\n"):
+        numbers = [int(value) for value in _B30_INST_PATTERN.findall(line)]
+        if "PENDING" in line and numbers and max(numbers) <= completed:
+            fixed += line.count("PENDING")
+            line = line.replace("PENDING", "ACCEPTED" if max(numbers) <= accepted else "COMPLETED")
+        lines.append(line)
+    return "\n".join(lines), fixed
+
+
+def sync_recover_md_state(vault_dir, completed_num, accepted_num, active_canary):
+    """INST-0149: keep RECOVER.md in step with progress and clear stale PENDING labels."""
+    completed = _b30_whole_number(completed_num, "completed_num")
+    accepted = _b30_whole_number(accepted_num, "accepted_num")
+    if accepted > completed:
+        raise ControlPanelError("accepted_num cannot be larger than completed_num")
+    if not isinstance(active_canary, str) or not _B30_CANARY_PATTERN.fullmatch(active_canary.strip()):
+        raise ControlPanelError("active_canary must look like 'Canary check: M = K -> submarine'")
+    canary = active_canary.strip()
+    root = _b30_prepare_vault(vault_dir)
+    target = root / "RECOVER.md"
+    existing = ""
+    if target.is_symlink():
+        raise ControlPanelError("RECOVER.md cannot be a symlink")
+    if target.exists():
+        raw = target.read_bytes()
+        if len(raw) > _B30_MAX_RECOVER_BYTES:
+            raise ControlPanelError("RECOVER.md is larger than 1 MiB")
+        try:
+            existing = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ControlPanelError("RECOVER.md must be UTF-8 text") from error
+    if _B30_RECOVER_BEGIN in existing and _B30_RECOVER_END in existing:
+        before, rest = existing.split(_B30_RECOVER_BEGIN, 1)
+        after = rest.split(_B30_RECOVER_END, 1)[1]
+    else:
+        before, after = ("# APCCS recovery state\n\n", "\n") if not existing else (existing.rstrip("\n") + "\n\n", "\n")
+    before, fixed_before = _b30_relabel_pending(before, completed, accepted)
+    after, fixed_after = _b30_relabel_pending(after, completed, accepted)
+    fixed = fixed_before + fixed_after
+    awaiting = "none" if accepted == completed else "%d to %d" % (accepted + 1, completed)
+    block = "\n".join([
+        _B30_RECOVER_BEGIN,
+        "- Completed instructions: %d of 1,000" % completed,
+        "- Accepted instructions: %d of 1,000" % accepted,
+        "- Completed, awaiting acceptance: " + awaiting,
+        "- Active canary: " + canary,
+        _B30_RECOVER_END,
+    ])
+    text = before + block + after
+    if _b30_relabel_pending(text, completed, accepted)[1]:
+        raise ControlPanelError("Stale PENDING labels remain after synchronization")
+    digest = _b30_write_atomic(target, text)
+    return {"status": "GREEN", "path": str(target), "sha256": digest, "completed": completed,
+            "accepted": accepted, "awaiting_acceptance": awaiting, "active_canary": canary,
+            "stale_pending_fixed": fixed, "stale_pending_remaining": 0}
+
+
+def _b30_zip_bytes(members):
+    buffer = _b30_io.BytesIO()
+    with _b30_zipfile.ZipFile(buffer, "w", compression=_b30_zipfile.ZIP_DEFLATED) as archive:
+        for name in sorted(members):
+            info = _b30_zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = _b30_zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, members[name])
+    return buffer.getvalue()
+
+
+def lock_checkpoint_cp150(vault_dir):
+    """INST-0150: seal audit/CP-150_LOCK.json and package both master build zips."""
+    root = _b30_prepare_vault(vault_dir)
+    evidence = _b30_part2_evidence()
+    if not evidence["core_ok"]:
+        raise ControlPanelError("CP-150 lock refused: frozen CP-100 core fingerprint mismatch")
+    continuity = evidence["continuity"]
+    if not continuity["passed"]:
+        raise ControlPanelError("CP-150 lock refused: Part 2 instructions missing: " +
+                                ", ".join(item["instruction"] for item in continuity["missing"]))
+    page = root / _B30_PAGE
+    generate_try_out_control_panel_html(page)
+    html = page.read_text(encoding="utf-8")
+    for token in ("APCCS Local Control Panel", "id=\"staging-inspector\"", "/api/status"):
+        if token not in html:
+            raise ControlPanelError("CP-150 lock refused: Try-Out UI page is incomplete")
+    launchers = generate_local_startup_scripts(root)
+    scorecard = generate_cp150_scorecard(root)
+    if scorecard["status"] != "GREEN":
+        raise ControlPanelError("CP-150 lock refused: scorecard is not GREEN")
+    code_dir = evidence["part2_path"].parent
+    members = {
+        "code/apccs_core.py": evidence["core_path"].read_bytes(),
+        "code/apccs_q1_part2.py": evidence["part2_path"].read_bytes(),
+        _B30_PAGE: page.read_bytes(),
+        _B30_MANIFEST: (root / _B30_MANIFEST).read_bytes(),
+        "audit/OWNER_SCORECARD_CP150.txt": Path(scorecard["path"]).read_bytes(),
+    }
+    for name in ("test_apccs_core.py", "test_apccs_q1_part2.py"):
+        if (code_dir / name).is_file():
+            members["code/" + name] = (code_dir / name).read_bytes()
+    for name in _B30_LAUNCHER_FILES:
+        members[name] = (root / name).read_bytes()
+    recover = root / "RECOVER.md"
+    if recover.is_file() and not recover.is_symlink():
+        members["RECOVER.md"] = recover.read_bytes()
+    lock = {
+        "checkpoint": "CP-150",
+        "progress": "150 of 1,000",
+        "canary": B30_CANARY_LINE,
+        "apccs_built": {"count": 100 + continuity["verified_count"], "ranges": ["1..140", "146..150"],
+                        "core_1_to_100_sha256": evidence["core_sha256"],
+                        "part2_verified": continuity["verified"]},
+        "built_in_uclrcde": {"instructions": list(_B30_UCLRCDE_INSTRUCTIONS), "status": "built in uclrcde",
+                             "note": "Recorded only; APCCS does not import or read uclrcde code."},
+        "try_out_ui_package": sorted([_B30_PAGE, _B30_MANIFEST] + list(_B30_LAUNCHER_FILES)),
+        "files_sha256": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(members.items())},
+    }
+    lock_text = json.dumps(lock, indent=2, sort_keys=True) + "\n"
+    lock_path = root / "audit" / "CP-150_LOCK.json"
+    lock_sha = _b30_write_atomic(lock_path, lock_text)
+    members["audit/CP-150_LOCK.json"] = lock_text.encode("utf-8")
+    archive = _b30_zip_bytes(members)
+    zips = {name: _b30_write_atomic(root / name, archive) for name in _B30_ZIP_NAMES}
+    return {"status": "LOCKED", "checkpoint": "CP-150", "lock_path": str(lock_path), "lock_sha256": lock_sha,
+            "zips": zips, "members": sorted(members), "apccs_built_verified": lock["apccs_built"]["count"],
+            "built_in_uclrcde": list(_B30_UCLRCDE_INSTRUCTIONS), "launchers": launchers["files"]}
