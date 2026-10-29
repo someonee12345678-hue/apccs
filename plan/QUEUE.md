@@ -158,3 +158,14 @@ Target: `code/apccs_q1_part3.py`, tests in `code/test_apccs_q1_part3.py`.
   - INST-0193: [UNIFIED_CP195_OWNER_SCORECARD] Build generate_cp195_scorecard(vault_dir) emitting `audit/OWNER_SCORECARD_CP195.txt` covering all `195 of 1,000` instructions across Core, Part 2, and Part 3.
   - INST-0194: [ZERO_LAG_PASS_TESTS_AND_RECOVER_COMPACTOR] Build synchronize_all_pass_tests_and_recover(vault_dir, completed_num=195, accepted_num=190, canary_line="Canary check: T = W -> compass") ensuring zero stale `PENDING` labels remain in `RECOVER.md` or nested `pass_tests*.json` objects.
   - INST-0195: [MILESTONE_CP195_CHECKPOINT_LOCK] Build lock_checkpoint_cp195(vault_dir) sealing `audit/CP-195_LOCK.json` (`195 of 1,000` instructions verified) into both `APPCS_MASTER_BUILD.zip` and `APCCS_MASTER_BUILD.zip`.
+
+## Owner decision, 2026-10-29: legal-engine batches move to the legal engine's own repository
+
+Added by Claude on 2026-10-29. Basis: Constitution Amendment 1 and Register decisions D-005 and D-006, approved by the owner on 2026-10-29 (Drive › UNIFIED SOFTWARE BUILDER — MASTER PROJECT › "00A — CONSTITUTION AMENDMENT 1" and "01A — REGISTER UPDATE 1").
+
+The Canadian legal research engine (UCLRCDE) is a separate project. Its work is built in its own private repository, `someonee12345678-hue/uclrcde`, not in APCCS.
+
+- **Batch 29 (instructions 141–145): NOT ready.** Waiting for the architect's re-plan (Drive file `APCCS_CATALOG_NEXT_LEGAL_SPLIT`, requested in `GEMINI_TASK_LEGAL_SPLIT`) and for the `uclrcde` repository to be set up for the builder (see `PROJECTS.md`).
+- **Batch 35 (instructions 171–175): NOT ready.** Same reason.
+- **Batch 36 (instructions 176–180): NOT ready.** Same reason.
+- Batches are still built strictly in order, so the builder stops at Batch 29 until its re-planned wording is added below and its repository is ready. It doesn't skip ahead.
