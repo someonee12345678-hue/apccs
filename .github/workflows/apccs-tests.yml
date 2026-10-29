@@ -1,0 +1,38 @@
+# APCCS tests: runs every test file on GitHub's servers for each pull request
+# and each change to main. It costs no phone battery.
+#
+# Safety: this job runs code that a builder (Codex or another AI) wrote, so it
+# gets read-only access and no secrets. Nothing here can post, push or merge.
+name: APCCS tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apccs-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Frozen files and all tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11 (the oldest version APCCS supports)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run frozen-file checks and every test file
+        run: python3 tools/run_all_tests.py
