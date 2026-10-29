@@ -1,14 +1,16 @@
-# APCCS guard: checks WHICH files a pull request changes, using the rules
-# stored on main. A builder cannot switch this check off from inside its own
-# pull request, because GitHub always runs this file as it is on main.
+# APCCS guard: checks WHAT a pull request changes, using the rules stored on
+# main. A builder cannot switch this check off from inside its own pull
+# request, because GitHub always runs this file as it is on main.
 #
 # Rules (the same ones listed in AGENTS.md):
-#   - Never change: .github/, tools/, contracts/, AGENTS.md, CLAUDE.md
-#   - code/ is append-only: new files are fine; editing, renaming or
-#     deleting an existing code file is not.
+#   - Never change: .github/, tools/, AGENTS.md, CLAUDE.md,
+#     BUILDER_RUNBOOK.md, code/apccs_core.py, code/test_apccs_core.py
+#   - Other files in code/ and plan/ are append-only: the old file must still
+#     be the exact beginning of the new file. Nothing may be deleted or renamed.
+#   - Test files may grow anywhere, but no existing test may disappear.
 #
-# Safety: this job never runs the pull request's code. It only reads the list
-# of changed file names. It has read-only access and uses no secrets.
+# Safety: this job never runs the pull request's code. It only reads file
+# names and file contents with git. It has read-only access and no secrets.
 name: APCCS guard
 
 on:
@@ -33,40 +35,74 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Compare the pull request's changed files against the rules
+      - name: Fetch the pull request's commits (as data only)
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           git fetch --no-tags --quiet origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
-          start="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-          problems=""
-          while IFS=$'\t' read -r status path; do
-            [ -z "${path:-}" ] && continue
-            case "$path" in
-              .github/*|tools/*|contracts/*|AGENTS.md|CLAUDE.md)
-                problems="${problems}| \`${path}\` | protected file (${status}) |"$'\n' ;;
-              code/*)
-                if [ "$status" != "A" ]; then
-                  problems="${problems}| \`${path}\` | existing code file changed (${status}); code/ is add-only |"$'\n'
-                fi ;;
-            esac
-          done < <(git diff --no-renames --name-status "$start" "$HEAD_SHA")
 
-          {
-            echo "## APCCS guard"
-            echo
-            if [ -z "$problems" ]; then
-              echo "**Result: SAFE TO MERGE.** No protected files were touched."
-            else
-              echo "**Result: BLOCKED.** This pull request changes files that need your explicit OK."
-              echo
-              echo "| File | Why it is blocked |"
-              echo "|---|---|"
-              printf '%s' "$problems"
-            fi
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Compare the pull request against the rules
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 -I - <<'PY'
+          import os, re, subprocess, sys
 
-          [ -z "$problems" ]
+          base_sha, head_sha = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]
+
+          def git(*args):
+              return subprocess.run(["git", *args], capture_output=True, check=True).stdout
+
+          start = git("merge-base", base_sha, head_sha).decode().strip()
+          changes = git("diff", "--no-renames", "--name-status", "-z", start, head_sha).split(b"\0")
+          pairs = []
+          i = 0
+          while i + 1 < len(changes):
+              status, path = changes[i].decode(), changes[i + 1].decode("utf-8", "replace")
+              pairs.append((status, path))
+              i += 2
+
+          PROTECTED_DIRS = (".github/", "tools/")
+          PROTECTED_FILES = {"AGENTS.md", "CLAUDE.md", "BUILDER_RUNBOOK.md",
+                             "code/apccs_core.py", "code/test_apccs_core.py"}
+          APPEND_ONLY_DIRS = ("code/", "plan/")
+          TEST_NAME = re.compile(rb"^\s*def (test_\w+)\s*\(", re.M)
+
+          problems = []
+          for status, path in pairs:
+              if path.startswith(PROTECTED_DIRS) or path in PROTECTED_FILES:
+                  problems.append((path, f"protected file ({status})"))
+                  continue
+              if not path.startswith(APPEND_ONLY_DIRS):
+                  continue
+              if status == "A":
+                  continue
+              if status != "M":
+                  problems.append((path, f"existing file removed or replaced ({status})"))
+                  continue
+              old = git("show", f"{start}:{path}")
+              new = git("show", f"{head_sha}:{path}")
+              name = path.rsplit("/", 1)[-1]
+              if path.startswith("code/") and name.startswith("test_"):
+                  missing = sorted(set(TEST_NAME.findall(old)) - set(TEST_NAME.findall(new)))
+                  if missing:
+                      shown = ", ".join(m.decode() for m in missing[:5])
+                      problems.append((path, f"existing tests removed: {shown}"))
+              elif not new.startswith(old):
+                  problems.append((path, "existing text changed; this file may only grow at the end"))
+
+          lines = ["## APCCS guard", ""]
+          if problems:
+              lines += ["**Result: BLOCKED.** This pull request changes things that need your explicit OK.", "",
+                        "| File | Why it is blocked |", "|---|---|"]
+              lines += [f"| `{p}` | {why} |" for p, why in problems]
+          else:
+              lines += ["**Result: SAFE TO MERGE.** No protected file was touched, existing code only grew, and no test was removed."]
+          text = "\n".join(lines) + "\n"
+          print(text)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write(text)
+          sys.exit(1 if problems else 0)
+          PY
