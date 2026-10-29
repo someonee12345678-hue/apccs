@@ -724,3 +724,813 @@ def run_part3_contract_gate_check(vault_dir, batch_num):
     if passed:
         _b31_write_atomic(prior_source_path, module_source)
     return dict(report, report_path=str(report_path), report_sha256=report_sha)
+
+
+# Batch 32 (INST-0156..INST-0160): private repository export and hygiene gate,
+# locked-plan PR packet compiler, five-gate CI runner, plain-English PR
+# scorecard and the GitHub Actions gate workflow emitter with /api/ci/preview.
+import argparse
+import subprocess
+import time
+from urllib.parse import urlsplit
+import zipfile
+
+B32_CANARY_LINE = "Canary check: T = Y -> lighthouse"
+
+PART3_CONTRACT_SPECS[32] = (
+    {"instruction": "INST-0156", "function": "export_verified_git_tree",
+     "parameters": ["vault_dir", "repo_dir", "repo_visibility_meta"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0157", "function": "compile_next_batch_pr_packet",
+     "parameters": ["db_path", "vault_dir", "project_id", "batch_num"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0158", "function": "execute_ci_gate_suite",
+     "parameters": ["repo_dir", "target_module", "target_test", "contract_path"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0159", "function": "format_pr_gate_comment",
+     "parameters": ["ci_result_dict"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0160", "function": "emit_github_actions_gate_yaml",
+     "parameters": ["repo_dir"], "min_assertions": 4, "min_negative_tests": 1},
+)
+
+CP100_TEST_CORE_SHA256 = "fb5a99dfb37b5b499b08775ab8c8ccb00871c60ffde2630528c852d961f7fd93"
+
+_B32_MASTER_ZIP = "APCCS_MASTER_BUILD.zip"
+_B32_LOCK_MEMBER = "audit/CP-150_LOCK.json"
+_B32_MAX_MEMBERS = 500
+_B32_MAX_EXPORT_BYTES = 64 * 1024 * 1024
+_B32_VISIBILITY = ("private", "public")
+_B32_KEYSTORE_SUFFIXES = (".jks", ".keystore", ".jceks", ".p12", ".pfx")
+_B32_KEYSTORE_MAGIC = (b"\xfe\xed\xfe\xed", b"\xce\xce\xce\xce")
+_B32_PRIVATE_KEY_PATTERN = r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----"
+_B32_REPO_NAME_PATTERN = r"[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}"
+_B32_CREDENTIAL_SCAN_CACHE = {}
+
+
+def _b32_new_directory(repo_dir, label):
+    """Return an absolute, symlink-free folder path that is missing or holds at most `.git`."""
+    if isinstance(repo_dir, bool) or not isinstance(repo_dir, (str, os.PathLike)) or not str(repo_dir).strip():
+        raise Part3Error(label + " path is required")
+    target = Path(os.path.abspath(os.fspath(repo_dir)))
+    for part in [target] + list(target.parents):
+        if part.is_symlink():
+            raise Part3Error(label + " path cannot contain symlinks")
+    if target.exists():
+        if not target.is_dir():
+            raise Part3Error(label + " exists and is not a folder")
+        leftovers = sorted(entry.name for entry in target.iterdir() if entry.name != ".git")
+        if leftovers:
+            raise Part3Error(label + " is not clean; it already holds: " + ", ".join(leftovers[:5]))
+    return target
+
+
+def _b32_visibility(repo_visibility_meta):
+    if not isinstance(repo_visibility_meta, dict):
+        raise Part3Error("Repository visibility details must be an object with 'expected' and 'actual'")
+    unknown = set(repo_visibility_meta) - {"expected", "actual", "repository"}
+    if unknown:
+        raise Part3Error("Unknown visibility fields: " + ", ".join(sorted(map(str, unknown))))
+    values = {}
+    for key in ("expected", "actual"):
+        value = repo_visibility_meta.get(key)
+        if not isinstance(value, str) or value.lower() not in _B32_VISIBILITY:
+            raise Part3Error("Visibility '%s' must be 'private' or 'public'" % key)
+        values[key] = value.lower()
+    repository = repo_visibility_meta.get("repository")
+    if repository is not None and (not isinstance(repository, str) or
+                                   not re.fullmatch(_B32_REPO_NAME_PATTERN, repository)):
+        raise Part3Error("Repository must be written owner/name")
+    values["repository"] = repository
+    return values
+
+
+def _b32_read_master_build(root):
+    """Open the vault's master build zip and verify every member against the CP-150 lock inside it."""
+    archive_path = root / _B32_MASTER_ZIP
+    if archive_path.is_symlink() or not archive_path.is_file():
+        raise Part3Error("No verified master build: " + _B32_MASTER_ZIP + " is missing from the vault")
+    try:
+        archive = zipfile.ZipFile(archive_path)
+    except zipfile.BadZipFile as error:
+        raise Part3Error("Master build is not a readable zip file") from error
+    members = {}
+    with archive:
+        infos = archive.infolist()
+        if len(infos) > _B32_MAX_MEMBERS:
+            raise Part3Error("Master build has too many files")
+        total = 0
+        for info in infos:
+            if info.is_dir():
+                continue
+            name = _b31_relative_path(info.filename, "Master build member")
+            if name in members:
+                raise Part3Error("Master build lists a file twice: " + name)
+            total += info.file_size
+            if total > _B32_MAX_EXPORT_BYTES:
+                raise Part3Error("Master build is larger than 64 MiB")
+            members[name] = archive.read(info)
+    if _B32_LOCK_MEMBER not in members:
+        raise Part3Error("Master build has no CP-150 lock")
+    try:
+        lock = json.loads(members[_B32_LOCK_MEMBER].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Part3Error("Master build lock is not valid UTF-8 JSON") from error
+    digests = lock.get("files_sha256") if isinstance(lock, dict) else None
+    if not isinstance(lock, dict) or lock.get("checkpoint") != "CP-150" or not isinstance(digests, dict):
+        raise Part3Error("Master build lock does not describe checkpoint CP-150")
+    listed = set(digests)
+    present = set(members) - {_B32_LOCK_MEMBER}
+    if listed != present:
+        raise Part3Error("Master build files do not match its lock (extra or missing: %s)" %
+                         ", ".join(sorted(listed ^ present)[:5]))
+    for name in sorted(present):
+        if _b31_sha256_bytes(members[name]) != digests[name]:
+            raise Part3Error("Master build file changed after locking: " + name)
+    for name in ("code/apccs_core.py", "code/apccs_q1_part2.py"):
+        if digests.get(name) != FROZEN_CP150_FILES[name]:
+            raise Part3Error("Master build holds an unverified copy of " + name)
+    outside_lock = root / "audit" / "CP-150_LOCK.json"
+    if outside_lock.is_file() and not outside_lock.is_symlink():
+        if outside_lock.read_bytes() != members[_B32_LOCK_MEMBER]:
+            raise Part3Error("Master build lock differs from the vault's audit/CP-150_LOCK.json")
+    return members
+
+
+def _b32_secret_findings(core, name, data):
+    """Find credentials (INST-0015), private keys and keystores in one file; values are never echoed."""
+    findings = []
+    lowered = name.lower()
+    if lowered.endswith(_B32_KEYSTORE_SUFFIXES) or data[:4] in _B32_KEYSTORE_MAGIC:
+        findings.append({"path": name, "code": "KEYSTORE_FILE"})
+    text = data.decode("utf-8", errors="replace")
+    if re.search(_B32_PRIVATE_KEY_PATTERN, text):
+        findings.append({"path": name, "code": "PRIVATE_KEY_BLOCK"})
+    if b"\0" not in data and len(data) <= 4 * 1024 * 1024:
+        key = _b31_sha256_bytes(data)
+        with _BRIDGE_LOCK:
+            codes = _B32_CREDENTIAL_SCAN_CACHE.get(key)
+        if codes is None:
+            scan = core.scan_destructive_ops(text)
+            codes = tuple(sorted({item["code"] for item in scan["findings"]
+                                  if str(item.get("code", "")).startswith("CREDENTIAL_")}))
+            with _BRIDGE_LOCK:
+                if len(_B32_CREDENTIAL_SCAN_CACHE) >= 256:
+                    _B32_CREDENTIAL_SCAN_CACHE.clear()
+                _B32_CREDENTIAL_SCAN_CACHE[key] = codes
+        findings.extend({"path": name, "code": code} for code in codes)
+    return findings
+
+
+def export_verified_git_tree(vault_dir, repo_dir, repo_visibility_meta):
+    """INST-0156: unpack the verified master build into a clean Git folder, or flag RED.
+
+    The vault's `APCCS_MASTER_BUILD.zip` must match the CP-150 lock inside it
+    (and the vault's own lock, if present), with the frozen core and Part 2 at
+    their locked fingerprints. `repo_visibility_meta` is
+    `{"expected": "private", "actual": "private"}` (plus an optional
+    `"repository": "owner/name"`). The result is RED, and nothing is written,
+    when the expected and actual visibility differ, when any file holds a
+    credential (INST-0015 scan), a private key block or a keystore (`.jks` and
+    similar), or, for a public repository, when the INST-0085 public-bundle
+    privacy check finds personal data. `repo_dir` must not exist or must hold
+    nothing but `.git`.
+    """
+    root = _b31_vault_root(vault_dir)
+    visibility = _b32_visibility(repo_visibility_meta)
+    target = _b32_new_directory(repo_dir, "Repository folder")
+    if target == root or root in target.parents:
+        raise Part3Error("Repository folder must be outside the vault")
+    members = _b32_read_master_build(root)
+    core = verify_and_import_cp150_modules(root)["core_module"]
+    flags = []
+    if visibility["expected"] != visibility["actual"]:
+        flags.append({"path": None, "code": "VISIBILITY_MISMATCH",
+                      "detail": "expected %s, repository is %s" % (visibility["expected"], visibility["actual"])})
+    secrets = []
+    for name in sorted(members):
+        secrets.extend(_b32_secret_findings(core, name, members[name]))
+    flags.extend(secrets)
+    privacy = None
+    if visibility["actual"] == "public":
+        text = "\n".join(members[name].decode("utf-8", errors="replace") for name in sorted(members))
+        privacy = core.verify_owner_privacy_mask({"pseudonym": "Donald Duck", "body": text})
+        flags.extend({"path": None, "code": "PUBLIC_" + issue} for issue in privacy["issues"])
+    passed = not flags
+    written = {}
+    if passed:
+        target.mkdir(parents=True, exist_ok=True)
+        for name in sorted(members):
+            path = target.joinpath(*name.split("/"))
+            digest = _b31_write_atomic(path, members[name])
+            if digest != _b31_sha256_bytes(members[name]):
+                raise Part3Error("Exported file did not verify: " + name)
+            if name.endswith(".sh"):
+                os.chmod(path, 0o755)
+            written[name] = digest
+    return {
+        "passed": passed,
+        "status": "GREEN" if passed else "RED",
+        "exported": passed,
+        "repo_dir": str(target),
+        "visibility": visibility,
+        "flags": flags,
+        "secret_findings": len(secrets),
+        "public_privacy_check": None if privacy is None else {"passed": privacy["passed"], "issues": privacy["issues"]},
+        "files": written,
+        "verified_members": len(members),
+        "next_step": ("Folder is ready for git add and commit." if passed else
+                      "Nothing was written. Fix the RED items, then export again."),
+    }
+
+
+_B32_PACKET_END = "=== END_OF_PACKET ==="
+_B32_PACKET_LIMIT = 1500
+_B32_FENCING_DB = "state/pr_packet_fencing.db"
+
+
+def _b32_plan_batch(core, db_path, project_id, batch_num):
+    if type(batch_num) is not int or batch_num < 1:
+        raise Part3Error("Batch number must be a whole number of at least 1")
+    if not isinstance(project_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", project_id):
+        raise Part3Error("Project ID must be 1-128 letters, digits, '.', '_' or '-'")
+    if isinstance(db_path, bool) or not isinstance(db_path, (str, os.PathLike)) or not str(db_path).strip():
+        raise Part3Error("A plan database path is required")
+    try:
+        batches = core.generate_batches_from_locked_plan(db_path, project_id)
+    except (ValueError, OSError) as error:
+        raise Part3Error("Locked plan could not be read: " + str(error)) from error
+    if batch_num > len(batches):
+        raise Part3Error("The locked plan has %d batch(es); Batch %d does not exist" % (len(batches), batch_num))
+    return batches[batch_num - 1]
+
+
+def _b32_advance_fencing(core, channel):
+    with core.SingleWriterDBQueue(_B32_FENCING_DB) as queue:
+        for _ in range(8):
+            rows = queue.query("SELECT max_token FROM b2c_tokens WHERE channel_id=?", (channel,))
+            proposed = (rows[0][0] if rows else 0) + 1
+            try:
+                core.verify_and_advance_fencing_token(_B32_FENCING_DB, channel, proposed)
+                return proposed
+            except core.StaleFencingToken:
+                continue
+    raise Part3Error("Fencing token kept moving; another packet is being compiled")
+
+
+def _b32_canary_probe(core, channel, batch_num, prompt_text):
+    engine = core.CanaryTripwireEngine(initial_index=(batch_num - 1) % len(core.B5_CODEBOOK))
+    try:
+        state = engine.channel_state(channel)
+        if state["locked"]:
+            raise Part3Error("Canary channel for this batch is locked; spawn a new channel")
+        reused = state["pending"] is not None
+        if not reused:
+            engine.attach(prompt_text, channel)
+            state = engine.channel_state(channel)
+    except core.AuditRejected as error:
+        raise Part3Error("Canary probe refused: " + str(error)) from error
+    return state["pending"], reused
+
+
+def _b32_fit_items(head, items, tail):
+    """Join head, item lines and tail, shortening item text so the body stays under the limit."""
+    lines = ["- %s: %s" % (item["id"], " ".join(item["text"].split())) for item in items]
+    body = head + "\n".join(lines) + tail
+    if len(body) < _B32_PACKET_LIMIT:
+        return body, False
+    budget = _B32_PACKET_LIMIT - 1 - len(head) - len(tail) - max(len(lines) - 1, 0)
+    each = budget // max(len(lines), 1)
+    if each < 12:
+        raise Part3Error("PR body cannot fit under 1,500 characters")
+    lines = [line if len(line) <= each else line[:each - 1] + "…" for line in lines]
+    return head + "\n".join(lines) + tail, True
+
+
+def compile_next_batch_pr_packet(db_path, vault_dir, project_id, batch_num):
+    """INST-0157: turn one batch of a locked plan into a branch, commit message and short PR body.
+
+    Reads the locked plan through INST-0062/INST-0063 (a plan that is not
+    locked is refused), advances the project's Kleppmann fencing token
+    (INST-0009) so the newest packet supersedes older ones, and attaches the
+    batch's canary probe (INST-0021/INST-0022, rotating with the batch number;
+    compiling the same batch again reuses its pending probe). The PR body is
+    under 1,500 characters and ends with `=== END_OF_PACKET ===`.
+    """
+    root = _b31_vault_root(vault_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    core = verify_and_import_cp150_modules(root)["core_module"]
+    batch = _b32_plan_batch(core, db_path, project_id, batch_num)
+    items = batch["instructions"]
+    project_tag = _b31_sha256_bytes(project_id.encode("utf-8"))[:12]
+    fencing_channel = "pr-packet:" + project_id
+    canary_channel = "pr-%s-b%03d" % (project_tag, batch_num)
+    branch = "batch/B%02d" % batch_num
+    token = _b32_advance_fencing(core, fencing_channel)
+    first, last = items[0]["id"], items[-1]["id"]
+    span = first if first == last else "%s–%s" % (first, last)
+    probe, reused = _b32_canary_probe(core, canary_channel, batch_num,
+                                      "Build Batch %d of project %s, plan items %s." % (batch_num, project_id, span))
+    head = ("Batch %02d of project %s: plan items %s.\n"
+            "Locked plan SHA-256: %s\nBatch SHA-256: %s\nFencing token: %d\n\nBuild exactly these items:\n"
+            % (batch_num, project_id, span, batch["lock_sha256"], batch["sha256"], token))
+    tail = ("\n\nReply with this exact line once, outside code blocks:\n%s\n\n%s"
+            % (probe["ack_line"], _B32_PACKET_END))
+    body, shortened = _b32_fit_items(head, items, tail)
+    if len(body) >= _B32_PACKET_LIMIT or not body.endswith(_B32_PACKET_END):
+        raise Part3Error("PR body is not a valid packet")
+    commit_message = ("Batch %02d: %s plan items %s\n\nLocked plan %s, fencing token %d."
+                      % (batch_num, project_id, span, batch["lock_sha256"][:16], token))
+    return {
+        "project_id": project_id,
+        "batch_num": batch_num,
+        "branch": branch,
+        "commit_message": commit_message,
+        "pr_body": body,
+        "pr_body_chars": len(body),
+        "items_shortened": shortened,
+        "lock_sha256": batch["lock_sha256"],
+        "batch_sha256": batch["sha256"],
+        "fencing": {"channel": fencing_channel, "token": token},
+        "canary": {"channel": canary_channel, "challenge": probe["challenge"], "ack_line": probe["ack_line"],
+                   "probe_id": probe["probe_id"], "reused_pending_probe": reused},
+        "instruction_ids": [item["id"] for item in items],
+    }
+
+
+_B32_TEST_BUDGET_SECONDS = 5.0
+_B32_TEST_TIMEOUT_SECONDS = 120
+_B32_RAN_PATTERN = r"(?m)^Ran (\d+) tests? in ([0-9.]+)s\s*$"
+
+
+def _b32_repo_root(repo_dir):
+    if isinstance(repo_dir, bool) or not isinstance(repo_dir, (str, os.PathLike)) or not str(repo_dir).strip():
+        raise Part3Error("A repository folder is required")
+    root = Path(os.path.abspath(os.fspath(repo_dir)))
+    if not root.is_dir():
+        raise Part3Error("Repository folder does not exist")
+    if root.is_symlink() or root.resolve() != root:
+        raise Part3Error("Repository folder path cannot contain symlinks")
+    return root
+
+
+def _b32_repo_file(root, value, label):
+    if isinstance(value, os.PathLike):
+        value = os.fspath(value)
+    name = _b31_relative_path(value, label)
+    if not name.endswith(".py"):
+        raise Part3Error(label + " must be a .py file")
+    path = root.joinpath(*name.split("/"))
+    for part in [path] + list(path.parents):
+        if part == root:
+            break
+        if part.is_symlink():
+            raise Part3Error(label + " path cannot contain symlinks")
+    if not path.is_file():
+        raise Part3Error(label + " not found: " + name)
+    return name, path
+
+
+def _b32_contract(root, contract_path):
+    if isinstance(contract_path, bool) or not isinstance(contract_path, (str, os.PathLike)) or not str(contract_path).strip():
+        raise Part3Error("A contract path is required")
+    path = Path(contract_path)
+    if not path.is_absolute():
+        path = root / path
+    if path.is_symlink() or not path.is_file():
+        raise Part3Error("Contract file not found")
+    try:
+        contract = json.loads(path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Part3Error("Contract file is not valid JSON") from error
+    batch_num, entries = _b31_verify_contract(contract)
+    return contract, batch_num, entries
+
+
+def _b32_expected_canary(core, batch_num):
+    variable, value, response = core.B5_CODEBOOK[(batch_num - 1) % len(core.B5_CODEBOOK)]
+    return "Canary check: %s = %s -> %s" % (variable, value, response)
+
+
+def _b32_frozen_check(root, scratch):
+    code_dir = root / "code"
+    files = {}
+    problems = []
+    expected = dict(FROZEN_CP150_FILES)
+    expected["code/test_apccs_core.py"] = CP100_TEST_CORE_SHA256
+    for name, digest in sorted(expected.items()):
+        path = root.joinpath(*name.split("/"))
+        actual = _b31_sha256_bytes(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+        files[name] = {"sha256": actual, "expected": digest, "verified": actual == digest}
+        if actual != digest:
+            problems.append(name + (" is missing" if actual is None else " changed"))
+    bridge = None
+    if not problems:
+        try:
+            bridge = _b31_verify_cp150_modules(code_dir, scratch)
+        except Part3Error as error:
+            problems.append(str(error))
+    return {"passed": not problems, "files": files, "problems": problems}, bridge
+
+
+def _b32_signature_findings(module_source, entries):
+    tree = ast.parse(module_source)
+    defined = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            defined.setdefault(node.name, []).append([arg.arg for arg in node.args.posonlyargs + node.args.args])
+    findings = []
+    for entry in entries:
+        found = defined.get(entry["function"])
+        if found and found[-1] != entry["parameters"]:
+            findings.append({"code": "SIGNATURE_MISMATCH", "symbol": entry["function"],
+                             "detail": "expected (%s)" % ", ".join(entry["parameters"])})
+    return findings
+
+
+def _b32_run_tests(test_path, scratch):
+    env = {key: value for key, value in os.environ.items() if key != "GITHUB_STEP_SUMMARY"}
+    env["APCCS_VAULT_ROOT"] = str(Path(scratch) / "delta_vault")
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["TMPDIR"] = str(scratch)
+    started = time.monotonic()
+    try:
+        proc = subprocess.run([sys.executable, test_path.name], cwd=str(test_path.parent), env=env,
+                              capture_output=True, text=True, timeout=_B32_TEST_TIMEOUT_SECONDS)
+        exit_code, stdout, stderr = proc.returncode, proc.stdout, proc.stderr
+    except subprocess.TimeoutExpired as error:
+        exit_code, stdout, stderr = None, error.stdout or "", "timed out"
+        stdout = stdout.decode("utf-8", errors="replace") if isinstance(stdout, bytes) else stdout
+    seconds = round(time.monotonic() - started, 3)
+    ran = re.findall(_B32_RAN_PATTERN, stderr + "\n" + stdout)
+    count = sum(int(number) for number, _ in ran)
+    tail = (stdout + "\n" + stderr).strip().splitlines()[-20:]
+    within = seconds < _B32_TEST_BUDGET_SECONDS
+    return {"passed": exit_code == 0 and count > 0 and within, "exit_code": exit_code, "count": count,
+            "runtime_seconds": seconds, "budget_seconds": _B32_TEST_BUDGET_SECONDS, "within_budget": within,
+            "stdout": stdout, "output_tail": tail}
+
+
+def execute_ci_gate_suite(repo_dir, target_module, target_test, contract_path):
+    """INST-0158: run the five-gate CI check on one module and its test file; exit code 0 only when all GREEN.
+
+    In order: frozen fingerprints and the CP-150 import bridge (INST-0151);
+    the sealed batch contract (INST-0154); Gates 1-4 from the frozen core
+    (INST-0012..0015) on the target module, where Gate 3 also requires every
+    contract function with its exact parameter list; Gate 5 (INST-0016 via the
+    contract); and the target test file run as delta tests with a throwaway
+    vault in a temporary folder, which must pass, print the batch's canary
+    line and finish in under 5 seconds.
+    """
+    root = _b32_repo_root(repo_dir)
+    module_name, module_path = _b32_repo_file(root, target_module, "Target module")
+    test_name, test_path = _b32_repo_file(root, target_test, "Target test file")
+    if module_name in FROZEN_CP150_FILES or module_name == "code/test_apccs_core.py":
+        raise Part3Error("Target module is a frozen file")
+    if not test_path.name.startswith("test_"):
+        raise Part3Error("Target test file name must start with test_")
+    contract, batch_num, entries = _b32_contract(root, contract_path)
+    module_source = module_path.read_text(encoding="utf-8")
+    test_source = test_path.read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="apccs_ci_gate_") as scratch:
+        scratch_vault = Path(scratch) / "vault"
+        scratch_vault.mkdir()
+        frozen, bridge = _b32_frozen_check(root, scratch_vault)
+        if bridge is None:
+            bridge = verify_and_import_cp150_modules(scratch_vault)
+        core = bridge["core_module"]
+        compliance = verify_test_contract_compliance(test_source, contract)
+        required = "".join("def %s(%s):\n    return None\n" % (entry["function"], ", ".join(entry["parameters"]))
+                           for entry in entries)
+        gate_results = {
+            "1": core.scan_for_fake_padding(module_source),
+            "2": core.verify_ast_structure(module_source),
+            "3": core.check_symbol_regression(module_source, required),
+            "4": core.scan_destructive_ops(module_source),
+        }
+        gates = {number: {"passed": bool(result["passed"]), "status": result["status"],
+                          "findings": [dict(item) for item in result["findings"]]}
+                 for number, result in gate_results.items()}
+        if gates["2"]["passed"]:
+            signature = _b32_signature_findings(module_source, entries)
+            if signature:
+                gates["3"]["findings"].extend(signature)
+                gates["3"]["passed"] = False
+                gates["3"]["status"] = "RED"
+        gates["5"] = {"passed": compliance["passed"], "status": compliance["status"],
+                      "findings": list(compliance["problems"])}
+        tests = _b32_run_tests(test_path, scratch)
+    expected_canary = _b32_expected_canary(core, batch_num)
+    canary_found = expected_canary in [line.strip() for line in tests.pop("stdout").splitlines()]
+    all_green = (frozen["passed"] and compliance["passed"] and all(gate["passed"] for gate in gates.values())
+                 and tests["passed"] and canary_found)
+    return {
+        "exit_code": 0 if all_green else 1,
+        "all_green": all_green,
+        "status": "GREEN" if all_green else "RED",
+        "batch": batch_num,
+        "target_module": module_name,
+        "target_test": test_name,
+        "canary": {"expected": expected_canary, "found": canary_found},
+        "frozen": frozen,
+        "contract": {"passed": compliance["passed"], "seal": contract["seal"]["digest"],
+                     "instructions": len(entries), "problems": compliance["problems"]},
+        "gates": gates,
+        "tests": tests,
+    }
+
+
+_B32_GATE_TITLES = {"1": "Gate 1: no fake padding", "2": "Gate 2: code structure",
+                    "3": "Gate 3: no lost functions", "4": "Gate 4: no destructive code or secrets",
+                    "5": "Gate 5: real tests (contract)"}
+
+
+def _b32_cell(value, limit=120):
+    text = " ".join(str(value).split()).replace("|", "\\|")
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def _b32_finding_text(finding):
+    if isinstance(finding, dict):
+        parts = [str(finding.get("code", "finding"))]
+        for key in ("symbol", "line", "detail"):
+            if finding.get(key) not in (None, ""):
+                parts.append("%s %s" % (key, finding[key]))
+        return " ".join(parts)
+    return str(finding)
+
+
+def format_pr_gate_comment(ci_result_dict):
+    """INST-0159: format an INST-0158 result as a short Markdown PR comment with a clear verdict.
+
+    The table shows the canary, frozen files, contract compliance, Gates 1-5
+    and the test count and runtime. The verdict is SAFE TO MERGE only when the
+    result says exit code 0 and every row is green; otherwise BLOCKED.
+    """
+    if not isinstance(ci_result_dict, dict):
+        raise Part3Error("CI result must be an object from execute_ci_gate_suite")
+    required = ("exit_code", "canary", "frozen", "contract", "gates", "tests")
+    missing = [key for key in required if key not in ci_result_dict]
+    if missing:
+        raise Part3Error("CI result is missing: " + ", ".join(missing))
+    canary, frozen, contract = ci_result_dict["canary"], ci_result_dict["frozen"], ci_result_dict["contract"]
+    gates, tests = ci_result_dict["gates"], ci_result_dict["tests"]
+    if not all(isinstance(value, dict) for value in (canary, frozen, contract, gates, tests)):
+        raise Part3Error("CI result sections must be objects")
+    if sorted(gates) != ["1", "2", "3", "4", "5"] or not all(isinstance(gates[key], dict) for key in gates):
+        raise Part3Error("CI result must hold Gates 1 to 5")
+    for key in ("expected", "found"):
+        if key not in canary:
+            raise Part3Error("CI result canary is missing '%s'" % key)
+    for key in ("count", "runtime_seconds", "passed"):
+        if key not in tests:
+            raise Part3Error("CI result tests are missing '%s'" % key)
+
+    def mark(ok):
+        return "✅ pass" if ok else "❌ fail"
+
+    rows = [("Canary", canary["found"] is True,
+             ("printed: " if canary["found"] is True else "not printed: ") + str(canary["expected"])),
+            ("Frozen files", frozen.get("passed") is True,
+             "unchanged" if frozen.get("passed") is True else "; ".join(map(str, frozen.get("problems") or ["changed"])))]
+    for number in ("1", "2", "3", "4", "5"):
+        gate = gates[number]
+        findings = gate.get("findings") or []
+        detail = "clean" if gate.get("passed") is True and not findings else \
+            "; ".join(_b32_finding_text(item) for item in findings[:3]) or "failed"
+        if len(findings) > 3:
+            detail += " (+%d more)" % (len(findings) - 3)
+        rows.append((_B32_GATE_TITLES[number], gate.get("passed") is True, detail))
+    problems = contract.get("problems") or []
+    rows.append(("Contract compliance", contract.get("passed") is True,
+                 "%s instruction(s) meet the sealed contract" % contract.get("instructions", "?")
+                 if contract.get("passed") is True else "; ".join(map(str, problems[:3])) or "failed"))
+    runtime = tests["runtime_seconds"]
+    rows.append(("Tests", tests["passed"] is True,
+                 "%s test(s) in %ss (limit %ss)" % (tests["count"], runtime, tests.get("budget_seconds", 5.0))))
+    safe = ci_result_dict["exit_code"] == 0 and all(ok for _, ok, _ in rows)
+    verdict = "SAFE TO MERGE" if safe else "BLOCKED"
+    lines = ["## APCCS gate check", "",
+             "**Verdict: %s**" % verdict, "",
+             "| Check | Result | Detail |", "|---|---|---|"]
+    lines += ["| %s | %s | %s |" % (name, mark(ok), _b32_cell(detail)) for name, ok, detail in rows]
+    lines += ["", "When this says SAFE TO MERGE, tap Merge." if safe else
+              "Do not merge. A red row above says what needs fixing."]
+    comment = "\n".join(lines) + "\n"
+    return {"verdict": verdict, "safe_to_merge": safe, "markdown": comment, "rows": len(rows)}
+
+
+_B32_WORKFLOW_PATH = ".github/workflows/apccs_gate.yml"
+_B32_UI_PAGE = "START_OUR_OWN_SYSTEM.html"
+_B32_GATE_YAML = """# APCCS five-gate check, written by emit_github_actions_gate_yaml (INST-0160).
+# Standard-library Python 3.11 only. It runs the gate suite (INST-0158) and
+# shows the plain-English scorecard (INST-0159) on the run's summary page.
+name: APCCS gate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apccs-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: APCCS five-gate check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v4
+
+      - name: Use Python 3.11 (standard library only, nothing installed)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run the five-gate check
+        working-directory: code
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 -c "import sys, apccs_q1_part3 as p3; sys.exit(p3.run_ci_gate_cli(sys.argv[1:]))" --repo ..
+"""
+
+
+def _b32_latest_contract_batch():
+    return max(PART3_CONTRACT_SPECS)
+
+
+def run_ci_gate_cli(argv=None):
+    """Command-line entry for the gate workflow: run INST-0158, print INST-0159, return the exit code."""
+    parser = argparse.ArgumentParser(prog="apccs-gate", description="Run the APCCS five-gate check.")
+    parser.add_argument("--repo", default="..", help="repository folder (default: the parent of code/)")
+    parser.add_argument("--module", default="code/apccs_q1_part3.py", help="target module, relative to --repo")
+    parser.add_argument("--test", default="code/test_apccs_q1_part3.py", help="target test file, relative to --repo")
+    parser.add_argument("--contract", default="auto",
+                        help="sealed contract JSON, or 'auto' to compile the newest Part 3 batch contract")
+    args = parser.parse_args(argv)
+    with tempfile.TemporaryDirectory(prefix="apccs_gate_contract_") as scratch:
+        try:
+            contract = args.contract
+            if contract == "auto":
+                batch = _b32_latest_contract_batch()
+                contract = compile_batch_test_contract(batch, list(PART3_CONTRACT_SPECS[batch]), scratch)["path"]
+            result = execute_ci_gate_suite(args.repo, args.module, args.test, contract)
+        except Part3Error as error:
+            print("APCCS gate check could not run: " + str(error))
+            return 2
+    comment = format_pr_gate_comment(result)["markdown"]
+    print(comment)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as handle:
+            handle.write(comment)
+    return result["exit_code"]
+
+
+def _b32_last_part3_gate(root):
+    path = root / "audit" / "pass_tests_q1_part3.json"
+    try:
+        report = _b31_previous_report(path)
+    except Part3Error as error:
+        return {"error": str(error)}
+    if report is None:
+        return None
+    gates = report.get("gates") if isinstance(report.get("gates"), dict) else {}
+    return {"batch": report.get("batch"), "status": report.get("status"), "canary": report.get("canary"),
+            "gates": {str(number): (gate.get("status") if isinstance(gate, dict) else None)
+                      for number, gate in sorted(gates.items())}}
+
+
+def preview_ci_gate(vault_dir):
+    """Describe the gate workflow for /api/ci/preview without writing anything."""
+    root = _b31_vault_root(vault_dir)
+    return {
+        "workflow_path": _B32_WORKFLOW_PATH,
+        "workflow_yaml": _B32_GATE_YAML,
+        "settings": {"timeout_minutes": 2, "cancel_in_progress": True, "python": "3.11",
+                     "standard_library_only": True, "test_budget_seconds": _B32_TEST_BUDGET_SECONDS},
+        "checks": ["Frozen files (INST-0151)", "Sealed test contract (INST-0154)",
+                   "Gates 1-5 (INST-0012..0016)", "Delta tests in a temporary folder, under 5 seconds",
+                   "Canary line printed"],
+        "contract_batch": _b32_latest_contract_batch(),
+        "last_part3_gate": _b32_last_part3_gate(root),
+        "note": "Preview only: nothing is written to the repository.",
+    }
+
+
+def handle_part3_control_panel_api(method, path, body, vault):
+    """Serve /api/ci/preview (GET) and pass every other route to the Part 2 control panel API."""
+    root = _b31_vault_root(vault)
+    route = urlsplit(path).path if isinstance(path, str) else None
+    if route == "/api/ci/preview":
+        if not isinstance(method, str) or method.upper() != "GET":
+            return {"http_status": 405, "body": {"error": "Method not allowed", "allow": ["GET"]}}
+        return {"http_status": 200, "body": preview_ci_gate(root)}
+    part2 = verify_and_import_cp150_modules(root)["part2_module"]
+    return part2.handle_control_panel_api(method, path, body, root)
+
+
+_B32_UI_PANEL = r'''<main id="ci-preview"><h2>CI gate preview</h2>
+<p>Shows the GitHub gate workflow (2-minute limit, older runs cancelled) and the last Part 3 gate result. Nothing is written.</p>
+<button id="ci-preview-button">Preview CI gate</button><pre id="ci-preview-result"></pre></main>
+<script>
+document.getElementById('ci-preview-button').onclick=async()=>{const out=document.getElementById('ci-preview-result');try{const response=await fetch('/api/ci/preview');const data=await response.json();if(!response.ok)throw new Error(data.error||response.statusText);out.textContent=JSON.stringify({settings:data.settings,checks:data.checks,last_part3_gate:data.last_part3_gate},null,2)+'\n\n'+data.workflow_yaml;}catch(error){out.textContent='CI preview failed: '+error.message;}};
+</script>'''
+
+
+def generate_part3_control_panel_html(output_path, vault_dir=None):
+    """Write START_OUR_OWN_SYSTEM.html from Part 2 and add the CI gate preview panel wired to /api/ci/preview."""
+    if isinstance(output_path, bool) or not isinstance(output_path, (str, os.PathLike)) or not str(output_path).strip():
+        raise Part3Error("output_path must be a local path")
+    target = Path(output_path).absolute()
+    if target.is_symlink():
+        raise Part3Error("Refusing to write through a symlink")
+    if vault_dir is None:
+        with tempfile.TemporaryDirectory(prefix="apccs_ui_") as scratch:
+            part2 = verify_and_import_cp150_modules(scratch)["part2_module"]
+    else:
+        part2 = verify_and_import_cp150_modules(vault_dir)["part2_module"]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    part2.generate_try_out_control_panel_html(target)
+    html = target.read_text(encoding="utf-8")
+    if 'id="ci-preview"' not in html:
+        if html.count("</body>") != 1:
+            raise Part3Error("Control panel page has no single body terminator")
+        html = html.replace("</body>", _B32_UI_PANEL + "</body>")
+    digest = _b31_write_atomic(target, html)
+    return {"path": str(target), "bytes": target.stat().st_size, "sha256": digest}
+
+
+def create_part3_local_server(host="127.0.0.1", port=8501, vault_dir=None, html_path=None):
+    """Start-ready loopback server: the Part 2 control panel plus GET /api/ci/preview."""
+    root = _b31_vault_root(vault_dir or os.environ.get("APCCS_VAULT_ROOT", Path(__file__).resolve().parents[1]))
+    part2 = verify_and_import_cp150_modules(root)["part2_module"]
+    page = Path(html_path) if html_path is not None else root / _B32_UI_PAGE
+    if not page.is_file():
+        generate_part3_control_panel_html(page, root)
+    try:
+        server = part2.create_local_control_server(host, port, vault_dir=root, html_path=page)
+    except part2.ControlPanelError as error:
+        raise Part3Error(str(error)) from error
+    base = server.RequestHandlerClass
+
+    class Part3Handler(base):
+        def do_GET(self):
+            if urlsplit(self.path).path == "/api/ci/preview":
+                result = handle_part3_control_panel_api("GET", self.path, b"", root)
+                self._send(result["http_status"], "application/json; charset=utf-8", json.dumps(result["body"]))
+                return
+            super().do_GET()
+
+        def do_POST(self):
+            if urlsplit(self.path).path == "/api/ci/preview":
+                self._send(405, "application/json; charset=utf-8",
+                           json.dumps({"error": "Method not allowed", "allow": ["GET"]}))
+                return
+            super().do_POST()
+
+    server.RequestHandlerClass = Part3Handler
+    return server
+
+
+def emit_github_actions_gate_yaml(repo_dir):
+    """INST-0160: write .github/workflows/apccs_gate.yml and wire /api/ci/preview into START_OUR_OWN_SYSTEM.html.
+
+    The workflow runs on pull requests with `timeout-minutes: 2`,
+    `cancel-in-progress: true` concurrency and standard-library Python 3.11,
+    calling the INST-0158 gate suite through `run_ci_gate_cli`. An existing
+    workflow file with different content is never overwritten. The page in
+    `repo_dir` is regenerated with the CI gate preview panel.
+    """
+    root = _b32_repo_root(repo_dir)
+    workflow = root / ".github" / "workflows" / "apccs_gate.yml"
+    for part in [workflow] + list(workflow.parents):
+        if part == root:
+            break
+        if part.is_symlink():
+            raise Part3Error("Workflow path cannot contain symlinks")
+    payload = _B32_GATE_YAML.encode("utf-8")
+    if workflow.exists():
+        if not workflow.is_file():
+            raise Part3Error("Workflow path exists and is not a file")
+        if workflow.read_bytes() != payload:
+            raise Part3Error("A different apccs_gate.yml already exists; it is protected and was not changed")
+        digest = _b31_sha256_bytes(payload)
+        created = False
+    else:
+        digest = _b31_write_atomic(workflow, payload)
+        created = True
+    with tempfile.TemporaryDirectory(prefix="apccs_ui_vault_") as scratch:
+        page = generate_part3_control_panel_html(root / _B32_UI_PAGE, scratch)
+    return {
+        "workflow_path": str(workflow),
+        "workflow_sha256": digest,
+        "created": created,
+        "settings": {"timeout_minutes": 2, "cancel_in_progress": True, "python": "3.11",
+                     "standard_library_only": True},
+        "page_path": page["path"],
+        "page_sha256": page["sha256"],
+        "api_route": "/api/ci/preview",
+    }
