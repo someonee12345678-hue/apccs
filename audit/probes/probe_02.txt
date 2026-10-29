@@ -1,0 +1,2 @@
+Probe 2: does Codex do a small task when asked through an @codex comment?
+Started: 2026-10-29 (America/Vancouver)
