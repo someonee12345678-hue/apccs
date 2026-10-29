@@ -1,0 +1,72 @@
+# APCCS guard: checks WHICH files a pull request changes, using the rules
+# stored on main. A builder cannot switch this check off from inside its own
+# pull request, because GitHub always runs this file as it is on main.
+#
+# Rules (the same ones listed in AGENTS.md):
+#   - Never change: .github/, tools/, contracts/, AGENTS.md, CLAUDE.md
+#   - code/ is append-only: new files are fine; editing, renaming or
+#     deleting an existing code file is not.
+#
+# Safety: this job never runs the pull request's code. It only reads the list
+# of changed file names. It has read-only access and uses no secrets.
+name: APCCS guard
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apccs-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Protected files untouched
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Get main's copy of the rules (never the pull request's code)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare the pull request's changed files against the rules
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+          start="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          problems=""
+          while IFS=$'\t' read -r status path; do
+            [ -z "${path:-}" ] && continue
+            case "$path" in
+              .github/*|tools/*|contracts/*|AGENTS.md|CLAUDE.md)
+                problems="${problems}| \`${path}\` | protected file (${status}) |"$'\n' ;;
+              code/*)
+                if [ "$status" != "A" ]; then
+                  problems="${problems}| \`${path}\` | existing code file changed (${status}); code/ is add-only |"$'\n'
+                fi ;;
+            esac
+          done < <(git diff --no-renames --name-status "$start" "$HEAD_SHA")
+
+          {
+            echo "## APCCS guard"
+            echo
+            if [ -z "$problems" ]; then
+              echo "**Result: SAFE TO MERGE.** No protected files were touched."
+            else
+              echo "**Result: BLOCKED.** This pull request changes files that need your explicit OK."
+              echo
+              echo "| File | Why it is blocked |"
+              echo "|---|---|"
+              printf '%s' "$problems"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+          [ -z "$problems" ]
