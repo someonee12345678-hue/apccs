@@ -7,7 +7,7 @@ Basis: Constitution Amendment 1, approved by the owner on 2026-10-29 (Drive › 
 | Project | Repository | Status | Ready for the builder |
 |---|---|---|---|
 | Unified Software Builder (APCCS, the builder bot). Genesis is folded in. | `someonee12345678-hue/apccs` (private) | Active. Built and accepted to instruction 140. | Yes |
-| Canadian legal research engine (UCLRCDE) | `someonee12345678-hue/uclrcde` (private) | Being set up. The owner creates the repository; then it gets its own setup pull request. | No |
+| Canadian legal research engine (UCLRCDE) | `someonee12345678-hue/uclrcde` (private) | Active. Created by the owner on 2026-10-29; its own `AGENTS.md`, test runner and two checks arrived through its setup pull request (uclrcde #1). Holds Batches 29, 35 and 36. | Yes |
 | Genesis (old repository, kept as a source) | `someonee12345678-hue/genesis` (private) | Folded into APCCS. Its features arrive as planned APCCS batches (the B40 plan). | No |
 | Elite Kit | `someonee12345678-hue/elite-kit` (private) | Separate. No approved work for the builder. | No |
 | Phone bridge | `someonee12345678-hue/aab-queue` (public) | Grok dropped. Archiving waits for the owner's yes. | No |
