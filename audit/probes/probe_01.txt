@@ -1,0 +1,2 @@
+Probe 1: does Codex start when an @codex comment is posted for the owner?
+Started: 2026-10-29 (America/Vancouver)
