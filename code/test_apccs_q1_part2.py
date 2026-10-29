@@ -727,5 +727,150 @@ class Part2Batch28Tests(unittest.TestCase):
         self.assertEqual(part2.handle_control_panel_api("GET", "/api/canary/probe", b"", self.root)["http_status"], 405)
 
 
+import hashlib
+import os as _b30_os
+import subprocess as _b30_subprocess
+import sys as _b30_sys
+from unittest import mock as _b30_mock
+
+
+class Part2Batch30Tests(unittest.TestCase):
+    def setUp(self):
+        print("Canary check: M = K -> submarine")
+        self.temp = tempfile.TemporaryDirectory(prefix="apccs_part2_b30_")
+        self.root = Path(self.temp.name) / "vault"
+        self.root.mkdir()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_146_launchers_manifest_and_self_test_boot(self):
+        result = part2.generate_local_startup_scripts(self.root)
+        self.assertEqual(result["url"], "http://127.0.0.1:8501/START_OUR_OWN_SYSTEM.html")
+        manifest = json.loads((self.root / "LAUNCHER_MANIFEST.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(manifest["files"]), sorted(["launch_local_system.py", "START_WINDOWS.bat", "START_MAC_LINUX.sh", "START_TERMUX.sh"]))
+        for name, digest in manifest["files"].items():
+            self.assertEqual(hashlib.sha256((self.root / name).read_bytes()).hexdigest(), digest)
+        launcher = (self.root / "launch_local_system.py").read_text(encoding="utf-8")
+        for token in ('HOST = "127.0.0.1"', "PORT = 8501", "START_OUR_OWN_SYSTEM.html"):
+            self.assertIn(token, launcher)
+        for name in ("START_WINDOWS.bat", "START_MAC_LINUX.sh", "START_TERMUX.sh"):
+            self.assertIn("launch_local_system.py", (self.root / name).read_text(encoding="utf-8"))
+        if _b30_os.name == "posix":
+            self.assertTrue(_b30_os.access(self.root / "START_MAC_LINUX.sh", _b30_os.X_OK))
+        env = dict(_b30_os.environ, APCCS_CODE_DIR=str(Path(part2.__file__).resolve().parent))
+        run = _b30_subprocess.run([_b30_sys.executable, str(self.root / "launch_local_system.py"), "--self-test", "--port", "0"],
+                                  cwd=self.root, env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("SELF-TEST OK http://127.0.0.1:", run.stdout)
+        self.assertTrue((self.root / "START_OUR_OWN_SYSTEM.html").is_file())
+        self.assertEqual(part2.generate_local_startup_scripts(self.root)["files"], result["files"])
+
+    def test_146_rejects_missing_or_file_vault(self):
+        with self.assertRaises(part2.ControlPanelError):
+            part2.generate_local_startup_scripts(None)
+        blocker = self.root / "not_a_folder"
+        blocker.write_text("x", encoding="utf-8")
+        with self.assertRaises(part2.ControlPanelError):
+            part2.generate_local_startup_scripts(blocker)
+
+    def test_147_continuity_verifies_45_and_lists_uclrcde(self):
+        source = Path(part2.__file__).read_text(encoding="utf-8")
+        result = part2.verify_101_to_150_continuity(source)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["verified_count"], 45)
+        self.assertEqual(result["verified"][0], "INST-0101")
+        self.assertEqual(result["verified"][-1], "INST-0150")
+        self.assertNotIn("INST-0141", result["verified"])
+        self.assertEqual(result["built_in_uclrcde"], ["INST-0141", "INST-0142", "INST-0143", "INST-0144", "INST-0145"])
+        self.assertEqual(result["dropped_functions"], [])
+
+    def test_147_detects_dropped_function_route_and_bad_source(self):
+        dropped = Path(part2.__file__).read_text(encoding="utf-8").replace("def handle_trash_api(", "def renamed_trash_api(")
+        result = part2.verify_101_to_150_continuity(dropped)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["dropped_functions"], ["handle_trash_api"])
+        self.assertEqual(result["missing"][0]["instruction"], "INST-0108")
+        no_route = Path(part2.__file__).read_text(encoding="utf-8").replace('"/api/hardware"', '"/api/hardwire"')
+        self.assertIn("INST-0131", [item["instruction"] for item in part2.verify_101_to_150_continuity(no_route)["missing"]])
+        for bad in (None, "", "def broken(:\n"):
+            with self.assertRaises(part2.ControlPanelError):
+                part2.verify_101_to_150_continuity(bad)
+
+    def test_148_scorecard_is_green_plain_english(self):
+        result = part2.generate_cp150_scorecard(self.root)
+        self.assertEqual(result["status"], "GREEN")
+        self.assertEqual(result["apccs_built_verified"], 145)
+        text = (self.root / "audit" / "OWNER_SCORECARD_CP150.txt").read_text(encoding="utf-8")
+        self.assertIn("Overall: GREEN", text)
+        self.assertIn("APCCS-built instructions verified: 145 of 145.", text)
+        self.assertIn("Instructions 141 to 145: built in uclrcde", text)
+        self.assertIn("45 of 45 verified", text)
+
+    def test_148_scorecard_turns_red_on_core_mismatch_and_bad_vault(self):
+        with _b30_mock.patch.object(part2, "CP100_CORE_SHA256", "0" * 64):
+            result = part2.generate_cp150_scorecard(self.root)
+        self.assertEqual(result["status"], "RED")
+        self.assertEqual(result["apccs_built_verified"], 45)
+        self.assertIn("NOT verified", Path(result["path"]).read_text(encoding="utf-8"))
+        with self.assertRaises(part2.ControlPanelError):
+            part2.generate_cp150_scorecard(42)
+
+    def test_149_recover_md_sync_clears_stale_pending(self):
+        recover = self.root / "RECOVER.md"
+        recover.write_text("# Notes kept by the owner\n- INST-0140 PENDING\n- INST-0148 PENDING review\n- INST-0151 PENDING\n", encoding="utf-8")
+        result = part2.sync_recover_md_state(self.root, 150, 145, "Canary check: M = K -> submarine")
+        text = recover.read_text(encoding="utf-8")
+        self.assertEqual(result["stale_pending_fixed"], 2)
+        self.assertIn("- INST-0140 ACCEPTED", text)
+        self.assertIn("- INST-0148 COMPLETED review", text)
+        self.assertIn("- INST-0151 PENDING", text)
+        self.assertIn("# Notes kept by the owner", text)
+        self.assertIn("- Completed instructions: 150 of 1,000", text)
+        self.assertIn("- Completed, awaiting acceptance: 146 to 150", text)
+        again = part2.sync_recover_md_state(self.root, 150, 150, "Canary check: M = K -> submarine")
+        text = recover.read_text(encoding="utf-8")
+        self.assertEqual(text.count("APCCS-RECOVER-STATE:BEGIN"), 1)
+        self.assertIn("- Completed, awaiting acceptance: none", text)
+        self.assertEqual(again["stale_pending_remaining"], 0)
+
+    def test_149_recover_md_rejects_bad_input(self):
+        for args in ((150, 151, "Canary check: M = K -> submarine"), (True, 1, "Canary check: M = K -> submarine"),
+                     (1001, 1, "Canary check: M = K -> submarine"), (150, 145, "no canary here")):
+            with self.assertRaises(part2.ControlPanelError):
+                part2.sync_recover_md_state(self.root, *args)
+        (self.root / "RECOVER.md").write_bytes(b"\xff\xfe not utf-8")
+        with self.assertRaises(part2.ControlPanelError):
+            part2.sync_recover_md_state(self.root, 150, 145, "Canary check: M = K -> submarine")
+
+    def test_150_lock_seals_json_and_both_identical_zips(self):
+        result = part2.lock_checkpoint_cp150(self.root)
+        self.assertEqual(result["status"], "LOCKED")
+        lock = json.loads((self.root / "audit" / "CP-150_LOCK.json").read_text(encoding="utf-8"))
+        self.assertEqual(lock["progress"], "150 of 1,000")
+        self.assertEqual(lock["apccs_built"]["count"], 145)
+        self.assertEqual(lock["built_in_uclrcde"]["status"], "built in uclrcde")
+        self.assertEqual(lock["apccs_built"]["core_1_to_100_sha256"], part2.CP100_CORE_SHA256)
+        first, second = (self.root / "APPCS_MASTER_BUILD.zip").read_bytes(), (self.root / "APCCS_MASTER_BUILD.zip").read_bytes()
+        self.assertEqual(first, second)
+        with zipfile.ZipFile(io.BytesIO(first)) as archive:
+            names = set(archive.namelist())
+            for name in ("audit/CP-150_LOCK.json", "code/apccs_core.py", "code/apccs_q1_part2.py", "START_OUR_OWN_SYSTEM.html", "launch_local_system.py", "LAUNCHER_MANIFEST.json"):
+                self.assertIn(name, names)
+            self.assertEqual(hashlib.sha256(archive.read("code/apccs_core.py")).hexdigest(), part2.CP100_CORE_SHA256)
+            for name, digest in lock["files_sha256"].items():
+                self.assertEqual(hashlib.sha256(archive.read(name)).hexdigest(), digest)
+        self.assertEqual(part2.lock_checkpoint_cp150(self.root)["zips"], result["zips"])
+
+    def test_150_lock_fails_closed_on_core_mismatch(self):
+        with _b30_mock.patch.object(part2, "CP100_CORE_SHA256", "0" * 64):
+            with self.assertRaises(part2.ControlPanelError):
+                part2.lock_checkpoint_cp150(self.root)
+        self.assertFalse((self.root / "audit" / "CP-150_LOCK.json").exists())
+        self.assertFalse((self.root / "APCCS_MASTER_BUILD.zip").exists())
+        with self.assertRaises(part2.ControlPanelError):
+            part2.lock_checkpoint_cp150(None)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
