@@ -296,3 +296,66 @@ Instructions 141–145 and 171–180 are now built in `someonee12345678-hue/uclr
 - **Batch 30 (instructions 146–150): NOT ready.** Waiting for the architect's corrected wording (requested in Drive › Claude 2 › `GEMINI_TASK_COUNT_FIX_AND_B40`).
 - **Batch 39 (instructions 191–195): NOT ready.** Same reason.
 - Batches 31 to 34 and 37 to 38 are unchanged. Batches are still built strictly in order, so after Batch 29 the builder waits at Batch 30 until a newer full-wording section for it is added below.
+
+## Plan update from Gemini: APCCS_CATALOG_NEXT_COUNT_FIX
+
+- Drive file title: `APCCS_CATALOG_NEXT_COUNT_FIX`
+- Drive file id: `1RAEanmsK1BbJcP__dGB_j01FTvDzh74513L8VF1-ks0` (saved 2026-10-29 10:30 America/Vancouver)
+- Earlier copies with the same title, not used: `1KWJLDibMWkuzoEAR_lJqme6jmQ6fxpYrUQOlbsj6IJU` (10:24) and `1IicBuFfMAAEzmiMdZ9solDfWn34tsbMqXO8d4ANpRZs` (09:58). Gemini saved the count fix three times, with small wording differences. The newest is the architect's latest word, so it is the one copied here. The two earlier ids are listed so the builder doesn't import them as new plans.
+- Added to this queue on 2026-10-29 by Claude (Master Architect), in place of the builder's import. Basis: owner decisions D-005 and D-006, and the architect's note above (Batches 30 and 39 wait for a count fix). The wording below is copied word for word from that file: its section 1 (how instructions moved to uclrcde are counted), and the Batch 30 and Batch 39 wording blocks from its sections 2 and 3. The file's section 4 repeats the same wording as JSON and stays in Drive.
+- These are the latest full-wording sections for Batches 30 and 39, so they replace the "NOT ready" note above. Both batches stay in apccs.
+
+### Architect's counting rule (copied word for word)
+
+Per `APCCS_CATALOG_NEXT_LEGAL_SPLIT` and Owner decision D-006:
+
+* **Instructions `141 to 145` (Batch 29 — 5 instructions)** and **Instructions `171 to 180` (Batches 35 and 36 — 10 instructions)** live exclusively in the separate legal repository (`someonee12345678-hue/uclrcde`).
+* **Strict Project Separation Rule:** APCCS checks, imports, and unit-tests **only** the instructions built inside APCCS. APCCS never imports, reads, or executes `uclrcde` code or tests.
+* **Exact Instruction Accounting:**
+  * **At Checkpoint `CP-150` (End of Batch 30, Instruction Numbers `1..150`):**
+    * `code/apccs_core.py`: `INST-0001`..`INST-0100` (**100 APCCS instructions**)
+    * `code/apccs_q1_part2.py`: `INST-0101`..`INST-0140` and `INST-0146`..`INST-0150` (**45 APCCS instructions**)
+    * External legal repository (`uclrcde`): `INST-0141`..`INST-0145` (**5 instructions listed as `"built in uclrcde"`**, not checked or imported by APCCS)
+    * **Total at `CP-150`:** **145 APCCS-built instructions verified** + **5 instructions listed as `"built in uclrcde"`** (covering instruction numbers `1..150`).
+  * **At Checkpoint `CP-195` (End of Batch 39, Instruction Numbers `1..195`):**
+    * `code/apccs_core.py`: `INST-0001`..`INST-0100` (**100 APCCS instructions**)
+    * `code/apccs_q1_part2.py`: `INST-0101`..`INST-0140` and `INST-0146`..`INST-0150` (**45 APCCS instructions**)
+    * `code/apccs_q1_part3.py`: `INST-0151`..`INST-0170` and `INST-0181`..`INST-0195` (**35 APCCS instructions**)
+    * External legal repository (`uclrcde`): `INST-0141`..`INST-0145` and `INST-0171`..`INST-0180` (**15 instructions listed as `"built in uclrcde"`**, not checked or imported by APCCS)
+    * **Total at `CP-195`:** **180 APCCS-built instructions verified** + **15 instructions listed as `"built in uclrcde"`** (covering instruction numbers `1..195`).
+
+### Batch 30: instructions 146–150. Canary: `Canary check: M = K -> submarine`. Ready to build.
+
+Target: `code/apccs_q1_part2.py`, tests in `code/test_apccs_q1_part2.py`.
+
+* **Batch Status:** **Ready to build** (all five instructions are fully worded; `INST-0146` and `INST-0149` are preserved word for word from `APCCS_CATALOG_NEXT_B30`).
+* **Canary Line:** `Canary check: M = K -> submarine` (`Canary: M=K -> submarine`)
+* **Target Files:** `code/apccs_q1_part2.py` and `code/test_apccs_q1_part2.py` (plus `START_OUR_OWN_SYSTEM.html`)
+
+```text
+* Batch_30 (146 to 150 of 1000) | Status: Ready to build | Canary: M=K -> submarine | Canary Line: Canary check: M = K -> submarine | Target Files: code/apccs_q1_part2.py, code/test_apccs_q1_part2.py
+  - INST-0146: [ONE_CLICK_LOCAL_LAUNCHER_GENERATOR] Build generate_local_startup_scripts(vault_dir) emitting `launch_local_system.py`, `START_WINDOWS.bat`, `START_MAC_LINUX.sh`, and `START_TERMUX.sh` (with SHA-256 manifest) that boot `127.0.0.1:8501` and open `START_OUR_OWN_SYSTEM.html`.
+  - INST-0147: [PART2_SCHEMA_AND_SYMBOL_CONTINUITY] Build verify_101_to_150_continuity(part2_source_text) verifying all 45 APCCS Part 2 markers (`INST-0101`..`INST-0140` and `INST-0146`..`INST-0150`) and AST symbols in `code/apccs_q1_part2.py` with zero dropped functions, while listing `INST-0141`..`INST-0145` as `"built in uclrcde"` without importing or reading `uclrcde` code so the two projects stay separate.
+  - INST-0148: [UNIFIED_CP150_SCORECARD_GENERATOR] Build generate_cp150_scorecard(vault_dir) combining frozen `CP-100` (`1..100`, 100 APCCS instructions) and verified APCCS Part 2 (`101..140` and `146..150`, 45 APCCS instructions) into a plain-English scorecard for instruction numbers `1..150` (145 APCCS-built instructions verified in APCCS, plus `141..145` explicitly listed as `"built in uclrcde"` without importing or reading `uclrcde` code).
+  - INST-0149: [CLEAN_RECOVER_MD_SYNCHRONIZER] Build sync_recover_md_state(vault_dir, completed_num, accepted_num, active_canary) keeping `RECOVER.md` synchronized with zero stale `PENDING` labels.
+  - INST-0150: [MILESTONE_CP150_CHECKPOINT_LOCK] Build lock_checkpoint_cp150(vault_dir) sealing `audit/CP-150_LOCK.json` (verifying the 145 APCCS-built instructions `1..140` and `146..150` + full Clickable Try-Out UI package, and recording `141..145` as `"built in uclrcde"` without importing or reading `uclrcde` code) into `APPCS_MASTER_BUILD.zip` and `APCCS_MASTER_BUILD.zip`.
+```
+
+### Batch 39: instructions 191–195. Canary: `Canary check: T = W -> compass`. Ready to build.
+
+Target: `code/apccs_q1_part3.py`, tests in `code/test_apccs_q1_part3.py`.
+
+* **Batch Status:** **Ready to build** (all five instructions are fully worded).
+* **Canary Line:** `Canary check: T = W -> compass` (`Canary: T=W -> compass`)
+* **Target Files:** `code/apccs_q1_part3.py` and `code/test_apccs_q1_part3.py`
+
+```text
+* Batch_39 (191 to 195 of 1000) | Status: Ready to build | Canary: T=W -> compass | Canary Line: Canary check: T = W -> compass | Target Files: code/apccs_q1_part3.py, code/test_apccs_q1_part3.py
+  - INST-0191: [PART3_AST_SCHEMA_AND_CONTINUITY_VERIFIER] Build verify_151_to_195_continuity(part3_source_text) using Python `ast` to verify all 35 APCCS Part 3 markers (`INST-0151`..`INST-0170` and `INST-0181`..`INST-0195`) and top-level function/class symbols in `code/apccs_q1_part3.py` with zero dropped or duplicate definitions, while listing `INST-0171`..`INST-0180` as `"built in uclrcde"` without importing or reading `uclrcde` code so the two projects stay separate.
+  - INST-0192: [THREE_MODULE_COHERENCE_AUDITOR] Build verify_cp195_three_module_coherence(vault_dir) verifying frozen `code/apccs_core.py` (`1..100`, 100 APCCS instructions), frozen `code/apccs_q1_part2.py` (`101..140` and `146..150`, 45 APCCS instructions), and active `code/apccs_q1_part3.py` (`151..170` and `181..195`, 35 APCCS instructions), plus SQLite integrity and `START_OUR_OWN_SYSTEM.html` APCCS route coverage, while recording `141..145` and `171..180` as `"built in uclrcde"` without importing or reading `uclrcde` code.
+  - INST-0193: [UNIFIED_CP195_OWNER_SCORECARD] Build generate_cp195_scorecard(vault_dir) emitting `audit/OWNER_SCORECARD_CP195.txt` covering instruction numbers `1..195` across Core, Part 2, and Part 3: verifying all 180 APCCS-built instructions (`1..140`, `146..170`, `181..195`) and listing the 15 legal instructions (`141..145` and `171..180`) as `"built in uclrcde"` without importing or reading `uclrcde` code.
+  - INST-0194: [ZERO_LAG_PASS_TESTS_AND_RECOVER_COMPACTOR] Build synchronize_all_pass_tests_and_recover(vault_dir, completed_num=195, accepted_num=190, canary_line="Canary check: T = W -> compass") recording 180 APCCS-built instructions completed (`175` APCCS-built instructions accepted prior to Batch 39) alongside 15 instructions (`141..145`, `171..180`) listed as `"built in uclrcde"` without importing or reading `uclrcde` code, ensuring zero stale `PENDING` labels remain in `RECOVER.md` or nested `pass_tests*.json` objects.
+  - INST-0195: [MILESTONE_CP195_CHECKPOINT_LOCK] Build lock_checkpoint_cp195(vault_dir) sealing `audit/CP-195_LOCK.json` (verifying all 180 APCCS-built instructions `1..140`, `146..170`, and `181..195`, and listing `141..145` and `171..180` as `"built in uclrcde"` without importing or reading `uclrcde` code) into both `APPCS_MASTER_BUILD.zip` and `APCCS_MASTER_BUILD.zip`.
+```
+
+Note for the builder (Claude, not the architect): the instructions name files outside `code/` (`START_OUR_OWN_SYSTEM.html`, launcher scripts, `audit/` files, `RECOVER.md`, the build zips). As with earlier batches, build them inside temporary test folders under `vault_dir`, and report in the pull request anything that AGENTS.md doesn't allow.
