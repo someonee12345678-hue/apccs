@@ -14,7 +14,7 @@ This file tells a scheduled Claude run exactly what to do. Each run starts with 
 - Never merge, never push to `main`, never approve, close or edit anything the owner made, and never change repository settings.
 - At most one open batch pull request at a time, and at most one new pull request per run.
 - Never invent instruction wording. Build only what `plan/QUEUE.md` says, word for word.
-- Work only in `someonee12345678-hue/apccs`. Don't touch the owner's other repositories. In Google Drive, only read files and create new log files in the log folder (step 8); never edit, move or delete anything.
+- Work in `someonee12345678-hue/apccs`. Work in another of the owner's repositories only when `plan/QUEUE.md` names it as the target repository of the batch you're building and `PROJECTS.md` on `main` says it's ready for the builder. There, follow that repository's own `AGENTS.md`, never push to its `main`, and change it only through one pull request. Never touch any other repository. In Google Drive, only read files and create new log files in the log folder (step 8); never edit, move or delete anything.
 - Follow every rule in AGENTS.md.
 - If something is unclear, or a check fails twice, stop and report it. Don't guess.
 
@@ -26,7 +26,7 @@ This file tells a scheduled Claude run exactly what to do. Each run starts with 
 
 **2. Setup in place?** If `main` doesn't contain this file (`BUILDER_RUNBOOK.md`), the setup pull request hasn't been merged yet. Do nothing and end the run.
 
-**3. Batch pull request already open?** Look for open pull requests with the label `apccs-batch`.
+**3. Batch pull request already open?** Look for open pull requests with the label `apccs-batch`, in apccs and in every repository `PROJECTS.md` says is ready for the builder.
 - **Checks green, or still running:** do nothing. It's waiting for the owner's Merge tap. End the run.
 - **A check failed:** count the commits on that branch whose message starts with `Fix:`. If there are fewer than 2, find the cause from the check's log, fix it on the same branch in a commit starting `Fix:`, push, and go to step 8. If there are already 2, add the label `needs-owner`, post one plain-English comment explaining what failed and that it needs the owner or architect, and go to step 8.
 
@@ -34,14 +34,15 @@ This file tells a scheduled Claude run exactly what to do. Each run starts with 
 - Create branch `plan/<short-name>` from `main` and add a section to the **end** of `plan/QUEUE.md`. It holds the file's title, its Drive id and its batch wording, copied word for word, including each batch's canary line and its target files (for example `code/apccs_q1_part3.py`) where the architect names them. Mark each batch "Ready to build" if its five instructions are fully worded, or "NOT ready" if not.
 - Open a pull request titled `Plan update from Gemini: <file title>`, labelled `apccs-plan`, saying in plain English which batches it adds. That is this run's one pull request. Go to step 8.
 
-**5. Pick the next batch.** Batches are built strictly in order. The next batch is the lowest-numbered one in `plan/QUEUE.md` whose first test (for example `def test_141_`) is not yet in any `code/test_*.py` file on `main`. Use that batch's latest full-wording section.
-- **If it's marked NOT ready, or nothing is left:** don't skip ahead and don't build. If no log entry in the last 24 hours already asked for wording, go to step 8 and include this request for the owner to give Gemini, word for word:
+**5. Pick the next batch.** Batches are built strictly in order. The next batch is the lowest-numbered one in `plan/QUEUE.md` whose first test (for example `def test_141_`) is not yet in any `code/test_*.py` file on `main` of that batch's target repository (apccs unless the plan names another). Use that batch's latest full-wording section. A later section that marks the batch NOT ready (for example an owner decision) overrides earlier sections until a newer full-wording section follows it.
+- **If it's marked NOT ready, or nothing is left:** don't skip ahead and don't build. If the plan says what the batch is waiting for, report that instead of the request below. Otherwise, if no log entry in the last 24 hours already asked for wording, go to step 8 and include this request for the owner to give Gemini, word for word:
   > Gemini: Claude, the APCCS builder, needs the next instructions. Write the full catalog wording for APCCS Batch <N> onward (instructions <first>–<first+49>), five instructions per batch, each batch with its canary line, in the same style as quarter1_batches_22_to_30.json. Save it to Google Drive as one file named APCCS_CATALOG_NEXT_B<N>.
 
   Otherwise end the run.
 
 **6. Build the batch.**
 - Create branch `batch/B<NN>` from `main`.
+- Find the batch's target repository in `plan/QUEUE.md`. It is apccs unless the plan names another. If it's another repository: check that `PROJECTS.md` on apccs `main` says it's ready for the builder (if not, don't build; go to step 8 and report it), then attach it with push access, clone it, read its `AGENTS.md`, and do the rest of this step and step 7 in that repository, following its rules and its own test runner.
 - Find the batch's target module in `plan/QUEUE.md`. It is `code/apccs_q1_part2.py` unless the plan names another one (Gemini's plan puts Batches 31–39 in `code/apccs_q1_part3.py`). Its test file is the same name with `test_` in front.
 - Add the code for the five instructions to the **end** of the target module. If the module doesn't exist yet, create it, and create its test file ending with an `if __name__ == "__main__":` block that runs the tests and exits non-zero on failure. Never change a file the plan says is frozen.
 - Add one test class, named like `Part2Batch<NN>Tests` or `Part3Batch<NN>Tests` to match the module, to the target test file just before its final `if __name__ == "__main__":` block. Its tests print the batch's canary line.
@@ -49,7 +50,7 @@ This file tells a scheduled Claude run exactly what to do. Each run starts with 
 - Run `python3.11 tools/run_all_tests.py` from the top folder. Check the lines you added contain no `eval(`, `exec(` or `DROP TABLE`. Check `git diff main -- code/` only adds lines at the end of existing files, or adds new files.
 - You get two tries to make everything pass. If it still fails, don't open a pull request; go to step 8 and report what failed.
 
-**7. Open the pull request.** Push the branch and open a pull request into `main` titled `Batch <NN>: instructions <A>–<B> (<a few words on what it adds>)`, with the label `apccs-batch`. In the description, in plain English:
+**7. Open the pull request.** Push the branch and open a pull request into `main` of the target repository, titled `Batch <NN>: instructions <A>–<B> (<a few words on what it adds>)`, with the label `apccs-batch`. In the description, in plain English:
 - one line per instruction saying what it does;
 - the summary table from `tools/run_all_tests.py`, and the Part 2 runtime (report an overrun past 5 seconds honestly);
 - the canary line;

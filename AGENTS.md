@@ -8,7 +8,7 @@ APCCS is a Python library: Python 3.11 or newer, standard library only. The code
 
 ## Hard rules
 
-1. **Never edit, rename or delete** anything in `.github/` or `tools/`, or `AGENTS.md`, `CLAUDE.md` and `BUILDER_RUNBOOK.md`. A guard check blocks any pull request that does. Changes to these come only from the owner.
+1. **Never edit, rename or delete** anything in `.github/` or `tools/`, or `AGENTS.md`, `CLAUDE.md`, `BUILDER_RUNBOOK.md` and `PROJECTS.md`. A guard check blocks any pull request that does. Changes to these come only from the owner.
 2. **`plan/` only grows.** New batch wording from the architect may be added to the end of `plan/QUEUE.md`, copied word for word from the architect's file. Existing wording is never changed.
 3. **`code/apccs_core.py` and `code/test_apccs_core.py` are frozen** (instructions 1–100, checkpoint CP-100). Their fingerprints are checked on every run.
 4. **Other code files are append-only.** New code for a batch is added to the end of the module `plan/QUEUE.md` names for that batch: `code/apccs_q1_part2.py` unless the plan says otherwise (Gemini's plan puts Batches 31–39 in `code/apccs_q1_part3.py`). Every existing byte stays exactly as it is. New files are fine, and a file the plan declares frozen is never changed again.

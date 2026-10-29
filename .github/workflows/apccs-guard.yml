@@ -4,7 +4,7 @@
 #
 # Rules (the same ones listed in AGENTS.md):
 #   - Never change: .github/, tools/, AGENTS.md, CLAUDE.md,
-#     BUILDER_RUNBOOK.md, code/apccs_core.py, code/test_apccs_core.py
+#     BUILDER_RUNBOOK.md, PROJECTS.md, code/apccs_core.py, code/test_apccs_core.py
 #   - Other files in code/ and plan/ are append-only: the old file must still
 #     be the exact beginning of the new file. Nothing may be deleted or renamed.
 #   - Test files may grow anywhere, but no existing test may disappear.
@@ -65,7 +65,7 @@ jobs:
               i += 2
 
           PROTECTED_DIRS = (".github/", "tools/")
-          PROTECTED_FILES = {"AGENTS.md", "CLAUDE.md", "BUILDER_RUNBOOK.md",
+          PROTECTED_FILES = {"AGENTS.md", "CLAUDE.md", "BUILDER_RUNBOOK.md", "PROJECTS.md",
                              "code/apccs_core.py", "code/test_apccs_core.py"}
           APPEND_ONLY_DIRS = ("code/", "plan/")
           TEST_NAME = re.compile(rb"^\s*def (test_\w+)\s*\(", re.M)
