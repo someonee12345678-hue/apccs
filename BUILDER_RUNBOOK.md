@@ -56,8 +56,9 @@ This file tells a scheduled Claude run exactly what to do. Each run starts with 
 - "When both checks below are green, tap **Merge**. If either is red, leave it; the next run will look at it."
 
 **8. Log it.** Only if this run changed something, or found a problem the owner must know about. Idle runs leave no log entry.
-- The log is one file per entry in Google Drive folder id `1IE4okuoLeHOUXxNL9NXYm8l2V69YNpf9` (Shared project › Conversation and Change History). Read `CLAUDE_AUDIT_LOG_README.md` there first and follow its format.
-- Find the highest-numbered `CLAUDE_AUDIT_LOG_ENTRY_NNNN.md` and read it. Your entry is the next number. Copy its "Change register (all changes)" and "Open items" into your entry and update them. Number new changes from the next free `CHG-CL-` number.
+- The log is one file per entry in Google Drive folder id `1IE4okuoLeHOUXxNL9NXYm8l2V69YNpf9` (Shared project › Conversation and Change History). Read `CLAUDE_AUDIT_LOG_README.md` there first and follow its format, except for the owner's change of 2026-10-29 below, which wins where they differ.
+- Find the highest-numbered `CLAUDE_AUDIT_LOG_ENTRY_NNNN.md` and read it. Your entry is the next number. Copy its "Open items" into your entry and update them. List this run's changes in a "Change register addition" table, numbered from the next free `CHG-CL-` number.
+- Shorter entries (owner's choice, 2026-10-29): include the full "Change register (all changes)" only if yours is the first entry of the day (America/Vancouver). It is the newest full register, plus every addition made since, plus yours. Otherwise leave it out.
 - "User message sent": `None. Scheduled builder run.` Correlation ID: `CLAUDE-AUDIT-CORR-<YYYYMMDD>-<entry number>`. Times are America/Vancouver.
 - Record what you did, every pull request or commit, check results, and anything that failed. Never include secrets or personal details.
 - Create the file as markdown (create only; never edit or delete an existing file).
