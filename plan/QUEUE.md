@@ -169,3 +169,130 @@ The Canadian legal research engine (UCLRCDE) is a separate project. Its work is 
 - **Batch 35 (instructions 171–175): NOT ready.** Same reason.
 - **Batch 36 (instructions 176–180): NOT ready.** Same reason.
 - Batches are still built strictly in order, so the builder stops at Batch 29 until its re-planned wording is added below and its repository is ready. It doesn't skip ahead.
+
+## Plan update from Gemini: APCCS_CATALOG_NEXT_LEGAL_SPLIT
+
+- Drive file title: `APCCS_CATALOG_NEXT_LEGAL_SPLIT`
+- Drive file id: `1d3YfXqkHDIeuBhf27wSZJLtD2iqQMhEQohmdxMt2X94`
+- Added to this queue on 2026-10-29 by Claude (Master Architect), in place of the builder's next run. Basis: owner decisions D-005 and D-006 (the section above). The wording below is copied word for word from that file: its "GLOBAL RULES FOR ALL BATCHES IN THIS FILE", Section 2 and Section 3. Section 1 of the file, the record of which four instructions were replaced and why, stays in Drive.
+- These are the latest full-wording sections for Batches 29, 35 and 36, so they replace the "NOT ready" note above. Their target repository is `someonee12345678-hue/uclrcde`. The builder builds them there only once `PROJECTS.md` on apccs `main` says that repository is ready for the builder.
+
+### Architect's global rules (copied word for word)
+
+1. **Python Standard Library Only:** Use Python 3.11+ standard library modules only (`sqlite3`, `hashlib`, `json`, `re`, `datetime`, `pathlib`, `http.server`, `unittest`, `ast`, ` tempfile`). Zero third-party packages.
+2. **Real Behavior & Negative Testing:** Every instruction's unit tests must verify real behavior on both valid (normal) inputs and invalid/malformed/adversarial (bad) inputs (e.g., missing fields, bad dates, tampered hashes, unverified quotes, SQL injection/destructive DDL attempts).
+3. **Synthetic / Made-Up Data Only:** All code, fixtures, docstrings, and unit tests must use strictly fictional, made-up data (e.g., `"Jane Roe"`, `"John Doe"`, `"MATTER-SYNTH-0001"`). Never include real names, real case numbers, or real client details.
+4. **Strict Project Separation:**
+   - Batches 29, 35, and 36 belong exclusively to **`someonee12345678-hue/uclrcde`** (`code/uclrcde_core.py`, `code/test_uclrcde_core.py`, and `ui/uclrcde_workspace.html`) with zero imports from `apccs_core.py` or `apccs_q1_part2.py`.
+   - All APCCS-side mounting and `/api/legal/*` control-panel wiring is moved into the separate **"APCCS legal connection batch"** in Section 3 (`Status: NOT ready: number to be assigned`), and APCCS must continue working normally when `uclrcde` is not installed.
+
+### Batch 29: instructions 141–145. Canary: `Canary check: T = W -> compass`. Ready to build.
+
+Target repository: `someonee12345678-hue/uclrcde`. Target: `code/uclrcde_core.py`, tests in `code/test_uclrcde_core.py`.
+
+#### Batch_29 (141 to 145 of 1000) | Canary: T=W -> compass
+* **Status:** **Ready to build** *(all 5 instructions fully worded; requires target repo `someonee12345678-hue/uclrcde` and Owner merge of plan PR)*
+* **Target Repository:** `someonee12345678-hue/uclrcde`
+* **Target Files:** `code/uclrcde_core.py` and `code/test_uclrcde_core.py`
+* **Canary Line:** `Canary check: T = W -> compass`
+
+  - **INST-0141: [UCLRCDE_STANDALONE_DB_AND_MATTER_REGISTRY]**
+    Build `init_uclrcde_db_and_register_matter(db_path, matter_id, title, jurisdiction, court_level, filing_role)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) initializing a standalone SQLite database in WAL mode with a SQLite authorizer denying `DROP TABLE` and `ALTER TABLE`, and registering a legal matter record with validation rejecting empty IDs, unsupported jurisdictions/roles, or duplicate matter overwrites (using synthetic test data only). *(Replaces APCCS-mount `INST-0141` so `uclrcde` has its own independent database spine).*
+
+  - **INST-0142: [UCLRCDE_CASE_DOCKET_AND_TIMELINE]**
+    Build `add_and_list_legal_docket_events(db_path, case_id, event_date, filing_type, title, quote_ref)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) storing chronological case filings and quote references in `uclrcde`'s standalone SQLite schema, returning a strict date-ordered (`YYYY-MM-DD`) docket timeline, deduplicating identical entries by SHA-256, and rejecting malformed dates, unregistered `case_id` values, or empty titles.
+
+  - **INST-0143: [UCLRCDE_EXHIBIT_STAMP_AND_RESPONSE_DRAFTER]**
+    Build `draft_point_by_point_response(db_path, case_id, claim_points_list, responses_list, exhibits_list)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) pairing opposing claim paragraphs with structured point-by-point responses and assigning deterministic sequential exhibit stamps (`Exhibit A, B, C...` with `Page 1 to N` ranges), while rejecting mismatched claim/response structures, negative/zero page counts, or unlinked exhibit references.
+
+  - **INST-0144: [UCLRCDE_ONE_PAGE_LAWYER_TRIAGE_BRIEF]**
+    Build `export_lawyer_triage_brief(db_path, case_id, level="BEGINNER")` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) generating a noise-free 1-page chronological case summary, point-by-point response digest, verified quote citations, and procedural checklist tailored to `BEGINNER`, `NOVICE`, or `EXPERT` levels (with disclaimer that output is procedural legal information, not legal advice), rejecting unknown cases or invalid levels.
+
+  - **INST-0145: [UCLRCDE_SOURCE_DOCUMENT_AND_FTS5_LOCKER]**
+    Build `ingest_and_lock_legal_source_document(db_path, case_id, doc_id, title, raw_text, source_type)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) sealing uploaded synthetic legal documents in SQLite with a SHA-256 hash, indexing their text in a local SQLite FTS5 table, and providing exact literal substring line-number and character-offset lookup, rejecting tampered re-uploads or empty documents. *(Replaces APCCS `START_OUR_OWN_SYSTEM.html` wiring in `INST-0145` so `uclrcde` has self-contained source document & quote indexing).*
+
+### Batch 35: instructions 171–175. Canary: `Canary check: M = K -> submarine`. Ready to build.
+
+Target repository: `someonee12345678-hue/uclrcde`. Target: `code/uclrcde_core.py`, tests in `code/test_uclrcde_core.py`.
+
+#### Batch_35 (171 to 175 of 1000) | Canary: M=K -> submarine
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batch_29` prefix in `code/uclrcde_core.py`)*
+* **Target Repository:** `someonee12345678-hue/uclrcde`
+* **Target Files:** `code/uclrcde_core.py` and `code/test_uclrcde_core.py`
+* **Canary Line:** `Canary check: M = K -> submarine`
+
+  - **INST-0171: [UCLRCDE_COURT_HIERARCHY_ROUTE_MAP]**
+    Build `get_canadian_court_hierarchy_route(jurisdiction, matter_type, current_stage)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) mapping deterministic procedural routes from Administrative Tribunals -> Provincial Court -> Supreme/Superior Court -> Court of Appeal -> Supreme Court of Canada with required filing stages and review/appeal standards, rejecting unknown jurisdictions, unsupported matter types, or invalid stage transitions.
+
+  - **INST-0172: [UCLRCDE_SERVICE_AND_FILING_DEADLINE_ENGINE]**
+    Build `calculate_procedural_filing_deadline(event_date_str, rule_days, count_mode, holiday_list)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) deterministically computing `CLEAR_DAYS` vs. `CALENDAR_DAYS` service and response deadlines (skipping weekends and supplied statutory holidays when required and rolling forward if the final day falls on a weekend/holiday) while flagging `SOURCE_RULE_CONFIRMATION_REQUIRED = True` until confirmed by the user, and rejecting invalid dates, non-positive `rule_days`, or unknown `count_mode` values.
+
+  - **INST-0173: [UCLRCDE_OFFICIAL_FORMS_AND_SERVICE_GUIDE]**
+    Build `get_official_form_and_service_checklist(jurisdiction, stage_code, level="BEGINNER")` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) providing self-contained, plain-English procedural checklists (`BEGINNER`, `NOVICE`, `EXPERT`) on locating official court forms, required methods of service, and fee-waiver/indigency procedures, rejecting unsupported jurisdictions, unknown stage codes, or invalid guidance levels.
+
+  - **INST-0174: [UCLRCDE_TWO_SIDED_ISSUE_WEIGHER]**
+    Build `build_two_sided_issue_matrix(db_path, case_id, issue_title, claimant_points, respondent_points, evidence_refs)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) organizing claimant and respondent positions side-by-side in SQLite with verified links to stored source documents/exhibits (`INST-0143`, `INST-0145`) and zero fabricated citations, rejecting unverified evidence references or empty issue definitions.
+
+  - **INST-0175: [UCLRCDE_AFFIDAVIT_OF_SERVICE_AND_PROOF_BUILDER]**
+    Build `compile_service_proof_record(db_path, case_id, document_served, method_of_service, served_date_str, recipient_role, rule_ref)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) validating permitted service methods (personal service required for originating processes vs. ordinary/address-for-service for subsequent filings), computing the effective service date and response deadline via `INST-0172`, and storing a verifiable Affidavit of Service proof record in SQLite, rejecting invalid service methods or malformed dates. *(Replaces APCCS `START_OUR_OWN_SYSTEM.html` wiring in `INST-0175` with pure legal-engine service-proof verification).*
+
+### Batch 36: instructions 176–180. Canary: `Canary check: T = X -> motorcycle`. Ready to build.
+
+Target repository: `someonee12345678-hue/uclrcde`. Target: `code/uclrcde_core.py`, tests in `code/test_uclrcde_core.py`, and `ui/uclrcde_workspace.html`.
+
+#### Batch_36 (176 to 180 of 1000) | Canary: T=X -> motorcycle
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batch_29` + `Batch_35` prefix in `code/uclrcde_core.py`)*
+* **Target Repository:** `someonee12345678-hue/uclrcde`
+* **Target Files:** `code/uclrcde_core.py`, `code/test_uclrcde_core.py`, and `ui/uclrcde_workspace.html`
+* **Canary Line:** `Canary check: T = X -> motorcycle`
+
+  - **INST-0176: [UCLRCDE_WORD_FOR_WORD_QUOTE_AUDITOR]**
+    Build `verify_legal_brief_quotes(db_path, brief_text, cited_doc_ids)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) cross-checking every quoted passage in a draft response or brief word-for-word against the locked source documents stored in `uclrcde`'s SQLite database (`INST-0145`), returning exact line numbers and character offsets for verified quotes and rejecting any altered, paraphrased, or fabricated quote or missing `doc_id`.
+
+  - **INST-0177: [UCLRCDE_AFFIDAVIT_BOOK_PAGINATOR]**
+    Build `compile_numbered_exhibit_index(db_path, case_id, exhibits_list, max_pages_per_bundle=20)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) generating a deterministic Table of Exhibits (`Exhibit A, B, C...`) with sequential start/end page numbers (`Page 1 to N`), bundle-split warnings when total pages exceed `max_pages_per_bundle`, and SHA-256 document digests, rejecting duplicate exhibit IDs, missing hashes, or invalid page counts.
+
+  - **INST-0178: [UCLRCDE_URGENT_COUNSEL_TRIAGE_DETECTOR]**
+    Build `evaluate_urgent_legal_representation_flags(db_path, case_id, case_facts_dict)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) deterministically detecting high-risk triggers (imminent limitation/filing deadline within 7 days, liberty/detention risk, child protection/parenting urgency, contempt motion, or application to strike/dismiss) and recording a `Critical` alert in `uclrcde`'s SQLite alert table advising immediate duty counsel or legal aid review, rejecting malformed fact payloads.
+
+  - **INST-0179: [UCLRCDE_EXPORTABLE_CASE_BINDER_JSON_MD]**
+    Build `export_verified_case_binder(db_path, output_dir, case_id, redact_pii=False)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) exporting a self-contained Markdown and JSON case binder (Matter Summary, Chronological Docket Timeline, Table of Exhibits, Point-by-Point Response, Two-Sided Issue Matrix, Verified Quote Receipts, and 1-Page Lawyer Triage Brief) with SHA-256 manifest and optional regex PII redaction (masking synthetic phone numbers, emails, postal codes, and street addresses), rejecting traversal paths or cases with unverified quotes.
+
+  - **INST-0180: [UCLRCDE_STANDALONE_LOCAL_WORKSPACE_AND_SERVER]**
+    Build `create_uclrcde_standalone_server_and_ui(db_path, output_html_path="ui/uclrcde_workspace.html", host="127.0.0.1", port=8530)` in `code/uclrcde_core.py` (tested in `code/test_uclrcde_core.py`) emitting the standalone `ui/uclrcde_workspace.html` interface and a standard-library loopback HTTP server (`127.0.0.1`) exposing `/uclrcde/matter`, `/uclrcde/docket`, `/uclrcde/response`, `/uclrcde/hierarchy`, `/uclrcde/deadline`, `/uclrcde/verify_quotes`, and `/uclrcde/export_binder`, verified by automated ephemeral-port HTTP smoke tests covering both valid requests and 400/404 rejection of bad inputs. *(Replaces APCCS `START_OUR_OWN_SYSTEM.html` wiring in `INST-0180` so `someonee12345678-hue/uclrcde` is a complete, standalone application).*
+
+### APCCS legal connection batch. NOT ready: number to be assigned.
+
+Target repository: `someonee12345678-hue/apccs`. Not built until the architect gives it a batch number, after the Genesis batches that start at Batch 40.
+
+#### APCCS legal connection batch (Batch Number & Instruction Numbers Assigned After Genesis Batches 40+)
+* **Status:** **NOT ready: number to be assigned** *(to be numbered and scheduled after the Genesis batches starting at Batch 40)*
+* **Target Repository:** `someonee12345678-hue/apccs`
+* **Target Files:** `code/apccs_q1_part3.py` (or active post-Genesis APCCS module), `code/test_apccs_q1_part3.py`, and `START_OUR_OWN_SYSTEM.html`
+* **Canary Line:** `To be assigned from rotating codebook when batch number is assigned`
+* **Mandatory Decoupling Invariant:** **APCCS must keep working with 100% of its core, builder, and control-panel features when the `uclrcde` legal engine is NOT installed.** No APCCS startup path, test runner, or UI view may crash or fail when `uclrcde` is absent.
+
+  - **INST-LEGAL-CONN-01: [OPTIONAL_UCLRCDE_PLUGIN_DISCOVERY_AND_PROBE]**
+    Build `probe_optional_uclrcde_plugin(vault_dir, external_repo_path=None)` in the active APCCS module checking whether a verified `uclrcde` package or local endpoint is present. When `uclrcde` is absent, return `{"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "apccs_healthy": True}` with zero errors; when present, verify its manifest and SHA-256 hashes via `INST-0051`..`0060` without importing legal business logic into APCCS core.
+
+  - **INST-LEGAL-CONN-02: [OPTIONAL_UCLRCDE_SIDE_LOADER_MOUNT_BRIDGE]**
+    Build `mount_or_unmount_optional_uclrcde(vault_dir, db_path, session_id, plugin_path=None)` allowing the APCCS Left Side-Loader (`INST-0053`, `INST-0056`) to mount or unmount `uclrcde` in an isolated namespace when installed, while preserving all APCCS user data (`INST-0054`) and returning a clean non-blocking prompt (`"UCLRCDE plugin not installed — APCCS running in standard mode"`) if the user clicks Mount when `uclrcde` is not present.
+
+  - **INST-LEGAL-CONN-03: [DECOUPLED_LEGAL_PROXY_ROUTER_WITH_ABSENT_FALLBACK]**
+    Build `handle_optional_legal_proxy_api(vault_dir, subpath, method, body_bytes)` in the APCCS local server router (`/api/legal/*`). When `uclrcde` is installed and mounted, forward `/api/legal/*` requests to the mounted `uclrcde` handler; when `uclrcde` is not installed, return HTTP `200` / `503` structured JSON `{"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "message": "Install someonee12345678-hue/uclrcde to enable legal workspace routes."}` without raising unhandled exceptions or breaking any other `/api/*` route.
+
+  - **INST-LEGAL-CONN-04: [START_OUR_OWN_SYSTEM_OPTIONAL_PLUGIN_UI_SLOT]**
+    Update `START_OUR_OWN_SYSTEM.html` so the Side-Loader displays `UCLRCDE` as an optional plugin card showing either `Mounted / Ready` (rendering the plugin's workspace view when installed) or `Not Installed (Optional)` (keeping all APCCS builder tabs, sub-tabs, tutor, and automation controls 100% functional when `uclrcde` is absent).
+
+  - **INST-LEGAL-CONN-05: [DUAL_MODE_INSTALLED_AND_ABSENT_SMOKE_TESTS]**
+    Build unit and HTTP smoke tests verifying both states: (1) **Absent Mode:** with zero `uclrcde` files present on disk, APCCS boots, serves `START_OUR_OWN_SYSTEM.html`, passes all `/api/status`, `/api/engines`, `/api/subtabs`, and `/api/legal/status` checks cleanly; and (2) **Installed Mode:** with a mock/mounted `uclrcde` plugin present, APCCS mounts the plugin, proxies `/api/legal/*` calls, and unmounts cleanly with zero data loss.
+
+## Architect's note, 2026-10-29: Batches 30 and 39 wait for a count fix
+
+Added by Claude (Master Architect) on 2026-10-29, for the owner's approval by merging this pull request. Basis: owner decision D-006 (legal work moves to `uclrcde`).
+
+Instructions 141–145 and 171–180 are now built in `someonee12345678-hue/uclrcde`, not in APCCS. Several APCCS instructions still count every number in their range as APCCS code: INST-0147, INST-0148 and INST-0150 in Batch 30 (instructions 101–150 in `code/apccs_q1_part2.py`, the CP-150 scorecard and lock), and INST-0191 to INST-0195 in Batch 39 (instructions 151–195 in `code/apccs_q1_part3.py`, the CP-195 checks, scorecard and lock). Built as worded, their checks would report instructions 141–145 and 171–180 as missing.
+
+- **Batch 30 (instructions 146–150): NOT ready.** Waiting for the architect's corrected wording (requested in Drive › Claude 2 › `GEMINI_TASK_COUNT_FIX_AND_B40`).
+- **Batch 39 (instructions 191–195): NOT ready.** Same reason.
+- Batches 31 to 34 and 37 to 38 are unchanged. Batches are still built strictly in order, so after Batch 29 the builder waits at Batch 30 until a newer full-wording section for it is added below.
