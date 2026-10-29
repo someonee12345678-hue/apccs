@@ -359,3 +359,389 @@ Target: `code/apccs_q1_part3.py`, tests in `code/test_apccs_q1_part3.py`.
 ```
 
 Note for the builder (Claude, not the architect): the instructions name files outside `code/` (`START_OUR_OWN_SYSTEM.html`, launcher scripts, `audit/` files, `RECOVER.md`, the build zips). As with earlier batches, build them inside temporary test folders under `vault_dir`, and report in the pull request anything that AGENTS.md doesn't allow.
+
+## Plan update from Gemini: APCCS_CATALOG_NEXT_B40
+
+- Drive file title: `APCCS_CATALOG_NEXT_B40`
+- Drive file id: `1XzpEV9v6U8VulIKWwaguj31vZTjGy22Ne46vVss-AFQ` (saved 2026-10-29 11:10 America/Vancouver)
+- Added to this queue on 2026-10-29 by the scheduled builder. The wording below is copied word for word from that file: its "GLOBAL RULES & ARCHITECTURAL DECISIONS FOR BATCHES 40 TO 49" and its Part 1 ("FULL CATALOG WORDING FOR BATCHES 40 TO 49"). Part 2 of the file repeats the same batches as shorter JSON and stays in Drive. Only the Google Docs export's backslash escapes were removed, and empty lines were tidied.
+- It adds Batches 40 to 49 (instructions 196–245), all in `someonee12345678-hue/apccs`. Batches 40 to 47 rebuild the Genesis features in a new module, `code/apccs_genesis.py`. Batch 48 is the numbered "APCCS legal connection batch", so it is the latest full-wording section for that batch and replaces its "NOT ready: number to be assigned" note above. Batch 49 is the CP-245 checkpoint.
+- Per the file's own notice, none of this is approved for building until the owner merges the pull request that adds it.
+
+### Architect's global rules (copied word for word)
+
+1. **Python Standard Library Only (Zero Kotlin Porting):**
+
+   - Rebuild Genesis v0.2's features cleanly in Python 3.11+ standard library only (`sqlite3`, `hashlib`, `json`, `html`, `xml.etree.ElementTree`, `re`, `datetime`, `copy`, `pathlib`, `http.server`, `unittest`, `ast`, `tempfile`) inside **`code/apccs_genesis.py`** with unit tests in **`code/test_apccs_genesis.py`** and UI wiring in **`START_OUR_OWN_SYSTEM.html`**.
+
+   - Do not port or copy Kotlin source code; use `GENESIS_FEATURES_FOR_GEMINI.md` and the Genesis v0.2 archive strictly as the behavioral reference.
+
+2. **What Is Skipped Because APCCS Already Has It:**
+
+   - System-level checkpoint locks (`CP-050`, `CP-100`, `CP-150`, `CP-195`), promotion receipts, chronological artifact ledgers (`INST-0005`, `INST-0079`, `INST-0080`), 24-hour file trash hold (`INST-0081`, `INST-0082`), and 1-click UI option reversal (`INST-0018`, `INST-0117`) already exist in APCCS (`1..195`) and are reused by reference rather than duplicated.
+
+   - Features listed as `NOT implemented` in Genesis v0.2 (compiling Android APKs on device, app store publishing, cloud sync, paid AI APIs) are not implemented; local/remote boundaries are represented honestly in the Capability Registry (`INST-0221`..`0223`).
+
+3. **Where the "APCCS Legal Connection Batch" Goes (Assigned Batch 48, `INST-0236` to `INST-0240`):**
+
+   - The **"APCCS legal connection batch"** from Section 3 of `APCCS_CATALOG_NEXT_LEGAL_SPLIT` is assigned **Batch 48 (`INST-0236` to `INST-0240`, `Canary check: T = Z -> anvil`)**, placed immediately after the Genesis feature batches (`Batches 40 to 47`, `INST-0196` to `INST-0235`) and immediately before the Milestone `CP-245` Coherence & Lock batch (`Batch 49`, `INST-0241` to `INST-0245`).
+
+   - It builds in `someonee12345678-hue/apccs` (`code/apccs_genesis.py`, `code/test_apccs_genesis.py`, and `START_OUR_OWN_SYSTEM.html`) and enforces the mandatory decoupling invariant: **APCCS must continue working 100% normally when `uclrcde` is not installed.**
+
+4. **Count-Aware Checkpoints (`CP-200` in Batch 40 & `CP-245` in Batch 49):**
+
+   - Exactly as in Part 1 (`APCCS_CATALOG_NEXT_COUNT_FIX`), APCCS checkpoints count and verify **only the instructions built in APCCS** (`1..140`, `146..170`, `181..245` = **230 APCCS-built instructions** at `CP-245`, and **185 APCCS-built instructions** at `CP-200`), and explicitly list `INST-0141` to `INST-0145` (Batch 29) and `INST-0171` to `INST-0180` (Batches 35 and 36) as **`"built in uclrcde"`** (`15` external legal-engine instructions in `someonee12345678-hue/uclrcde`) without importing or reading `uclrcde` code.
+
+5. **Testing & Data Hygiene Rules:**
+
+   - Every instruction's unit test in `code/test_apccs_genesis.py` must test real behavior on both valid (normal) inputs and invalid/malformed/adversarial (bad) inputs.
+
+   - Use synthetic, made-up test data only (e.g., `"Personal Task Manager"`, `"Synthetic Widget Tracker"`, `"Jane Roe"`). Never include real names, real case numbers, or real client details.
+
+   - Keep `if __name__ == "__main__":` at the very bottom of `code/test_apccs_genesis.py`, emit the active `Canary check: ...` line in test runner stdout and `audit/pass_tests_genesis.json`, and end all handoff packets with `=== END_OF_PACKET ===`.
+
+### Batch 40: instructions 196–200. Canary: `Canary check: M = K -> submarine`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_40 (196 to 200 of 1000) | Canary: M=K -> submarine
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: M = K -> submarine`
+
+  - **INST-0196: [GENESIS_MODULE_BRIDGE_AND_SCHEMA_INIT]**
+
+    Build `verify_and_init_genesis_module(vault_dir, db_path)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) verifying that `code/apccs_core.py` (`1..100`), `code/apccs_q1_part2.py` (`101..140`, `146..150`), and `code/apccs_q1_part3.py` (`151..170`, `181..195`) match their locked SHA-256 digests without reading or importing `uclrcde`, and initializing the Genesis SQLite WAL schema (with a non-destructive authorizer denying `DROP TABLE` and `ALTER TABLE`), rejecting tampered core modules or unsafe database paths.
+
+  - **INST-0197: [GENESIS_PROJECT_VALIDATION_AND_10_CATEGORIES]**
+
+    Build `create_or_update_genesis_project(db_path, project_id, name, product_category, description, dependencies="")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) enforcing Genesis v0.2 validation rules: `name` (`1..60` chars after trimming), `product_category` (must be one of the 10 allowed Genesis product categories: `WEB_APP`, `MOBILE_APP`, `DESKTOP_TOOL`, `CLI_UTILITY`, `STATIC_WEBSITE`, `DATA_PIPELINE`, `AUTOMATION_SCRIPT`, `DOCUMENT_ENGINE`, `GAME_PROTOTYPE`, `OTHER`), `description` (`1..2000` chars), and `dependencies` (`<=1000` chars), rejecting empty/overlong fields, unknown categories, or control-character injection.
+
+  - **INST-0198: [GENESIS_HOME_LIST_SEARCH_AND_CATEGORY_FILTER]**
+
+    Build `list_and_filter_genesis_projects(db_path, search_query="", category_filter="ALL")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) returning matching projects ordered deterministically by update sequence, supporting case-insensitive substring search across `name` and `description` and exact category filtering, and returning explicit empty-state codes (`EMPTY_NO_PROJECTS` when the database has 0 projects vs. `EMPTY_NO_MATCHES` when filters match 0 projects), rejecting non-string queries or invalid category filters.
+
+  - **INST-0199: [GENESIS_SYNTHETIC_SAMPLE_PROJECT_SEEDER]**
+
+    Build `seed_sample_personal_task_manager_once(db_path)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) seeding the synthetic, deletable `"Personal Task Manager"` starter project (with sample requirements, tasks, acceptance criteria, and a `seeded_once` flag in SQLite) ONLY on a fresh install with zero existing projects and zero prior seed history, guaranteeing it is never re-added after deletion or when upgrading a database that already has projects.
+
+  - **INST-0200: [MILESTONE_CP200_APCCS_ONLY_COUNT_CHECKPOINT]**
+
+    Build `verify_cp200_apccs_only_checkpoint(vault_dir)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) verifying that all **185 APCCS-built instructions** through `INST-0200` (`INST-0001`..`0140`, `INST-0146`..`0170`, `INST-0181`..`0200`) are present and passing in APCCS while explicitly recording `INST-0141`..`0145` and `INST-0171`..`0180` (`15` instructions) as `"built in uclrcde"` without importing or reading `uclrcde` files, and emitting `Canary check: M = K -> submarine` in `code/test_apccs_genesis.py` stdout and `audit/pass_tests_genesis.json`.
+
+### Batch 41: instructions 201–205. Canary: `Canary check: T = X -> motorcycle`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_41 (201 to 205 of 1000) | Canary: T=X -> motorcycle
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batch_40` prefix in `code/apccs_genesis.py`)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: T = X -> motorcycle`
+
+  - **INST-0201: [GENESIS_REQUIREMENTS_AND_SIX_EVIDENCE_LABELS]**
+
+    Build `manage_genesis_requirement(db_path, project_id, action, req_id, text="", evidence_label=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) supporting `add`, `edit`, `delete`, and `cycle_label` across the 6 Genesis evidence labels in deterministic order (`VERIFIED` [green], `DOCUMENTED` [blue], `REPORTED` [teal], `INFERRED` [amber], `PROPOSED` [purple], `UNVERIFIED` [gray]), returning both label text and colour token, and rejecting unknown `project_id`s, empty requirement text, or invalid evidence labels.
+
+  - **INST-0202: [GENESIS_TASKS_FOUR_STATE_CYCLER]**
+
+    Build `manage_genesis_task(db_path, project_id, action, task_id, title="", status=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) supporting `add`, `edit`, `delete`, and `cycle_status` across the 4 Genesis task states in deterministic order (`TO_DO` -> `IN_PROGRESS` -> `DONE` -> `BLOCKED` -> `TO_DO`), rejecting blank task titles, non-existent `task_id`s, or invalid status enums.
+
+  - **INST-0203: [GENESIS_ACCEPTANCE_CRITERIA_AND_DECISIONS_LISTS]**
+
+    Build `manage_genesis_criteria_and_decisions(db_path, project_id, list_type, action, item_id, content="", rationale="")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) supporting `add`, `edit`, and `delete` for a project's `ACCEPTANCE_CRITERIA` and `DECISIONS` lists in SQLite, rejecting invalid `list_type` values, empty content, or edits to missing items.
+
+  - **INST-0204: [GENESIS_KNOWN_DEFECTS_AND_BOUNDED_200_HISTORY]**
+
+    Build `manage_genesis_defects_and_record_history(db_path, project_id, action, defect_id=None, summary="", severity="MEDIUM")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) managing the `KNOWN_DEFECTS` list (`add`, `edit`, `delete`) and automatically recording every project mutation in a per-project history table strictly bounded to the **last 200 changes** (pruning only entries older than the newest 200 for that project), rejecting invalid severities or empty summaries.
+
+  - **INST-0205: [GENESIS_IMMUTABLE_COPY_CHECKPOINT_AND_UNDO_RESTORE]**
+
+    Build `checkpoint_and_restore_genesis_project(db_path, project_id, action, checkpoint_id=None, label="")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) creating isolated deep-copy JSON checkpoints of the full project record and, on `restore`, automatically saving the current project state as a new `"Pre-Restore Auto-Save"` checkpoint first so every restore is immediately undoable, plus logging the restore in the Genesis audit log and rejecting corrupt or foreign checkpoints.
+
+### Batch 42: instructions 206–210. Canary: `Canary check: T = Y -> lighthouse`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_42 (206 to 210 of 1000) | Canary: T=Y -> lighthouse
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batches 40–41` prefix in `code/apccs_genesis.py`)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: T = Y -> lighthouse`
+
+  - **INST-0206: [RULE_BASED_KEYWORD_SCANNER_TO_INFERRED_REQUIREMENTS]**
+
+    Build `infer_requirements_from_description(description_text)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) implementing Genesis's deterministic, zero-AI keyword rule engine (scanning for domain keywords such as offline/storage, search/filter, export/import, authentication/PIN, notifications/reminders, forms/validation, charts/reports, accessibility, and privacy) to generate candidate requirements pre-labeled `INFERRED` with the exact matched keyword trigger, rejecting empty or non-string descriptions.
+
+  - **INST-0207: [CATEGORY_GENERIC_PROPOSED_REQUIREMENTS_GENERATOR]**
+
+    Build `generate_proposed_category_requirements(product_category)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) returning deterministic generic candidate requirements pre-labeled `PROPOSED` (such as input validation, empty-state handling, error recovery, and data export) tailored to each of the 10 Genesis product categories, rejecting unknown categories.
+
+  - **INST-0208: [CATEGORY_STARTER_TASKS_GENERATOR]**
+
+    Build `generate_category_starter_tasks(product_category, inferred_reqs_list)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) generating a deterministic ordered list of starter tasks (`TO_DO` status) for the chosen category and inferred requirements without calling any AI model, rejecting invalid categories or malformed requirement lists.
+
+  - **INST-0209: [USER_SELECTIVE_PLAN_TICK_APPLIER]**
+
+    Build `apply_selected_plan_items_to_project(db_path, project_id, plan_preview_dict, selected_req_ids, selected_task_ids)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) adding ONLY the candidate `INFERRED` requirements, `PROPOSED` requirements, and starter tasks whose IDs were ticked/selected by the user into the project record (skipping duplicates and recording the batch addition in the 200-change project history), rejecting unselected or unknown candidate IDs.
+
+  - **INST-0210: [DETERMINISTIC_PLANNER_END_TO_END_AND_BAD_INPUT_TESTS]**
+
+    Build `run_rule_based_planner_preview(db_path, project_id)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) combining `INST-0206`..`0209` into a complete deterministic preview-and-apply workflow and verifying in unit tests that identical descriptions always produce byte-identical candidate plans with zero AI or network calls.
+
+### Batch 43: instructions 211–215. Canary: `Canary check: T = Z -> anvil`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_43 (211 to 215 of 1000) | Canary: T=Z -> anvil
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batches 40–42` prefix in `code/apccs_genesis.py`)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: T = Z -> anvil`
+
+  - **INST-0211: [STATIC_WEBSITE_HTML_ESCAPED_TEMPLATE_BUILDER]**
+
+    Build `build_static_project_website_html(db_path, project_id, theme="LIGHT")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) rendering a complete, self-contained `index.html` document from a Genesis project record (project title, category badge, description, requirements with evidence-label badges, tasks by status, acceptance criteria, decisions, and known defects) with strict `html.escape(..., quote=True)` applied to every user-supplied string, rejecting unknown projects or invalid themes.
+
+  - **INST-0212: [STATIC_WEBSITE_CSP_AND_ZERO_SCRIPT_ENFORCER]**
+
+    Build `verify_static_website_csp_and_safety(html_text)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) enforcing that the generated `index.html` contains the exact `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">` header and rejecting any HTML containing `<script`, `javascript:`, `vbscript:`, `data:text/html`, inline `on*=` event handlers, or external `http://`/`https://` resource loads.
+
+  - **INST-0213: [STATIC_WEBSITE_SANDBOXED_PREVIEW_DESCRIPTOR]**
+
+    Build `create_sandboxed_preview_ descriptor(db_path, project_id, theme="LIGHT")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) returning the verified `index.html` payload alongside strict preview container settings (`iframe_sandbox="", allow_scripts=False, allow_network=False, allow_file_access=False, sha256=...`) matching Genesis's WebView security policy.
+
+  - **INST-0214: [STATIC_WEBSITE_EXPORT_AND_SHARE_BUNDLE]**
+
+    Build `export_static_website_bundle(db_path, vault_dir, project_id, export_subdir="exports/genesis_sites")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) writing the verified `index.html` and a `SITE_MANIFEST.json` (with byte size, SHA-256 checksum, and CSP verification receipt) inside the vault for 1-click download or share-sheet export, rejecting path traversal or unverified HTML.
+
+  - **INST-0215: [STATIC_WEBSITE_XSS_AND_CSP_VERIFICATION_SUITE]**
+
+    Build `audit_static_website_against_xss_vectors(db_path)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) running a built-in synthetic security test suite that injects `<script>alert(1)</script>`, `" onmouseover="alert(1)`, `javascript:evil()`, and remote `<img src="https://...">` strings into project fields and proves the static website builder escapes 100% of them and passes `INST-0212`.
+
+### Batch 44: instructions 216–220. Canary: `Canary check: T = W -> compass`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_44 (216 to 220 of 1000) | Canary: T=W -> compass
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batches 40–43` prefix in `code/apccs_genesis.py`)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: T = W -> compass`
+
+  - **INST-0216: [CANONICAL_COMPACT_JSON_SHA256_EXPORTER]**
+
+    Build `export_genesis_project_checksum_json(db_path, project_id)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) serializing the authoritative project record (metadata, requirements, tasks, criteria, decisions, defects, checkpoints, and bounded history) into a canonical compact JSON string (`sort_keys=True, separators=(",", ":")`), computing its SHA-256 checksum, and returning the envelope `{"format": "GENESIS_PROJECT_V1", "schema_version": 1, "sha256": ..., "project": ...}`.
+
+  - **INST-0217: [STRICT_CHECKSUM_AND_SCHEMA_JSON_IMPORTER]**
+
+    Build `validate_and_parse_genesis_import_json(json_text)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) verifying that `json_text` is valid JSON, matches `format == "GENESIS_PROJECT_V1"` and `schema_version == 1`, has a matching SHA-256 checksum over the canonical `project` payload, and passes all field validations (10 product categories, 6 evidence labels, 4 task states, `name` 1–60 chars, `description` 1–2000 chars, `dependencies` <=1000 chars), rejecting tampered checksums, unknown enum values, or missing keys.
+
+  - **INST-0218: [IMPORT_DELETE_RESTORE_AUDIT_LOG_REDUCER]**
+
+    Build `execute_audited_genesis_state_action(db_path, action_type, payload_dict)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) executing `DELETE_PROJECT`, `RESTORE_CHECKPOINT`, and `IMPORT_PROJECT` transactionally while appending an immutable audit record (`timestamp`, `action_type`, `project_id`, `project_name`, `sha256`, `outcome`) to the Genesis Settings Audit Log table in SQLite (with pre-backup on overwrite/delete so no user project is lost).
+
+  - **INST-0219: [EXECUTION_MODE_ENVELOPE_COORDINATOR]**
+
+    Build `evaluate_genesis_execution_mode(mode, has_external_runner=False, owner_approved=False)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) implementing Genesis's 4 execution modes: `LOCAL` (rule-based planner, static HTML builder, validation — `IMPLEMENTED`), `MANUAL` (JSON/HTML export & import — `IMPLEMENTED`), `REMOTE` (external CI/computer engine — `NEEDS_EXTERNAL_INTEGRATION`), and `HYBRID` (plan locally, build remotely, verify locally — `NEEDS_EXTERNAL_INTEGRATION`), failing closed when `REMOTE` or `HYBRID` is invoked without both a verified external runner and explicit Owner `"YES"` approval.
+
+  - **INST-0220: [EXPORT_IMPORT_ROUNDTRIP_AND_TAMPER_REJECTION_TESTS]**
+
+    Build `verify_genesis_json_roundtrip_integrity(db_path, project_id)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) exporting a project via `INST-0216`, importing it into a clean namespace via `INST-0217`/`0218`, verifying 100% field equality and audit-log recording, and confirming that 1-byte checksum tampering or invalid enum injection is rejected with zero database modification.
+
+### Batch 45: instructions 221–225. Canary: `Canary check: M = K -> submarine`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_45 (221 to 225 of 1000) | Canary: M=K -> submarine
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batches 40–44` prefix in `code/apccs_genesis.py`)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: M = K -> submarine`
+
+  - **INST-0221: [HONEST_CAPABILITY_REGISTRY_FIVE_TIERS]**
+
+    Build `get_genesis_capability_registry(db_path=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) returning the structured capability registry classifying every module and feature under Genesis's 5 honest status labels (`VERIFIED_WORKING`, `NEEDS_EXTERNAL_INTEGRATION`, `PLANNED`, `FAILED`, `UNVERIFIED`) with plain-English explanations, availability, `$0` cost, and required permissions, rejecting any attempt to register an unknown status tier.
+
+  - **INST-0222: [MODULE_INFO_AND_FIVE_ENGINE_INTERFACES]**
+
+    Build `ModuleInfo` and the 5 standard-library engine interface contracts (`PlannerInterface`, `AiProviderInterface`, `BuilderInterface`, `BuildAdapterInterface`, `TestAdapterInterface`) in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) with deterministic metadata validation (`module_id`, `display_name`, `interface_type`, `status_label`, `cost_usd`, `permissions_required`, `is_available`), wiring `RuleBasedPlanner` (`INST-0206`..`0210`) to `PlannerInterface` and `StaticWebsiteBuilder` (`INST-0211`..`0214`) to `BuilderInterface`.
+
+  - **INST-0223: [UNAVAILABLE_MODULE_EXPLICIT_FAIL_CLOSED_STUBS]**
+
+    Build `UnavailableEngineStub` (`AiProviderStub`, `RemoteBuildAdapterStub`, `OnDeviceApkCompilerStub`) in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) that exposes accurate `ModuleInfo` (`status_label="NEEDS_EXTERNAL_INTEGRATION"` or `"PLANNED"`, `is_available=False`) and raises a deterministic `CapabilityUnavailableError` with a plain-English reason whenever called, guaranteeing unavailable modules never fake output.
+
+  - **INST-0224: [JUNIT_XML_TO_VERIFICATION_JSON_CONVERTER]**
+
+    Build `convert_junit_xml_to_verification_json(xml_text_or_path, output_json_path=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) parsing JUnit XML test reports via `xml.etree.ElementTree` (while blocking `<!DOCTYPE` / `<!ENTITY` XML external entity payloads) and generating a deterministic `verification.json` structure (`tests_total`, `failures`, `errors`, `skipped`, `all_passed`, `test_cases`, `sha256`), rejecting malformed XML or entity-expansion inputs.
+
+  - **INST-0225: [CAPABILITY_AND_VERIFICATION_REPORT_AUDITOR]**
+
+    Build `audit_capabilities_against_verification_report(capability_registry_list, verification_report_dict)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) verifying that every module marked `VERIFIED_WORKING` has passing test evidence in `verification_report_dict` and automatically downgrading any module with failing or missing tests to `FAILED` or `UNVERIFIED`.
+
+### Batch 46: instructions 226–230. Canary: `Canary check: T = X -> motorcycle`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_46 (226 to 230 of 1000) | Canary: T=X -> motorcycle
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batches 40–45` prefix in `code/apccs_genesis.py`)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: T = X -> motorcycle`
+
+  - **INST-0226: [GENESIS_SETTINGS_AUTONOMY_AND_THEME_GUARD]**
+
+    Build `get_or_update_genesis_settings(db_path, autonomy_mode=None, theme=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) persisting Genesis settings in SQLite with defaults `autonomy_mode="B"` (`A` and `B` allowed; `C` and `D` explicitly disabled and rejected with `"AUTONOMY_C_D_DISABLED_BY_POLICY"`), `theme="FOLLOW_SYSTEM"` (`FOLLOW_SYSTEM`, `LIGHT`, `DARK` allowed), and immutable `device_backup_disabled=True`.
+
+  - **INST-0227: [API_GENESIS_PROJECTS_AND_RECORDS_ROUTER]**
+
+    Build `handle_genesis_projects_api(db_path, subpath, method, body_bytes)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) routing `/api/genesis/projects`, `/api/genesis/requirements`, `/api/genesis/tasks`, `/api/genesis/criteria`, `/api/genesis/decisions`, `/api/genesis/defects`, and `/api/genesis/checkpoints` to `INST-0197`..`0205` with structured JSON responses and HTTP `400` on validation errors.
+
+  - **INST-0228: [API_GENESIS_PLANNER_AND_STATIC_SITE_ROUTER]**
+
+    Build `handle_genesis_planner_and_site_api(db_path, vault_dir, subpath, method, body_bytes)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) routing `/api/genesis/plan_preview`, `/api/genesis/plan_apply`, `/api/genesis/static_site_preview`, and `/api/genesis/static_site_export` to `INST-0206`..`0215`.
+
+  - **INST-0229: [API_GENESIS_EXPORT_IMPORT_AND_CAPABILITIES_ROUTER]**
+
+    Build `handle_genesis_admin_api(db_path, subpath, method, body_bytes)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) routing `/api/genesis/export_json`, `/api/genesis/import_json`, `/api/genesis/audit_log`, `/api/genesis/capabilities`, `/api/genesis/verification`, and `/api/genesis/settings` to `INST-0216`..`0226`.
+
+  - **INST-0230: [API_GENESIS_HTTP_SMOKE_AND_BAD_INPUT_SUITE]**
+
+    Build `create_genesis_enabled_control_server(vault_dir, db_path, host="127.0.0.1", port=8501)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) mounting all `/api/genesis/*` routes alongside existing APCCS `/api/*` routes on the standard-library loopback server and verifying them over live ephemeral-port HTTP requests for both valid inputs and bad-input rejection (`400`/`422`).
+
+### Batch 47: instructions 231–235. Canary: `Canary check: T = Y -> lighthouse`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`, and `START_OUR_OWN_SYSTEM.html`.
+
+#### Batch_47 (231 to 235 of 1000) | Canary: T=Y -> lighthouse
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; preserves exact `Batches 40–46` prefix in `code/apccs_genesis.py`)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py`, `code/test_apccs_genesis.py`, and `START_OUR_OWN_SYSTEM.html`
+
+* **Canary Line:** `Canary check: T = Y -> lighthouse`
+
+  - **INST-0231: [UI_GENESIS_HOME_SEARCH_FILTER_AND_CREATE_MODAL]**
+
+    Build `render_genesis_home_and_project_modal_html()` in `code/apccs_genesis.py` and wire it into `START_OUR_OWN_SYSTEM.html` (tested in `code/test_apccs_genesis.py`), adding the Genesis Project Home panel with search input (`name`/`description`), 10-category filter dropdown, explicit empty-state banners (`No projects yet` / `No matching projects`), and Create/Edit Project form (`name` 1–60, `category`, `description` 1–2000, `dependencies` <=1000).
+
+  - **INST-0232: [UI_GENESIS_EVIDENCE_LABELS_AND_TASK_CYCLER_VIEW]**
+
+    Build `render_genesis_project_records_panel_html()` in `code/apccs_genesis.py` and wire it into `START_OUR_OWN_SYSTEM.html` (tested in `code/test_apccs_genesis.py`), rendering interactive lists for Requirements (tap/click to cycle the 6 colour-coded evidence labels), Tasks (tap/click to cycle `To do` / `In progress` / `Done` / `Blocked`), Acceptance Criteria, Decisions, Known Defects, 200-item History, and Undoable Checkpoints.
+
+  - **INST-0233: [UI_GENESIS_RULE_PLANNER_AND_SANDBOXED_SITE_PREVIEW]**
+
+    Build `render_genesis_planner_and_site_builder_html()` in `code/apccs_genesis.py` and wire it into `START_OUR_OWN_SYSTEM.html` (tested in `code/test_apccs_genesis.py`), adding the deterministic "Plan from Description" checklist selector (showing `INFERRED` requirements, `PROPOSED` requirements, and starter tasks with user tick-boxes) and the Static Website Builder panel with a sandboxed preview frame (`sandbox=""` with scripts and network blocked) and export button.
+
+  - **INST-0234: [UI_GENESIS_CAPABILITY_TABLE_AND_JSON_IMPORT_EXPORT]**
+
+    Build `render_genesis_capabilities_and_settings_html()` in `code/apccs_genesis.py` and wire it into `START_OUR_OWN_SYSTEM.html` (tested in `code/test_apccs_genesis.py`), adding the 5-tier Capability Registry table, JUnit `verification.json` badge, Settings screen (Autonomy A/B selector with C/D disabled, Theme selector, and delete/restore/import Audit Log), and SHA-256 Checksum JSON Export/Import controls.
+
+  - **INST-0235: [GENESIS_UI_AND_END_TO_END_WORKFLOW_SMOKE_TEST]**
+
+    Build `run_genesis_full_vertical_smoke_test(vault_dir)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) booting the local server on an ephemeral port, fetching `START_OUR_OWN_SYSTEM.html`, verifying all Genesis UI panels and `/api/genesis/*` endpoints end-to-end (seeding `"Personal Task Manager"`, creating a synthetic project, running the rule-based planner, cycling evidence labels, generating the CSP-locked static website, and round-tripping checksummed JSON).
+
+### Batch 48: instructions 236–240. Canary: `Canary check: T = Z -> anvil`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`, and `START_OUR_OWN_SYSTEM.html`.
+
+#### Batch_48 (236 to 240 of 1000) — APCCS Legal Connection Batch | Canary: T=Z -> anvil
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; this is the numbered **"APCCS legal connection batch"** from Section 3 of `APCCS_CATALOG_NEXT_LEGAL_SPLIT`, placed immediately after the Genesis feature batches `40–47`)*
+
+* **Where It Goes:** Placed as **Batch 48 (`INST-0236` to `INST-0240`)** inside `someonee12345678-hue/apccs` (`code/apccs_genesis.py`, `code/test_apccs_genesis.py`, and `START_OUR_OWN_SYSTEM.html`), immediately after Genesis UI Batch 47 (`INST-0235`) and immediately before the Batch 49 (`INST-0241` to `INST-0245`) coherence & `CP-245` milestone lock batch.
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py`, `code/test_apccs_genesis.py`, and `START_OUR_OWN_SYSTEM.html`
+
+* **Canary Line:** `Canary check: T = Z -> anvil`
+
+* **Mandatory Decoupling Invariant:** **APCCS must keep working with 100% of its core, builder, Genesis, and control-panel features when the `uclrcde` legal engine is NOT installed.** Neither APCCS startup nor any APCCS test may import or read `uclrcde` repository code.
+
+  - **INST-0236: [OPTIONAL_UCLRCDE_PLUGIN_DISCOVERY_AND_PROBE]** *(formerly `INST-LEGAL-CONN-01`)*
+
+    Build `probe_optional_uclrcde_plugin(vault_dir, external_plugin_manifest_path=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) checking whether an optional `uclrcde` plugin manifest is present. When `uclrcde` is absent, return `{"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "apccs_healthy": True}` with zero errors; when a manifest is supplied, validate its schema and SHA-256 fields via `INST-0051`..`0060` without importing `uclrcde` code into APCCS, rejecting malformed manifests or unsafe paths.
+
+  - **INST-0237: [OPTIONAL_UCLRCDE_SIDE_LOADER_MOUNT_BRIDGE]** *(formerly `INST-LEGAL-CONN-02`)*
+
+    Build `mount_or_unmount_optional_uclrcde(vault_dir, db_path, session_id, plugin_manifest=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) allowing the APCCS Left Side-Loader (`INST-0053`, `INST-0056`) to mount or unmount `uclrcde` in an isolated namespace when a valid plugin manifest is provided, preserving 100% of APCCS and Genesis user data (`INST-0054`), and returning a clean non-blocking status (`{"mounted": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "message": "UCLRCDE plugin not installed — APCCS running in standard mode"}`) when `uclrcde` is absent.
+
+  - **INST-0238: [DECOUPLED_LEGAL_PROXY_ROUTER_WITH_ABSENT_FALLBACK]** *(formerly `INST-LEGAL-CONN-03`)*
+
+    Build `handle_optional_legal_proxy_api(vault_dir, db_path, subpath, method, body_bytes, plugin_handler=None)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) handling `/api/legal/*` requests on the APCCS server. When `uclrcde` is not installed (`plugin_handler is None`), return structured JSON `{"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "message": "Optional plugin uclrcde is not installed. All APCCS and Genesis features remain active."}` without raising unhandled exceptions or affecting any other `/api/*` route; when a verified callback/handler is mounted, route valid requests and reject malformed paths.
+
+  - **INST-0239: [START_OUR_OWN_SYSTEM_OPTIONAL_PLUGIN_UI_SLOT]** *(formerly `INST-LEGAL-CONN-04`)*
+
+    Update `START_OUR_OWN_SYSTEM.html` via `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) so the Left Side-Loader displays `UCLRCDE Legal Engine` as an explicitly **Optional Plugin Slot** showing either `Not Installed (Optional — APCCS & Genesis Active)` by default or `Mounted / Ready` when a plugin manifest is mounted, keeping all APCCS and Genesis tabs 100% functional in both states.
+
+  - **INST-0240: [DUAL_MODE_INSTALLED_AND_ABSENT_SMOKE_TESTS]** *(formerly `INST-LEGAL-CONN-05`)*
+
+    Build `verify_optional_legal_plugin_decoupling(vault_dir)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) testing both modes in `/tmp`: (1) **Absent Mode:** with zero `uclrcde` files anywhere on disk, APCCS and Genesis boot, serve `START_OUR_OWN_SYSTEM.html`, and pass all status, sub-tab, Genesis, and `/api/legal/status` checks cleanly; and (2) **Mounted Mode:** with a synthetic plugin manifest and mock handler mounted, APCCS mounts, routes calls in an isolated namespace, and unmounts cleanly with zero data loss.
+
+### Batch 49: instructions 241–245. Canary: `Canary check: T = W -> compass`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`, tests in `code/test_apccs_genesis.py`.
+
+#### Batch_49 (241 to 245 of 1000) | Canary: T=W -> compass
+
+* **Status:** **Ready to build** *(all 5 instructions fully worded; counts only APCCS's own instructions the same way as Part 1)*
+
+* **Target Repository:** `someonee12345678-hue/apccs`
+
+* **Target Files:** `code/apccs_genesis.py` and `code/test_apccs_genesis.py`
+
+* **Canary Line:** `Canary check: T = W -> compass`
+
+  - **INST-0241: [GENESIS_AND_LEGAL_CONN_AST_CONTINUITY_VERIFIER]**
+
+    Build `verify_196_to_245_continuity(genesis_source_text)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) using Python `ast` to verify that all 50 instruction markers (`INST-0196` through `INST-0245`) and all required top-level function/class symbols exist in `code/apccs_genesis.py` with zero dropped or duplicate definitions, rejecting source text with missing markers or syntax/stub violations.
+
+  - **INST-0242: [FOUR_MODULE_APCCS_COHERENCE_AUDITOR]**
+
+    Build `verify_cp245_four_module_coherence(vault_dir)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) verifying frozen `code/apccs_core.py` (`INST-0001`..`0100`), frozen `code/apccs_q1_part2.py` (`INST-0101`..`0140` and `INST-0146`..`0150`), frozen `code/apccs_q1_part3.py` (`INST-0151`..`0170` and `INST-0181`..`0195`), and active `code/apccs_genesis.py` (`INST-0196`..`0245`), while recording `INST-0141`..`0145` and `INST-0171`..`0180` as `"built in uclrcde"` without importing or reading `uclrcde` code.
+
+  - **INST-0243: [UNIFIED_CP245_COUNT_AWARE_OWNER_SCORECARD]**
+
+    Build `generate_cp245_scorecard(vault_dir)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) emitting `audit/OWNER_SCORECARD_CP245.txt` covering instructions `1..245` by checking and counting only the **230 instructions built in APCCS** (`1..140`, `146..170`, `181..245`) from APCCS `pass_tests*.json` files and listing `INST-0141`..`0145` (Batch 29) and `INST-0171`..`0180` (Batches 35–36) as `"built in uclrcde (15 instructions in someonee12345678-hue/uclrcde)"`.
+
+  - **INST-0244: [GENESIS_PASS_TESTS_AND_RECOVER_SYNCHRONIZER]**
+
+    Build `synchronize_cp245_pass_tests_and_recover(vault_dir, completed_num=245, accepted_num=240, canary_line="Canary check: T = W -> compass")` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) updating `audit/pass_tests_genesis.json` and `RECOVER.md` so all 230 APCCS-built instructions (`1..140`, `146..170`, `181..245`) are recorded with zero stale `PENDING` labels and `141..145, 171..180` (`15` instructions) are listed as `"built in uclrcde"`.
+
+  - **INST-0245: [MILESTONE_CP245_CHECKPOINT_LOCK]**
+
+    Build `lock_checkpoint_cp245(vault_dir)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) sealing `audit/CP-245_LOCK.json` into `APPCS_MASTER_BUILD.zip` and `APCCS_MASTER_BUILD.zip` after verifying that all **230 APCCS-built instructions** (`1..140`, `146..170`, `181..245`) pass tests and recording `141..145` and `171..180` (`15` instructions) as `"built in uclrcde"` without reading or importing `uclrcde` files, rejecting lock creation if any of the 230 APCCS instructions is missing or failing.
+
+Note for the builder (Claude, not the architect): these instructions name files outside `code/` (`START_OUR_OWN_SYSTEM.html`, `audit/` files, `RECOVER.md`, the build zips). As with earlier batches, build them inside temporary test folders under `vault_dir`, and report in the pull request anything that AGENTS.md doesn't allow. INST-0213's function name is written `create_sandboxed_preview_ descriptor` (with a space) in the architect's file; it is copied as written, and the builder should raise it in that batch's pull request rather than guess.
