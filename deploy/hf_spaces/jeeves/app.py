@@ -102,7 +102,10 @@ def _systemone_gpu(body: str) -> str:
 
 def systemone(body: str) -> str:
     """Accept one System One JSON string and return one JSON string."""
-    return _systemone_gpu(body)
+    try:
+        return _systemone_gpu(body)
+    except Exception:
+        return json.dumps({"error": "request processing failed"})
 
 
 def _build_demo() -> gr.Blocks:
