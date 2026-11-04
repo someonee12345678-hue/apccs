@@ -52,7 +52,10 @@ def _ask(body: str) -> str:
     try:
         if not _status["ready"] or ws is None:
             return json.dumps({"error": "WaterSheep is not ready"})
-        answer = ws.ask(body)
+        request = json.loads(body)
+        if not isinstance(request, dict):
+            return json.dumps({"error": "request body must be a JSON object"})
+        answer = ws.ask(request)
         return json.dumps(answer, ensure_ascii=False, separators=(",", ":"))
     except Exception:
         return json.dumps({"error": "request processing failed"})

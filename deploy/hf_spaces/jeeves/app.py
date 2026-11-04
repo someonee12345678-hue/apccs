@@ -90,9 +90,10 @@ def _systemone_gpu(body: str) -> str:
 
         from inference import api
 
+        request = json.loads(body)
         started = time.perf_counter()
-        record, opts = api.parse_request(body, defaults)
-        model, results = engine.answer(record, opts)
+        record, model, opts = api.parse_request(request, defaults)
+        results = engine.answer(record, opts)
         latency_ms = int((time.perf_counter() - started) * 1000)
         payload = api.response(record, model, opts, results, engine.encoder.tok, latency_ms)
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
