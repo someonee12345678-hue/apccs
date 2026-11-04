@@ -170,5 +170,107 @@ class HuggingFaceDecisionSpacesSelfTest(unittest.TestCase):
             _unload_app(water)
 
 
+class _RealShapeJeevesApi:
+    """Stand-in for inference.api with the same call shapes as Jeeves commit 8c6ab53."""
+
+    def __init__(self):
+        self.calls = []
+
+    def parse_request(self, body, defaults):
+        if not isinstance(body, dict):
+            raise ValueError("request body must be a JSON object")
+        self.calls.append(("parse_request", body, defaults))
+        return {"questions": sorted(body["questions"])}, body.get("model", "jeeves"), {"defaults": defaults}
+
+    def response(self, record, model, opts, results, tok, latency_ms):
+        self.calls.append(("response", record, model, opts, results, tok))
+        return {"model": model, "answers": dict(zip(record["questions"], results))}
+
+
+class _RealShapeJeevesEngine:
+    """Stand-in for inference.engine.Engine: answer() returns one result per question."""
+
+    def __init__(self):
+        self.encoder = types.SimpleNamespace(tok="tokenizer-stand-in")
+
+    def answer(self, record, opts):
+        return [{"noul": 0.75} for _ in record["questions"]]
+
+
+class _RealShapeWaterSheep:
+    """Stand-in for watersheep.WaterSheep: ask() reads a dict, as the real one does."""
+
+    def ask(self, request):
+        questions = request.get("questions") or {}
+        return {"model": "watersheep", "answers": {name: {"noul": 0.25} for name in questions}}
+
+
+class HuggingFaceSpacesRequestShapeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        print("Canary check: HF = ZeroGPU -> lantern")
+
+    def _ready_jeeves(self):
+        module = _load_app("deploy/hf_spaces/jeeves/app.py")
+        fake_api = _RealShapeJeevesApi()
+        package = types.ModuleType("inference")
+        package.api = fake_api
+        saved = {name: sys.modules.get(name) for name in ("inference", "inference.api")}
+        sys.modules["inference"] = package
+        sys.modules["inference.api"] = fake_api
+        module.engine = _RealShapeJeevesEngine()
+        module.defaults = "defaults-stand-in"
+        module._set_status(True)
+
+        def cleanup():
+            for name, value in saved.items():
+                if value is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = value
+            _unload_app(module)
+
+        self.addCleanup(cleanup)
+        return module, fake_api
+
+    def test_jeeves_space_answers_a_json_request_with_the_real_call_shapes(self):
+        module, fake_api = self._ready_jeeves()
+        body = json.dumps({"state": {"x": 1}, "questions": {"q_b": {"type": "noul"}, "q_a": {"type": "noul"}}})
+        result = json.loads(module.systemone(body))
+        self.assertEqual(result, {"model": "jeeves", "answers": {"q_a": {"noul": 0.75}, "q_b": {"noul": 0.75}}})
+        self.assertEqual(fake_api.calls[0][0], "parse_request")
+        self.assertIsInstance(fake_api.calls[0][1], dict)
+        self.assertEqual(fake_api.calls[0][2], "defaults-stand-in")
+        self.assertEqual(fake_api.calls[1][5], "tokenizer-stand-in")
+
+    def test_jeeves_space_refuses_bad_requests_without_echoing_them(self):
+        module, fake_api = self._ready_jeeves()
+        for body in ("not json private-text-xyz", '["private-text-xyz"]'):
+            result = json.loads(module.systemone(body))
+            self.assertEqual(result, {"error": "request processing failed"})
+            self.assertNotIn("private-text-xyz", json.dumps(result))
+        self.assertEqual(fake_api.calls, [])
+
+    def test_watersheep_space_answers_a_json_request(self):
+        module = _load_app("deploy/hf_spaces/watersheep/app.py")
+        self.addCleanup(_unload_app, module)
+        module.ws = _RealShapeWaterSheep()
+        module._set_status(True)
+        body = json.dumps({"state": {}, "questions": {"q_rain": {"type": "noul"}}})
+        self.assertEqual(json.loads(module.systemone(body)),
+                         {"model": "watersheep", "answers": {"q_rain": {"noul": 0.25}}})
+
+    def test_watersheep_space_refuses_bad_requests_without_echoing_them(self):
+        module = _load_app("deploy/hf_spaces/watersheep/app.py")
+        self.addCleanup(_unload_app, module)
+        module.ws = _RealShapeWaterSheep()
+        module._set_status(True)
+        self.assertEqual(json.loads(module.systemone('["private-text-xyz"]')),
+                         {"error": "request body must be a JSON object"})
+        result = json.loads(module.systemone("not json private-text-xyz"))
+        self.assertEqual(result, {"error": "request processing failed"})
+        self.assertNotIn("private-text-xyz", json.dumps(result))
+
+
 if __name__ == "__main__":
     unittest.main()
