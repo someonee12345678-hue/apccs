@@ -56,7 +56,7 @@ def _selected_targets(which: str) -> tuple[str, ...]:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     token = os.environ.get("HF_TOKEN")
-    if not token:
+    if not token or not token.strip():
         print("HF_TOKEN is missing. Set it in the environment, then run the deployer again.", file=sys.stderr)
         return 2
 
