@@ -65,9 +65,12 @@ def _ask_gpu(body: str) -> str:
 
 def systemone(body: str) -> str:
     """Accept one System One JSON string and return one JSON string."""
-    if WATERSHEEP_DEVICE == "cuda":
-        return _ask_gpu(body)
-    return _ask(body)
+    try:
+        if WATERSHEEP_DEVICE == "cuda":
+            return _ask_gpu(body)
+        return _ask(body)
+    except Exception:
+        return json.dumps({"error": "request processing failed"})
 
 
 def _build_demo() -> gr.Blocks:
