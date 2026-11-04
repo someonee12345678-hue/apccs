@@ -753,3 +753,14 @@ Note for the builder (Claude, not the architect): these instructions name files 
 - HF-03: Decision canary verification (`HF = ZeroGPU -> lantern`).
 - HF-04: 4-step fallback chain (hosted Jeeves -> hosted WaterSheep -> local phone WaterSheep -> human owner).
 - HF-05: Question-free hash ledger, case-file local-only lock, Gradio 6.31.0 Space apps (`deploy/hf_spaces/jeeves/app.py`, `deploy/hf_spaces/watersheep/app.py`), and private Space deployer (`deploy/hf_spaces/deploy.py`).
+
+## Batch HF-L (HF Decision Support Piece 3 / Piece 4) — Target Repository: someonee12345678-hue/uclrcde
+- Target Repository: `someonee12345678-hue/uclrcde` (standalone standard-library module; never imports APCCS code; synthetic/made-up data only; legal information, not legal advice).
+- Target Files: `code/uclrcde_decisions.py` and `code/test_uclrcde_decisions.py` (test class `UclrcdeBatchHFLTests`, localhost `127.0.0.1` mock server tests only, normal-use and bad-input tests for each instruction).
+- Five-Instruction Scope:
+  - `HF-L01`: Define data classes `MADE_UP`, `PUBLIC_LAW`, and `CASE_FILE`, and implement `check_remote_decision_allowed(data_class, settings)` which always refuses `CASE_FILE` for any off-device provider and allows `MADE_UP` / `PUBLIC_LAW` only when `settings["remote_decisions_enabled"]` is `True` (default `False` so the engine runs offline by default).
+  - `HF-L02`: Implement `build_gate3_tag_request(point_text, quote, page, data_class)` to build one choice question over the six confirmed Gate 3 tags (`RESOLVED`, `UNRESOLVED`, `ONGOING`, `UNKNOWN`, `SUPPORTING`, `SCAFFOLDING`) using draft one-line tag descriptions pending owner confirmation; require `quote` to appear verbatim word-for-word inside `point_text` and require a non-empty `page` from Gate 2 search, otherwise refuse.
+  - `HF-L03`: Implement a standard-library `urllib`-only client for System One HTTP and for a Gradio Space's `systemone` call using the two-step protocol (`POST /gradio_api/call/systemone`, then `GET` the event stream).
+  - `HF-L04`: Implement `suggest_gate3_tag(...)` returning a suggestion-only record with fields `tag`, `probability`, `confidence`, `quote`, `page`, `provider`, `needs_person_confirmation: True`, and `LEGAL_INFORMATION_NOTICE` from `uclrcde_core`; never auto-apply a tag, and if refused or failed return no tag (`None`) with a plain-English reason.
+  - `HF-L05`: Implement an append-only decision log storing hashes only (zero raw question/prompt/quote text) plus `audit_decision_log(path)` reporting the count of `CASE_FILE` entries sent off-device (must equal `0`).
+- Canaries: `Canary check: CASE = DEVICE -> anchor` and `Canary check: HF = ZeroGPU -> lantern`.
