@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_PATH = ROOT / "deploy" / "hf_spaces" / "deploy.py"
+TOKEN_MARKER = "test-only-marker"
 sys.path.insert(0, str(ROOT / "code"))
 from apccs_decision_tier import hf_space_url
 
@@ -73,11 +74,12 @@ class HuggingFaceSpaceDeployerTests(unittest.TestCase):
         stdout = io.StringIO()
         stderr = io.StringIO()
         with patch.dict(sys.modules, {"huggingface_hub": hub}), patch.dict(
-            os.environ, {"HF_TOKEN": "hf_test_secret_never_print"}, clear=False
+            os.environ, {"HF_TOKEN": TOKEN_MARKER}, clear=False
         ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             result = deployer.main(["--which", which])
-        self.assertNotIn("hf_test_secret_never_print", stdout.getvalue())
-        self.assertNotIn("hf_test_secret_never_print", stderr.getvalue())
+        self.assertEqual(_FakeApi.instances[0].token, TOKEN_MARKER)
+        self.assertNotIn(TOKEN_MARKER, stdout.getvalue())
+        self.assertNotIn(TOKEN_MARKER, stderr.getvalue())
         return result, stdout.getvalue(), stderr.getvalue(), _FakeApi.instances[0]
 
     def test_hf05_missing_token_fails_without_echoing_token_material(self):
@@ -89,7 +91,23 @@ class HuggingFaceSpaceDeployerTests(unittest.TestCase):
         self.assertEqual(result, 2)
         self.assertIn("HF_TOKEN is missing", stderr.getvalue())
         self.assertEqual(stdout.getvalue(), "")
-        self.assertNotIn("hf_test_secret_never_print", stdout.getvalue() + stderr.getvalue())
+        self.assertNotIn(TOKEN_MARKER, stdout.getvalue() + stderr.getvalue())
+
+    def test_hf05_default_selection_deploys_both_spaces(self):
+        deployer = _load_deployer()
+        hub = _fake_hub()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch.dict(sys.modules, {"huggingface_hub": hub}), patch.dict(
+            os.environ, {"HF_TOKEN": TOKEN_MARKER}, clear=False
+        ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = deployer.main([])
+        self.assertEqual(result, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual([call[1] for call in _FakeApi.instances[0].calls if call[0] == "create_repo"], [
+            "MiXeD-Owner/decisions-jeeves",
+            "MiXeD-Owner/decisions-watersheep",
+        ])
 
     def test_hf05_both_targets_create_private_gradio_spaces_and_ignore_cache_files(self):
         result, stdout, stderr, api = self._run("both")
