@@ -1425,7 +1425,7 @@ In `code/uclrcde_filing.py`, build `build_receipt(db_path, case_id, document_tex
 
 Architect: Claude, 2026-11-04. Source: the architect's file `plan/architect/BATCH_LSD_2026-11-04.md` (this wording is copied word for word from it). The owner approved this batch on 2026-11-04 at about 11:50 (Claude log Entries 0163 and 0164).
 
-Why: the BC credit in LS-B (`BC_LAW_CREDIT`, `code/uclrcde_oracle.py`) is not the statement that the King's Printer Licence – British Columbia, version 1.1, section 3.3 requires. The owner hand-copied the statement from the live licence page on 2026-11-04, and Claude cross-checked it (Drive › Claude 2 › `BC_LICENCE_STATEMENT_KPL_v1.1_VERIFIED_2026-11-04`). This batch adds the exact statement, each BC law's "current to" date, a warning for changes passed but not yet in force, and a check before each public release. Sources: the licence (https://free.bcpublications.ca/standards/Licence.html, sections 3.1, 3.2, 3.3, 5.1 and 9.1) and the BC Laws FAQ (https://www.bclaws.gov.bc.ca/faq.html).
+Why: the BC credit in LS-B (`BC_LAW_CREDIT`, `code/uclrcde_oracle.py`) is not the statement that the King's Printer Licence – British Columbia, version 1.1, section 3.3 requires. The owner hand-copied the statement from the live licence page on 2026-11-04, and Claude cross-checked it. The owner then pasted the full licence text from https://www.bclaws.gov.bc.ca/standards/Licence.html, which prints the first address as `http://www.bclaws.gov.bc.ca`; this batch uses that printed form (Drive › Claude 2 › `BC_LICENCE_STATEMENT_KPL_v1.1_VERIFIED_2026-11-04_R2`, which replaces the first record). This batch adds the exact statement, each BC law's "current to" date, a warning for changes passed but not yet in force, and a check before each public release. Sources: the licence (https://free.bcpublications.ca/standards/Licence.html, sections 3.1, 3.2, 3.3, 5.1 and 9.1) and the BC Laws FAQ (https://www.bclaws.gov.bc.ca/faq.html).
 
 **Build only after Batch LS-C is merged on uclrcde `main`.** This batch wraps LS-C02's `source_notice_for`.
 
@@ -1463,14 +1463,14 @@ Append these constants to `code/uclrcde_oracle.py`:
 - `BC_KPL_STATEMENT`, exactly this text on one line. It uses a straight apostrophe (') in "King's" and an en dash (–, U+2013) between "Licence" and "British Columbia", with single spaces and no line breaks:
 
 ```
-These materials contain information that has been derived from information originally made available by the Province of British Columbia at: www.bclaws.gov.bc.ca and this information is being used in accordance with the King's Printer Licence – British Columbia available at: https://www.bclaws.gov.bc.ca/standards/Licence.html. They have not, however, been produced in affiliation with, or with the endorsement of, the Province of British Columbia and THESE MATERIALS ARE NOT AN OFFICIAL VERSION.
+These materials contain information that has been derived from information originally made available by the Province of British Columbia at: http://www.bclaws.gov.bc.ca and this information is being used in accordance with the King's Printer Licence – British Columbia available at: https://www.bclaws.gov.bc.ca/standards/Licence.html. They have not, however, been produced in affiliation with, or with the endorsement of, the Province of British Columbia and THESE MATERIALS ARE NOT AN OFFICIAL VERSION.
 ```
 
-- `BC_KPL_STATEMENT_SHA256 = "2ea8bacba06129bd2d44066b3bbf521c442099967287ecb712f28cbb4c84ca70"`. This is the SHA-256 of `BC_KPL_STATEMENT` encoded as UTF-8.
+- `BC_KPL_STATEMENT_SHA256 = "7a463e1b4a83751245f0e64f1f9b0d206901e321f42c85c10278bf0e5c2b3645"`. This is the SHA-256 of `BC_KPL_STATEMENT` encoded as UTF-8.
 
 **Tests must show:**
 - `hashlib.sha256(BC_KPL_STATEMENT.encode("utf-8")).hexdigest()` equals `BC_KPL_STATEMENT_SHA256`;
-- the statement ends with `THESE MATERIALS ARE NOT AN OFFICIAL VERSION.` and contains both addresses exactly as printed;
+- the statement ends with `THESE MATERIALS ARE NOT AN OFFICIAL VERSION.` and contains both addresses exactly as printed, the first as `http://www.bclaws.gov.bc.ca`;
 - the statement doesn't contain `Contains public sector Data`;
 - a changed copy (one letter different, a curly apostrophe, or a hyphen in place of the en dash) gives a different hash. This is the bad-input test.
 
