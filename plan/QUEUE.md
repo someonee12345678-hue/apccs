@@ -1161,3 +1161,262 @@ Matching ignores case. It returns False for ordinary procedural questions such a
 - the prediction phrases above are caught and procedural questions are not.
 
 **Not checked yet by the architect:** the exact King's Printer credit wording. It comes from Gemini's check of the licence page on BC Laws (bclaws.gov.bc.ca/standards/2014/QP-License_1.0.html), which was blocked from Claude's workspace. The reviewer confirms it before public release.
+
+## Batch LS-C (page reader, federal law, and filing checks). Target repository: someonee12345678-hue/uclrcde
+
+Architect: Claude, 2026-11-04. Source: the architect's file `plan/architect/BATCH_LSC_2026-11-04.md` (this wording is copied word for word from it). The owner asked for this batch on 2026-11-04 at 06:02.
+
+It carries forward T17 (LiteParse page reader) and T18 (Justice Laws fetcher), which the LS-B handoff moved here. It adds three tests already specified in the on-hold addenda: T27 (closest real wording, Addendum 8), T28 (pre-filing check, Addendum 9) and T29 (reasonable-care receipt, Addendum 9).
+
+**Build only after Batch LS-B is merged on uclrcde `main`.** This batch uses LS-B's functions.
+
+**Target repository and rules:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
+- standard library only, and never import APCCS code;
+- made-up data only;
+- information, not advice;
+- one pull request, which the owner merges.
+
+**Target files:**
+- LS-C01 and LS-C02 are appended to the **end** of `code/uclrcde_sources.py`.
+- LS-C02's notice rule is appended to the **end** of `code/uclrcde_oracle.py`. Every existing byte stays the same, and Python uses the later definition.
+- LS-C03 to LS-C05 go in a new `code/uclrcde_filing.py`.
+- All tests go in one new test class, `UclrcdeBatchLSCTests`, in a new `code/test_uclrcde_filing.py`. Its final `if __name__ == "__main__":` block stays last.
+- No other file changes.
+
+**Canary:** `Canary check: RECEIPT = SOURCES -> ledger`.
+
+**Reuse:**
+- `uclrcde_core`: `open_uclrcde_db`, `ingest_and_lock_legal_source_document`, `LEGAL_INFORMATION_NOTICE`, and the sealed-document check.
+- `uclrcde_sources`: `normalize_for_quote_match`, `verify_quote_in_passage` (the LS-B01 whole-word version), `verify_quote_in_locked_document`, `record_law_section_dates`, the `source_provenance` table, and the LS-A05 rules for allowed URLs.
+- `uclrcde_oracle`: `find_canadian_citations`, `check_citations_in_library`, `check_answer` and `source_notice_for`.
+- New tables are created with `CREATE TABLE IF NOT EXISTS`, through `open_uclrcde_db` only.
+
+**Made-up test data only.** Examples: `Jane Roe`, `MATTER-SYNTH-0001`, citation `2099 BCCA 9999`, a made-up federal Act `Made-Up Fairness Act` with chapter `Z-99.9`, and made-up page text.
+
+**Network:** tests use only a pretend server on `127.0.0.1`. Every instruction gets at least one normal-use test and one bad-input test, named `test_lsc01_...` to `test_lsc05_...`.
+
+### LS-C01: LITEPARSE_PAGE_READER (T17)
+
+Append `lock_liteparse_pages(db_path, case_id, doc_id_prefix, title, liteparse_json_text)` to `code/uclrcde_sources.py`.
+
+**What it accepts.** The text of LiteParse's JSON output (`lit parse <file> --format json`), in the snake_case shape from LiteParse's own documentation:
+
+```
+{"pages": [{"page": 1, "width": 612, "height": 792, "text": "...",
+            "text_items": [{"text": "...", "x": 72, "y": 200, "width": 150, "height": 12}]}]}
+```
+
+UCLRCDE never imports or runs LiteParse. It only reads this JSON.
+
+**Validation first.** It checks the whole file before storing anything. It refuses, raising `ValueError` and storing nothing, when:
+- the text isn't valid JSON;
+- there is no `pages` list, or the list is empty;
+- any page lacks an integer `page` of 1 or more;
+- two pages share a page number;
+- any page's `text` isn't a string;
+- `text_items` is present but isn't a list of objects, each with a string `text` and numeric `x`, `y`, `width` and `height`;
+- every page's text is empty or only whitespace.
+
+**Locking.**
+- Each page with text is locked with `ingest_and_lock_legal_source_document`:
+  - doc_id: `doc_id_prefix + ":p" + str(page)`;
+  - title: `title + ", page " + str(page)`;
+  - source type: `CASE_DOCUMENT_PAGE`.
+- Pages with no text are listed in `pages_without_text` (they need OCR) and are not locked.
+- Before locking anything, it checks every target doc_id. If any is already locked with different text, it raises `ValueError` and stores nothing. The same file sent twice returns the same result and adds no rows.
+- A new table, `document_pages`, records one row per page, with primary key `(doc_id_prefix, page)`:
+  - `doc_id_prefix`, `page`, `doc_id`;
+  - `width`, `height` and `item_count`, where `doc_id` is NULL for pages without text.
+
+**What it returns:** `{"locked_pages": [{"page", "doc_id"}], "pages_without_text": [...], "page_count": n}`.
+
+**Tests must show:**
+- a made-up two-page file locks as two documents with the right page numbers;
+- a quote from page 2 is found by `verify_quote_in_locked_document` on the page-2 doc_id only;
+- a missing `page` stores nothing;
+- duplicate page numbers store nothing;
+- non-string `text` stores nothing;
+- an all-empty file is refused;
+- a page with empty text appears in `pages_without_text`.
+
+### LS-C02: JUSTICE_LAWS_FETCHER, off by default (T18)
+
+Append the following to `code/uclrcde_sources.py`.
+
+**The address:**
+- `JUSTICE_LAWS_XML_BASE = "https://raw.githubusercontent.com/justicecanada/laws-lois-xml/main"`. This is Justice Canada's own published XML of the consolidated federal Acts, under the Open Government Licence – Canada.
+- Acts are at `eng/acts/<chapter>.xml`, for example `eng/acts/D-3.4.xml`.
+
+**The fetch function.** `fetch_and_lock_federal_act(db_path, library_case_id, chapter, settings, approved_by_person=False, base_url=JUSTICE_LAWS_XML_BASE, timeout=20, clock=time.monotonic, sleep=time.sleep)`.
+
+1. **What can leave the phone.** The only thing sent is the chapter code. It must match `^[A-Z]{1,2}-\d+(\.\d+)?$` (for example `D-3.4` or `C-46`). Anything else raises `ValueError` and sends nothing.
+2. **Off unless two things are true:**
+   - `settings["justice_laws_enabled"] is True`;
+   - the call has `approved_by_person=True`.
+
+   Otherwise it returns `DISABLED` or `NEEDS_APPROVAL`, with `would_send` showing the exact URL, and sends nothing.
+3. **Address and speed rules:**
+   - `https` only, except `http://127.0.0.1` in tests (the same rule as LS-A05);
+   - at most one request per second, with its own rate state;
+   - a daily cap of `settings.get("justice_laws_daily_cap", 50)`.
+4. **Safe reading.** It refuses a response over 5,000,000 bytes, or one containing `<!DOCTYPE` or `<!ENTITY`. Then it parses with `xml.etree.ElementTree`.
+5. **The reply must match the real shape** (from Justice Canada's XML). The root is `Statute`, in the namespace `lims = "http://justice.gc.ca/lims"`, and:
+   - it has a `lims:current-date` ISO date and `in-force="yes"`;
+   - `Identification/ShortTitle` is non-empty;
+   - `Identification/Chapter/ConsolidatedNumber` equals the requested chapter;
+   - `Body` holds at least one `Section` with a `Label`.
+
+   If not, it returns `FORMAT_ERROR` and locks nothing.
+6. **Locking each section.**
+   - Each `Section` is locked as one document:
+     - doc_id: `"JL:" + chapter + "@" + consolidated_to + ":s" + label`, where `consolidated_to` is the root's `lims:current-date`. A newer consolidation gets new doc_ids, so an older locked copy is never overwritten;
+     - title: `ShortTitle + ", s. " + label + " (" + chapter + ")"`;
+     - text: the `MarginalNote`, then the label, then all the text inside the section, in document order, with whitespace collapsed;
+     - source type: `CONSOLIDATED_FEDERAL_LAW`.
+   - A label repeated within the same Act is refused, with `FORMAT_ERROR`, and nothing is locked.
+   - If every section is already locked with the same text (the same consolidation fetched twice), it returns `ALREADY_LOCKED` and records nothing again.
+7. **The recorded address.** `source_url` is always the public address `JUSTICE_LAWS_XML_BASE + "/eng/acts/" + chapter + ".xml"`, because LS-A03 accepts only `https` addresses. The address actually fetched (the pretend server, in tests) is stored separately as `fetched_from`.
+8. **In-force dates.**
+   - For each section with a `lims:inforce-start-date`, it calls `record_law_section_dates(db_path, doc_id, label, that_date, None, source_url, "JUSTICE-CANADA-XML")`.
+   - These dates come from the official data, not from AI.
+9. **Provenance table.** A new table, `official_law_provenance`, holds one row per section:
+   - `doc_id` (primary key), `chapter`, `short_title`, `section_label`;
+   - `consolidated_to`, taken from `lims:current-date`;
+   - `last_amended`, taken from the section's `lims:lastAmendedDate`, or NULL;
+   - `source_url`, `fetched_from`, `licence` ("Open Government Licence – Canada") and `fetched_at`.
+
+**Choosing between copies.** `preferred_copy(db_path, doc_ids)` returns the first doc_id in this order:
+1. one with an `official_law_provenance` row;
+2. one with a `source_provenance` row (the unofficial A2AJ copy);
+3. any other locked document.
+
+An empty list, or an unknown doc_id, raises `ValueError`.
+
+**The notice line.** Append a new `source_notice_for` to `code/uclrcde_oracle.py`:
+- For a document with an `official_law_provenance` row, it returns: "Consolidated federal law published by Justice Canada, current to <consolidated_to>. Contains information licensed under the Open Government Licence – Canada."
+- Otherwise it behaves exactly as LS-B03's version.
+
+**Tests** use a pretend server serving a made-up Act in the real XML shape: a `Statute` root with the `lims` namespace, chapter `Z-99.9`, and two sections. They must show:
+- disabled settings or no approval send 0 requests;
+- a chapter code like `person@example.com` or `../x` is refused, with 0 requests;
+- an approved fetch locks two sections, records their in-force dates (checked with `check_section_in_force_on`), and fills `official_law_provenance`;
+- the same fetch run twice returns `ALREADY_LOCKED` and raises no overlap error;
+- `<!DOCTYPE`, a wrong root, or a wrong chapter locks nothing;
+- `preferred_copy` picks the official copy over an A2AJ-provenance copy;
+- the new notice text appears for an official section.
+
+### LS-C03: CLOSEST_REAL_WORDING (T27)
+
+In `code/uclrcde_filing.py`, build `closest_wording(quote, passage, min_ratio=0.6)`.
+
+1. If the LS-B01 whole-word check passes, it returns `{"status": "EXACT", "char_offset", "end_offset"}`.
+2. Otherwise it compares the normalized quote, using `difflib.SequenceMatcher`, with every run of words in the normalized passage whose length is within two words of the quote's length.
+3. It picks the best ratio, with the earliest run winning ties.
+4. If the best ratio is at least `min_ratio`, it returns `{"status": "NOT_EXACT", "closest_text": <slice of the original passage>, "char_offset", "end_offset", "similarity": <ratio rounded to 3 places>}`.
+5. Otherwise it returns `{"status": "NO_CLOSE_MATCH"}`.
+6. It **never** returns a verified status.
+
+An empty quote or passage, or a `min_ratio` outside the range from just above 0 up to 1, raises `ValueError`.
+
+Build `explain_unverified_claims(check_result, package)`. For each claim in an LS-B04 `check_answer` result whose status isn't `CHECKED` and whose `source` names a passage in `package`, it runs the LS-B01 check of `exact_words` against that passage's snippet itself (so it doesn't depend on LS-B04's check names). If that check fails and `closest_wording` finds a match, it adds a `hint`: "Not an exact quote. The closest wording in the source is: <closest_text>". The hint includes the passage number and offsets. **A claim's status is never changed.** A `WITHHELD` result is returned unchanged.
+
+**Tests must show:**
+- "must file a response within 21 day" against a made-up passage containing "must file a response within 21 days" gives `NOT_EXACT`, with the right slice and offsets;
+- an unrelated quote gives `NO_CLOSE_MATCH`;
+- an exact quote gives `EXACT`;
+- a hint is added while the claim stays `NOT_VERIFIED`;
+- bad `min_ratio` values are refused.
+
+### LS-C04: PRE_FILING_CHECK (T28)
+
+In `code/uclrcde_filing.py`, build `pre_filing_check(db_path, draft, limits=None)`. It uses no AI.
+
+**The draft:**
+
+```
+{"doc_type": str, "text": str, "signed_off": bool,
+ "points": [{"point": str,
+             "authorities": [{"citation" or "doc_id": str, "exact_words": str, "pinpoint": str}]}]}
+```
+
+**The limits** are written by a person. The defaults are:
+- `max_authorities_per_point`: 3;
+- `max_words`: {} (a mapping from document type to a word limit);
+- `max_sentence_words`: 40;
+- `jargon`: {} (a mapping from a term to its plain-English explanation);
+- `aggressive_phrases`: [].
+
+The engine supplies no word lists of its own.
+
+**Warnings** (each a code plus details, with offsets in `text` where they apply):
+1. `UNTIED_AUTHORITY`: a citation found in `text` by `find_canadian_citations` that isn't an authority under any point. The detail says "remove or explain".
+2. `AUTHORITY_NOT_VERIFIED`: an authority without a pinpoint, or whose `exact_words` don't verify in its locked document. The document is the one named by `doc_id`, or, for a `citation`, the first locked document (by doc_id order) that matches it by LS-B02's three rules. A citation that matches no locked document also gives this warning.
+3. `TOO_MANY_AUTHORITIES`: a point with more authorities than the limit.
+4. `TOO_LONG`: the word count is over `max_words[doc_type]`. If there is no limit for that type, the warning is `NO_LENGTH_LIMIT_SET`, so a person must set a limit for each document type before export.
+5. `LONG_SENTENCE`: a sentence longer than `max_sentence_words`. Sentences are split on `.`, `?` and `!`, each followed by a space or the end of the text.
+6. `JARGON_UNEXPLAINED`: a jargon term appears, ignoring case, but its explanation text doesn't.
+7. `TONE`: an aggressive phrase appears, ignoring case.
+
+**Status:**
+- `BLOCKED_NO_SIGN_OFF` if `signed_off` isn't True;
+- otherwise `NEEDS_ATTENTION` if there is any warning;
+- otherwise `READY_TO_EXPORT`.
+
+The result also holds `word_count` and `notice` (`LEGAL_INFORMATION_NOTICE`).
+
+**Bad input** raises `ValueError`: a draft that isn't a dict, missing or non-string `text`, `points` that isn't a list, or a negative or non-integer limit.
+
+**Tests must show:**
+- a made-up brief with a citation not tied to any point gives `UNTIED_AUTHORITY`;
+- 4 authorities on one point give `TOO_MANY_AUTHORITIES`;
+- a word limit of 10 gives `TOO_LONG`;
+- a 45-word sentence gives `LONG_SENTENCE`;
+- a jargon term without its explanation gives `JARGON_UNEXPLAINED`;
+- a listed phrase gives `TONE`;
+- no sign-off gives `BLOCKED_NO_SIGN_OFF`;
+- a clean, signed-off draft with a word limit set for its type gives `READY_TO_EXPORT`;
+- the same draft with no limit for its type gives `NO_LENGTH_LIMIT_SET`.
+
+### LS-C05: REASONABLE_CARE_RECEIPT (T29)
+
+In `code/uclrcde_filing.py`, build `build_receipt(db_path, case_id, document_text, source_doc_ids, check_results, signed_by, signed_on)`.
+
+**Inputs:**
+- `source_doc_ids`: each must be a locked document that passes its sealed SHA-256 check.
+- `check_results`: a list of `{"name": str, "status": str}`, for example the status from LS-B04 `check_answer`, LS-C04 `pre_filing_check`, or a citation check.
+- `signed_by`: non-empty initials.
+- `signed_on`: an ISO date.
+
+**The receipt is a JSON object** with:
+- `case_id`;
+- `document_sha256`;
+- `sources`: each as `{doc_id, sha256, link, notice}`, where:
+  - `link` is the `source_url` from `official_law_provenance` or `source_provenance`, or "own document";
+  - `notice` is from `source_notice_for`;
+- `checks`: exactly as given;
+- `signed_by` and `signed_on`;
+- `statement`: "This receipt records the checks that were run. It is not legal advice and not a guarantee.";
+- `receipt_sha256`: the SHA-256 of the canonical JSON (sorted keys, separators `(",", ":")`) of every other field.
+
+**Storage.** It is stored once in a new table, `care_receipts`:
+- `receipt_sha256` (primary key), `case_id`, `document_sha256`, `receipt_json` and `created_at`.
+- A row is never updated or deleted.
+
+**Checking a receipt.** Build `verify_receipt(db_path, receipt_json, document_text)`. It returns:
+- `RECEIPT_ALTERED` if the recomputed hash doesn't match `receipt_sha256`;
+- `UNKNOWN_RECEIPT` if no stored row has that hash;
+- `DOCUMENT_CHANGED` if the document's SHA-256 differs;
+- otherwise `MATCH`.
+
+**Bad input** raises `ValueError`: an unknown doc_id, a tampered locked document, empty `signed_by`, a non-ISO `signed_on`, or a check without a string `name` and `status`.
+
+**Tests must show:**
+- a receipt lists exactly the given checks and sources;
+- changing one character of the document gives `DOCUMENT_CHANGED`;
+- editing the receipt JSON gives `RECEIPT_ALTERED`;
+- a valid receipt gives `MATCH`;
+- an unknown source doc_id is refused.
+
+**Not checked yet by the architect:**
+- the exact attribution wording the Open Government Licence – Canada requires (the reviewer confirms it before public release);
+- whether Justice Canada's XML repository and the Justice Laws Website are treated as the same official source for every Act (the label stays "consolidated text published by Justice Canada").
