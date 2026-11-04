@@ -1,0 +1,10 @@
+# Runs on Hugging Face only (never on the phone, never imported by APCCS or UCLRCDE).
+# Pinned to the versions in Jeeves's own requirements.txt at commit 8c6ab532 (16 Oct 2026).
+torch==2.14.0
+triton==3.8.0
+flash-linear-attention==0.5.2
+transformers==5.17.0
+tokenizers==0.23.2
+safetensors==0.8.0
+huggingface_hub==1.32.0
+spaces==0.51.3
