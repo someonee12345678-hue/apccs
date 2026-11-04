@@ -155,6 +155,20 @@ class HuggingFaceDecisionSpacesSelfTest(unittest.TestCase):
         finally:
             _unload_app(module)
 
+    def test_decorator_failures_are_returned_as_json(self):
+        jeeves = _load_app("deploy/hf_spaces/jeeves/app.py")
+        try:
+            jeeves._systemone_gpu = lambda _body: (_ for _ in ()).throw(RuntimeError("hidden"))
+            self.assertEqual(json.loads(jeeves.systemone("{}")), {"error": "request processing failed"})
+        finally:
+            _unload_app(jeeves)
+        water = _load_app("deploy/hf_spaces/watersheep/app.py", device="cuda")
+        try:
+            water._ask_gpu = lambda _body: (_ for _ in ()).throw(RuntimeError("hidden"))
+            self.assertEqual(json.loads(water.systemone("{}")), {"error": "request processing failed"})
+        finally:
+            _unload_app(water)
+
 
 if __name__ == "__main__":
     unittest.main()
