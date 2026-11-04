@@ -949,3 +949,215 @@ Tests use a pretend server on `127.0.0.1` that returns the real A2AJ reply shape
 - **a stand-in that returns a different shape (no `results` key) makes the call fail**, which proves the test copies the real reply shape.
 
 Not checked yet by the architect: A2AJ's terms of use and rate limits. That is research R1 in the handoff; real use stays off until the owner records `a2aj_terms_checked_on`.
+
+## Batch LS-B (Legal engine ready for the Oracle prompt engine). Target repository: someonee12345678-hue/uclrcde
+
+Architect: Claude, 2026-11-04. Source: the architect's file `plan/architect/BATCH_LSB_2026-11-04.md` (this wording is copied word for word from it; the handoff is Drive › Claude 2 › HANDOFF_LEGAL_ENGINE_LSB_2026-11-04). The owner said "proceed" on 2026-11-04 at 05:37. This batch replaces the earlier Batch B plan. T17 (LiteParse page reader) and T18 (Justice Laws fetcher) move to the next batch. The Oracle design is in the guide "Building the Oracle Prompt Engine" (4 Nov 2026).
+
+**Target repository:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
+- standard library only, and never import APCCS code;
+- made-up data only;
+- information, not advice;
+- one pull request, which the owner merges.
+
+**Target files:**
+- LS-B01 is appended to the **end** of `code/uclrcde_sources.py`. Every existing byte stays the same. Python uses the later definition of a function name, so the fix takes effect for every existing caller, including LS-A02.
+- LS-B02 to LS-B05 go in a new `code/uclrcde_oracle.py`.
+- All tests go in one new test class, `UclrcdeBatchLSBTests`, in a new `code/test_uclrcde_oracle.py`. Its final `if __name__ == "__main__":` block stays last.
+- No other file changes.
+
+**Canary:** `Canary check: ORACLE = CHECKED -> beacon`.
+
+**Reuse:** `uclrcde_core` and `uclrcde_sources`, especially:
+- `build_evidence_first_answer`
+- `verify_quote_in_passage`
+- `check_section_in_force_on`
+- the `law_section_dates` and `source_provenance` tables
+- the email, phone, address and path patterns.
+
+New tables are created with `CREATE TABLE IF NOT EXISTS` through `open_uclrcde_db` only.
+
+**Made-up test data only.** Examples: citations such as `2099 BCCA 9999`, names such as `Jane Roe`, matter `MATTER-SYNTH-0001`, and a made-up guide page named `bc-sc-made-up-form` written into a temporary folder.
+
+**No network calls.** The AI is always a stand-in callable in tests.
+
+**Tests:** every instruction gets at least one normal-use test and one bad-input test, named `test_lsb01_...` to `test_lsb05_...`.
+
+### LS-B01: WHOLE_WORD_QUOTE_CHECK (fixes LS-A01)
+
+Append a new definition of `verify_quote_in_passage(quote, passage)` to the end of `code/uclrcde_sources.py`.
+
+**What changes:**
+- It keeps the same normalization, index map and result shape as LS-A01.
+- It accepts a match **only on whole-word boundaries:**
+  - If the normalized quote starts with a letter or digit, the character just before the match must not be a letter or digit (or the match is at the start of the text).
+  - If the quote ends with a letter or digit, the character just after the match must not be a letter or digit (or the match is at the end of the text).
+- It uses the first occurrence that meets these rules.
+- `verify_quote_in_locked_document` and LS-A02 then use this rule automatically.
+
+**Tests must show:**
+- "the file" no longer verifies against "The filed claim was late".
+- "the file" still verifies against "See the file, please".
+- Curly-quote and spacing cases from LS-A01 still pass.
+- An empty quote is still refused.
+
+### LS-B02: CANADIAN_CITATION_CHECKER (T20)
+
+In `code/uclrcde_oracle.py`, build `find_canadian_citations(text)`.
+
+**Input:**
+- Over 64,000 characters raises `ValueError`.
+
+**What it finds:**
+- Neutral citations shaped as year, space, court code, space, number (for example `2099 BCCA 9999`).
+- The year is 1900–2100 and the number is 1–99999.
+
+**What it returns:** a list of entries, each with:
+- `citation` (as written);
+- `normalized` (single spaces, upper-case court);
+- `start` and `end` (offsets in the original text);
+- `year`, `court`, `number`;
+- `status`.
+
+**Status rules:**
+- `MALFORMED` when the court code is not on the module's known list.
+- The known list must include at least: SCC, FCA, FC, TCC, CMAC, BCCA, BCSC, BCPC, BCCRT, BCHRT, ONCA, ONSC, ABCA, ABKB, ABQB, SKCA, SKKB, MBCA, MBKB, NSCA, NSSC, NBCA, NLCA, PECA, QCCA, YKCA, NWTCA, NUCA, CHRT, SST.
+
+Build `check_citations_in_library(db_path, text)`. It does the same, and also sets `status` for each well-formed citation:
+- `FOUND_LOCKED` if a locked document carries it, meaning one of:
+  - a `source_provenance.citation` equals it;
+  - the doc_id equals `"A2AJ:" + citation`;
+  - the document title contains it.
+- `NOT_IN_LIBRARY` otherwise.
+
+It never says a case "exists" unless it is `FOUND_LOCKED`.
+
+**Tests must show:**
+- made-up text with three citations gives the right statuses and offsets;
+- "2099 BCZZ 1" is `MALFORMED`;
+- text over the limit is refused.
+
+### LS-B03: ORACLE_PROMPT_PACKAGE (the five parts)
+
+In `code/uclrcde_oracle.py`, define these constants:
+- **`RULES_CARD`:** this exact text, one line per sentence:
+  "You are helping a person who represents themselves in a British Columbia court. Give procedural information only. Never give legal advice. Use ONLY the numbered passages below. Do not use anything you remember. Every statement must quote exact words from one passage, with its number and pinpoint (rule, section, paragraph or page). If the passages don't cover something, list it under "not_in_my_files". Never guess, never predict who will win, never describe how a judge rules. Never count deadline dates. Name the rule instead; the engine counts. Reply ONLY in the answer form below. No other text."
+- **`ANSWER_FORM`:** a JSON text skeleton with exactly these keys:
+  - `claims`: a list of objects with `says`, `source`, `exact_words` and `pinpoint`;
+  - `not_in_my_files`;
+  - `missing_from_document`;
+  - `rules_version_used`.
+- **`BC_LAW_CREDIT`:** this exact text: "Contains public sector Data licensed under the King's Printer License – British Columbia. Unofficial copy, not endorsed by the Province of British Columbia."
+
+Build `load_guide_page(folder)`. It reads `SKILL.md` and follows the Agent Skills format.
+
+**Frontmatter:** a simple YAML subset (`key: value` lines, plus one nested `metadata:` block of two-space-indented `key: "value"` lines). Anything else is refused.
+
+**It refuses when:**
+- `name` is missing, longer than 64 characters, not lowercase letters, digits and single hyphens, starts or ends with a hyphen, or doesn't match the folder name;
+- `description` is missing or longer than 1,024 characters;
+- `metadata` lacks `rules-current-to` as an ISO date;
+- the body is over 500 lines.
+
+**It returns:** `name`, `description`, `metadata` and `body`.
+
+Build `source_notice_for(db_path, doc_id)`:
+- returns `BC_LAW_CREDIT` when the document's `source_provenance.dataset` is `LEGISLATION-BC` or `REGULATIONS-BC`;
+- returns the stored provenance `label` for other provenance rows;
+- returns "Your own document" when there is no provenance row.
+
+Build `build_prompt_package(db_path, case_id, guide_folder, phrases, question, blocked_terms=(), max_chars=24000)`. It works in this order:
+
+1. **Refuse a bad question.** If the question contains an email, phone number, street address, file path or blocked term, return `NEEDS_EDIT`, listing what to remove. It never edits the question itself.
+2. **Refuse a prediction request.** Use LS-B05 `is_prediction_request`. If it matches, return `REFUSED_PREDICTION` with the notice.
+3. **Get the evidence.** Call LS-A02 with `writer=None`. If there is no evidence, return `REFUSED_NO_EVIDENCE`.
+4. **Assemble the package text** in this exact order, each part under a heading line:
+   - `RULES CARD`;
+   - `GUIDE PAGE`, holding the body only;
+   - `PASSAGES`, each as `[n] title, line L, characters S–E`, then the exact snippet, then its `source_notice_for` line;
+   - `QUESTION`;
+   - `ANSWER FORM`.
+5. **Check the size.** If the text is over `max_chars`, return `NARROW_EVIDENCE` with the size. Nothing is cut off quietly.
+6. **Return** `READY` with:
+   - `package_text`;
+   - `package_sha256`;
+   - `chars`;
+   - `passages`: a list of `{n, doc_id, pinpoint, snippet, char_offset, end_offset}`;
+   - `notice` (`LEGAL_INFORMATION_NOTICE`).
+
+The function takes no earlier-answer input of any kind.
+
+**Tests must show:**
+- a made-up guide page and two locked made-up documents give the five parts in order;
+- a bad guide-page name or a missing `rules-current-to` is refused;
+- `person@example.com` in the question gives `NEEDS_EDIT`;
+- a tiny `max_chars` gives `NARROW_EVIDENCE`;
+- a BC-legislation provenance row shows `BC_LAW_CREDIT`.
+
+### LS-B04: ANSWER_FORM_CHECKER and VERIFIED_NOTES (the check loop and T21)
+
+Build `check_answer(db_path, package, reply_text, event_date=None)`.
+
+1. **Read the reply.** `reply_text` must be one JSON object and nothing else, with the four keys. If not, the result is `WITHHELD` with reason `FORM_ERROR`.
+2. **Check each claim with fixed rules, no AI:**
+   1. `source` is an integer that names a passage in the package.
+   2. `exact_words` passes LS-B01 against that passage's snippet.
+   3. `pinpoint` equals that passage's pinpoint string.
+   4. If `event_date` is given and that passage's document has `law_section_dates` rows, at least one recorded period must be `IN_FORCE` on that date. If the document has no rows, the claim is marked `DATE_NOT_CHECKED` but not failed.
+   5. Every citation found by LS-B02 in `says` or `exact_words` must be `FOUND_LOCKED`.
+3. **Set each claim's status:**
+   - `CHECKED` if it passes all applicable checks;
+   - otherwise `NOT_VERIFIED`, with the failed check names.
+4. **Set the overall result:**
+   - `CHECKED` if all claims pass;
+   - `PARTLY_CHECKED` if some pass;
+   - `WITHHELD` if none pass. In that case no claim text is returned, only the reasons.
+5. `not_in_my_files` and `missing_from_document` are passed through.
+
+**Verified notes.** Build a table `verified_notes` and `save_verified_note(db_path, case_id, checked_claim, confirmed_by)`. It stores:
+- `case_id`;
+- claim text, exact words, `doc_id`, offsets and pinpoint;
+- `confirmed_by` initials;
+- confirmation date;
+- `package_sha256`.
+
+Only a claim with status `CHECKED` and non-empty initials can be saved. Anything else raises `ValueError`. Build `list_verified_notes(db_path, case_id)`.
+
+**Tests must show:**
+- a stand-in reply with one good claim and one invented quote gives `PARTLY_CHECKED` with the right reasons;
+- prose instead of JSON gives `WITHHELD`/`FORM_ERROR`;
+- a source of 9 when there are 2 passages fails check 1;
+- the wrong pinpoint fails check 3;
+- a law outside its in-force dates fails check 4;
+- "2099 BCZZ 1" in a claim fails check 5;
+- a `NOT_VERIFIED` claim can't be saved as a verified note, and a `CHECKED` one can.
+
+### LS-B05: PERSUASION_GUARD (T22)
+
+Build `ask_twice_order_swapped(parts, ask)`.
+
+- `parts` is a list of text pieces.
+- `ask` is a callable that receives only a list of text pieces and returns one label.
+- It calls `ask(parts)`, then `ask(list(reversed(parts)))`.
+- If the two labels match, it returns `{"status": "STABLE", "label": ...}`.
+- Otherwise it returns `{"status": "UNSTABLE", "label": None, "message": "The AI gave different answers when the material was reordered. You decide."}`.
+- It never passes any earlier answer or label into the second call.
+
+Build `is_prediction_request(text)`. It returns True for requests to predict an outcome or describe a judge. It must cover at least:
+- "will I win";
+- "chance of winning" / "chances of winning";
+- "likely to win";
+- "odds";
+- "how will the judge";
+- "this judge usually";
+- "what will the judge decide".
+
+Matching ignores case. It returns False for ordinary procedural questions such as "when is my response due".
+
+**Tests must show:**
+- a stand-in that flips with order gives `UNSTABLE`;
+- a steady stand-in gives `STABLE`;
+- the second call's arguments contain no label from the first call (a recording stand-in proves it);
+- the prediction phrases above are caught and procedural questions are not.
+
+**Not checked yet by the architect:** the exact King's Printer credit wording. It comes from Gemini's check of the licence page on BC Laws (bclaws.gov.bc.ca/standards/2014/QP-License_1.0.html), which was blocked from Claude's workspace. The reviewer confirms it before public release.
