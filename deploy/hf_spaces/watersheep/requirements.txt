@@ -1,0 +1,5 @@
+# Runs on Hugging Face only (never on the phone, never imported by APCCS or UCLRCDE).
+# WaterSheep is pinned to commit f07dd2cb of github.com/SamratDuttaOfficial/WaterSheep (Apache-2.0, 25 Oct 2026).
+watersheep @ git+https://github.com/SamratDuttaOfficial/WaterSheep@f07dd2cb3d0398b3dda8a52f9c5e6af338998c66
+huggingface_hub==1.32.0
+spaces==0.51.3
