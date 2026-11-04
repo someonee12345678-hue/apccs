@@ -745,3 +745,11 @@ Target repository: `someonee12345678-hue/apccs`. Target: `code/apccs_genesis.py`
     Build `lock_checkpoint_cp245(vault_dir)` in `code/apccs_genesis.py` (tested in `code/test_apccs_genesis.py`) sealing `audit/CP-245_LOCK.json` into `APPCS_MASTER_BUILD.zip` and `APCCS_MASTER_BUILD.zip` after verifying that all **230 APCCS-built instructions** (`1..140`, `146..170`, `181..245`) pass tests and recording `141..145` and `171..180` (`15` instructions) as `"built in uclrcde"` without reading or importing `uclrcde` files, rejecting lock creation if any of the 230 APCCS instructions is missing or failing.
 
 Note for the builder (Claude, not the architect): these instructions name files outside `code/` (`START_OUR_OWN_SYSTEM.html`, `audit/` files, `RECOVER.md`, the build zips). As with earlier batches, build them inside temporary test folders under `vault_dir`, and report in the pull request anything that AGENTS.md doesn't allow. INST-0213's function name is written `create_sandboxed_preview_ descriptor` (with a space) in the architect's file; it is copied as written, and the builder should raise it in that batch's pull request rather than guess.
+
+## Batch HF-A: Hugging Face Decision Tier (Pieces 1 and 2)
+
+- HF-01: System One request validation and HTTP client (`code/apccs_decision_tier.py`).
+- HF-02: Two-step Gradio Space client (`/gradio_api/call/systemone` and `/gradio_api/call/status`) using stdlib `urllib`.
+- HF-03: Decision canary verification (`HF = ZeroGPU -> lantern`).
+- HF-04: 4-step fallback chain (hosted Jeeves -> hosted WaterSheep -> local phone WaterSheep -> human owner).
+- HF-05: Question-free hash ledger, case-file local-only lock, Gradio 6.31.0 Space apps (`deploy/hf_spaces/jeeves/app.py`, `deploy/hf_spaces/watersheep/app.py`), and private Space deployer (`deploy/hf_spaces/deploy.py`).
