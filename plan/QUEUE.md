@@ -767,7 +767,7 @@ Note for the builder (Claude, not the architect): these instructions name files 
 
 ## Batch LS-A (Legal Search A: Addendum 5, tests T11–T15). Target repository: someonee12345678-hue/uclrcde
 
-Architect: Claude, 2026-11-04. Source: Drive › Claude 2 › HANDOFF_LEGAL_SEARCH_LSA_2026-11-04 (this wording is copied word for word from it). The owner released Addendum 5 on 2026-11-04 at 03:41.
+Architect: Claude, 2026-11-04. Source: the architect's file `plan/architect/BATCH_LSA_2026-11-04.md` (this wording is copied word for word from it; the handoff is Drive › Claude 2 › HANDOFF_LEGAL_SEARCH_LSA_2026-11-04). The owner released Addendum 5 on 2026-11-04 at 03:41.
 
 - **Target repository:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
   - standard library only, and never import APCCS code;
