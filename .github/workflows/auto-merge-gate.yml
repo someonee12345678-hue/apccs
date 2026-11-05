@@ -1,0 +1,230 @@
+# Auto-merge gate: merges a pull request by itself once it passes the hard rules.
+# Owner request, 2026-11-05 15:09 America/Vancouver: "We still don't have automatic
+# merge on pull requests." Merging the pull request that adds this file is the
+# Owner's approval. It is plain software: no AI and no saved secrets, only
+# GitHub's own short-lived token for this repository.
+#
+# A pull request is merged only when ALL of these are true on its latest commit:
+#   1. Both checks are green: "Protected files untouched" and "Frozen files and
+#      all tests". (The guard check already fails on protected files, changed or
+#      deleted code, and removed tests, so those still need the Owner's tap.)
+#   2. Every other check that ran is finished and none failed.
+#   3. There's no open issue whose title starts with STOP, and no STOP file on main.
+#   4. It isn't a draft, has no "hold" label, and its title doesn't name Batch 41-49.
+#   5. It comes from this repository (not a copy) and GitHub says it merges cleanly.
+# After a merge it posts how to undo it, then starts the tests on main again.
+# Safety: it never checks out or runs pull request code. It only reads GitHub's
+# records and merges. "Run workflow" with dry_run = yes only reports.
+name: Auto-merge gate
+
+on:
+  workflow_run:
+    workflows: ["APCCS tests", "APCCS guard"]
+    types: [completed]
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report what would be merged (yes or no)"
+        default: "no"
+
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: auto-merge-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Auto-merge gate
+    # Runs only after a green check on a pull request, on the 6-hourly sweep,
+    # or by hand. Skipped runs cost no minutes.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       (github.event.workflow_run.event == 'pull_request' ||
+        github.event.workflow_run.event == 'pull_request_target'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Merge every pull request that passes the rules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'no' }}
+          TESTS_WORKFLOW: apccs-tests.yml
+        run: |
+          python3 -I - <<'PY'
+          """Auto-merge gate: merge open pull requests that pass the hard rules.
+
+          Inputs: environment variables GH_TOKEN, GITHUB_REPOSITORY, GITHUB_API_URL,
+          DRY_RUN ("yes" only reports) and TESTS_WORKFLOW (file to re-run on main).
+          Output: merges, one undo note per merge, and a summary in the run page.
+          Errors: a GitHub error on one pull request is reported and skipped.
+          """
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.request
+
+          API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+          REPO = os.environ["GITHUB_REPOSITORY"]
+          TOKEN = os.environ["GH_TOKEN"]
+          DRY_RUN = os.environ.get("DRY_RUN", "no").strip().lower() in ("yes", "y", "true", "1")
+          TESTS_WORKFLOW = os.environ.get("TESTS_WORKFLOW", "")
+          REQUIRED_CHECKS = ("Protected files untouched", "Frozen files and all tests")
+          SELF_CHECK = "Auto-merge gate"
+          HELD_TITLE = re.compile(r"\b(?:batch\s*4[1-9]|inst-0204)\b", re.IGNORECASE)
+          HOLD_LABELS = {"hold", "do-not-merge", "do not merge"}
+          CLEAN_STATES = {"clean", "has_hooks"}
+
+
+          def call(method: str, path: str, body: dict | None = None, missing_ok: bool = False):
+              """Send one GitHub REST request and return the decoded JSON (None on an allowed 404)."""
+              data = None if body is None else json.dumps(body).encode("utf-8")
+              request = urllib.request.Request(API + path, data=data, method=method, headers={
+                  "Authorization": "Bearer " + TOKEN,
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "User-Agent": "auto-merge-gate",
+              })
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      raw = response.read()
+              except urllib.error.HTTPError as error:
+                  if missing_ok and error.code == 404:
+                      return None
+                  raise
+              return json.loads(raw) if raw else {}
+
+
+          def report(text: str) -> None:
+              """Print text and add it to the run's summary page."""
+              print(text)
+              summary = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary:
+                  with open(summary, "a", encoding="utf-8") as handle:
+                      handle.write(text + "\n")
+
+
+          def stop_reason() -> str | None:
+              """Return why everything must stop (STOP issue or STOP file), or None."""
+              for issue in call("GET", f"/repos/{REPO}/issues?state=open&per_page=100"):
+                  if "pull_request" not in issue and issue.get("title", "").strip().upper().startswith("STOP"):
+                      return f"open issue #{issue['number']} is titled STOP"
+              if call("GET", f"/repos/{REPO}/contents/STOP?ref=main", missing_ok=True) is not None:
+                  return "a STOP file is on main"
+              return None
+
+
+          def check_problem(sha: str) -> str | None:
+              """Return why the checks on commit sha aren't all green yet, or None if they are."""
+              runs = call("GET", f"/repos/{REPO}/commits/{sha}/check-runs?per_page=100").get("check_runs", [])
+              newest = {}
+              for run in runs:
+                  name = run.get("name", "")
+                  if name == SELF_CHECK:
+                      continue
+                  if name not in newest or run.get("id", 0) > newest[name].get("id", 0):
+                      newest[name] = run
+              for name in REQUIRED_CHECKS:
+                  run = newest.get(name)
+                  if run is None:
+                      return f"check '{name}' hasn't run yet"
+                  if run.get("status") != "completed":
+                      return f"check '{name}' is still running"
+                  if run.get("conclusion") != "success":
+                      return f"check '{name}' is {run.get('conclusion')}"
+              for name, run in newest.items():
+                  if run.get("status") != "completed":
+                      return f"check '{name}' is still running"
+                  if run.get("conclusion") not in ("success", "neutral", "skipped"):
+                      return f"check '{name}' is {run.get('conclusion')}"
+              return None
+
+
+          def fresh(number: int) -> dict:
+              """Read one pull request, waiting briefly while GitHub works out if it can merge."""
+              pull = {}
+              for _ in range(6):
+                  pull = call("GET", f"/repos/{REPO}/pulls/{number}")
+                  if pull.get("mergeable") is not None:
+                      break
+                  time.sleep(5)
+              return pull
+
+
+          def main() -> None:
+              """Check every open pull request into main and merge the ones that pass."""
+              lines = ["## Auto-merge gate" + (" (dry run: nothing merged)" if DRY_RUN else ""), ""]
+              reason = stop_reason()
+              if reason:
+                  report("\n".join(lines + [f"Stopped: {reason}. Nothing was merged."]))
+                  return
+              pulls = call("GET", f"/repos/{REPO}/pulls?state=open&base=main&per_page=50")
+              if not pulls:
+                  lines.append("No open pull requests.")
+              merged = 0
+              for item in pulls:
+                  number, title = item["number"], item.get("title", "")
+                  labels = {label.get("name", "").lower() for label in item.get("labels", [])}
+                  if item.get("draft"):
+                      lines.append(f"- #{number}: waiting (draft).")
+                      continue
+                  if labels & HOLD_LABELS:
+                      lines.append(f"- #{number}: held (hold label).")
+                      continue
+                  if HELD_TITLE.search(title):
+                      lines.append(f"- #{number}: held (Batch 41-49 are on hold).")
+                      continue
+                  try:
+                      pull = fresh(number)
+                      if pull.get("state") != "open":
+                          continue
+                      head_repo = ((pull.get("head") or {}).get("repo") or {}).get("full_name")
+                      if head_repo != REPO:
+                          lines.append(f"- #{number}: needs the Owner (it comes from another copy of the repository).")
+                          continue
+                      sha = pull["head"]["sha"]
+                      problem = check_problem(sha)
+                      if problem:
+                          lines.append(f"- #{number}: waiting ({problem}).")
+                          continue
+                      if pull.get("mergeable") is not True or pull.get("mergeable_state") not in CLEAN_STATES:
+                          lines.append(f"- #{number}: waiting (GitHub says: {pull.get('mergeable_state')}).")
+                          continue
+                      if DRY_RUN:
+                          lines.append(f"- #{number}: WOULD MERGE.")
+                          continue
+                      result = call("PUT", f"/repos/{REPO}/pulls/{number}/merge",
+                                    {"merge_method": "merge", "sha": sha})
+                  except urllib.error.HTTPError as error:
+                      lines.append(f"- #{number}: not merged (GitHub said {error.code}); the next run tries again.")
+                      continue
+                  merged += 1
+                  lines.append(f"- #{number}: MERGED ({str(result.get('sha', ''))[:7]}).")
+                  note = ("Merged by the auto-merge gate (server software, no AI).\n\n"
+                          f"Checked on {sha[:7]}: both checks green, no STOP, not held, no conflicts.\n\n"
+                          "UNDO: open this pull request on GitHub, tap **Revert**, then merge the revert pull request.")
+                  try:
+                      call("POST", f"/repos/{REPO}/issues/{number}/comments", {"body": note})
+                  except urllib.error.HTTPError as error:
+                      lines.append(f"  (couldn't post the undo note on #{number}: {error.code})")
+              if merged and TESTS_WORKFLOW:
+                  try:
+                      call("POST", f"/repos/{REPO}/actions/workflows/{TESTS_WORKFLOW}/dispatches", {"ref": "main"})
+                      lines += ["", "Started the tests on main again after merging."]
+                  except urllib.error.HTTPError as error:
+                      lines += ["", f"Couldn't start the tests on main (GitHub said {error.code})."]
+              report("\n".join(lines))
+
+
+          main()
+          PY
