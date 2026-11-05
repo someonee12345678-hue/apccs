@@ -2885,91 +2885,62 @@ End of Batch A4.
 
 ## Batch LS-I (BC court AI-rule cards). Target repository: someonee12345678-hue/uclrcde
 
-Checker: Muse, after the Owner's 2026-11-05 order. Source: Drive › Claude 2 › AUDITED_WORDING_U5_LSI_AND_A5_2026-11-05 — Plan only, no code.
+Checker: Muse, 2026-11-05. Source: Drive › Claude 2 › AUDITED_WORDING_U5_LSI_AND_A5_2026-11-05 (corrected wording; audit of Gemini wording, log record 20261105-0852-GE). Wording verified against R2_VERIFIED_BC_COURT_AI_RULES_2026-11-05 and the uclrcde code at main.
 
-Function: plan_ls_i_bc_court_ai_rule_cards() -> None
-Does:
-1. Adds BC court AI-rule cards to the "What a person needs to check" page.
-2. Keeps the cards read-only.
-3. The cards are short — BC Supreme Court Practice Direction 1 (2024): a person must declare AI use and must not put AI-written text into a filing unless a person has checked it.
-4. The cards also show BC Provincial Court Civil Resolution Tribunal rule: a person must declare AI use; the card is short and the AI output is not legal advice.
-5. The rules and the declaration steps are short and clear.
-Refuses:
-- If the court AI rules are missing or the declaration steps are unclear, the batch is not done, raising ValueError("LS_I_AI_RULES_NOT_READY: <reason>").
-Tests:
-- test_ls_i_01_bc_court_ai_rule_cards_present_and_short
-- test_ls_i_02_bc_court_ai_rule_cards_declare_ai_use
-- test_ls_i_03_bc_court_ai_rule_cards_refuse_off_shape
-- test_ls_i_04_bc_court_ai_rule_cards_refuse_missing_declaration
-- test_ls_i_05_bc_court_ai_rule_cards_refuse_unclear_declaration
-Done means: The court AI rules are short and clear, and the declaration steps are easy to follow.
+Build only after: Batch LS-K is merged (it is: PR #13, merged 2026-11-05).
+
+Files: new code/uclrcde_courts.py, standard library only. Tests go in code/test_uclrcde_courts.py, class UclrcdeBatchLSITests.
+
+Reuse: open_uclrcde_db from uclrcde_core; check_citations_in_library from uclrcde_oracle. Nothing else.
+
+Tables, created with CREATE TABLE IF NOT EXISTS through open_uclrcde_db only: bc_court_ai_cards (id TEXT PRIMARY KEY, source_url TEXT, points_json TEXT, verified TEXT, checked_date TEXT, rule_hash TEXT); bc_court_ai_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT, note TEXT, sha256 TEXT, ts TEXT). Add-only: no function updates or deletes a row.
+
+Constants:
+
+VERIFIED_BC_COURT_AI_CARDS: card bc_provincial, source_url https://provincialcourt.bc.ca/news-notices-policies-and-practice-directions/enews/07-07-2026, verified VERIFIED, checked_date 2026-11-05, points (R2 section 1, as 8 strings): (1) Check your material carefully and make sure it's accurate; be extra careful if AI helped make it. (2) Before accepting what AI says about the law, check it. (3) Look up any law or judgment it cites and read it yourself. (4) If an AI summary is inaccurate, don't use it. (5) CanLII is a good place to search by case name or citation. (6) Include a hyperlink if possible, and note the section, paragraph or page you quote. (7) If a judge asks how you used AI, answer truthfully. (8) You may want to remove personal details about yourself or others before uploading anything to AI.
+
+Card civil_resolution_tribunal, source_url https://civilresolutionbc.ca/help/can-i-use-ai-tools-in-evidence-and-arguments/, verified VERIFIED, checked_date 2026-11-05, points (R2 section 2, as 4 strings): (1) Must not include fake cases or legislation in their arguments, such as those created by an AI tool. (2) Must not give fake evidence, such as evidence created or altered by an AI tool. (3) Giving false or misleading information is an offence under the Civil Resolution Tribunal Act. (4) Unreliable evidence or arguments may mean you might not get the decision you want, and you may be ordered to pay another participant's legal costs and for their lost time.
+
+UNVERIFIED_COURT_ITEMS_ON_HOLD: bc_court_of_appeal (Registrar's Filing Directive, March 12, 2024, s.7.3 primary text — NOT CHECKED); gerber (1182573 B.C. Ltd. v. Gerber, 2026 BCCA 399 — NOT CHECKED); crt_standard_rule (CRT "Standard Rule 8.3(9)" — NOT CHECKED); zhang_chen (Zhang v. Chen, 2024 BCSC 285 — NOT CHECKED).
+
+### LS-I01: LOAD_VERIFIED_BC_COURT_AI_CARDS (R2_VERIFIED sections 1-2)
+Function: `load_verified_bc_court_ai_cards(db_path) -> list[dict]`
+Does: 1. Open the database with open_uclrcde_db. 2. Insert each card in VERIFIED_BC_COURT_AI_CARDS if absent, storing the SHA-256 of its points as rule_hash. 3. Log each insert in bc_court_ai_audit. 4. Return one display dict per card, exactly as display_source returns it.
+Refuses: Never inserts or returns a card whose verified value is not "VERIFIED"; hold items are never inserted.
+Tests: test_lsi01_loads_two_verified_cards (normal) and test_lsi01_hold_item_never_loaded (bad input).
+Done means: Exactly the two VERIFIED cards are stored and returned; no existing table changes.
+Not checked: The four hold items stay out (R2_VERIFIED sections 3-4).
+
+### LS-I02: DISPLAY_SOURCE (R2_VERIFIED sections 1-2)
+Function: `display_source(db_path, card_id) -> dict`
+Does: 1. Load the card row for card_id. 2. Return its id, source_url, verified and checked_date, with points as a numbered list numbered inside this module. 3. Log nothing on success.
+Refuses: An unknown or unverified card_id returns {"status": "IGNORED", "card_id": <the requested id>} and logs "NOT A VERIFIED CARD" in bc_court_ai_audit.
+Tests: test_lsi02_display_source_returns_numbered_points (bc_provincial: 8 points and its URL) and test_lsi02_display_source_refuses_unverified (gerber).
+Done means: Each card shows its own source, points, flag and date; nothing NOT CHECKED is ever displayed.
+Not checked: None — both cards are R2 VERIFIED, read 2026-11-05.
+
+### LS-I03: CHECK_PINPOINT_REMINDER (R2_VERIFIED section 1)
+Function: `check_pinpoint_reminder(db_path, payload_text) -> dict`
+Does: 1. Find the citations in payload_text with check_citations_in_library. 2. For each citation, look for a pinpoint (a section, paragraph or page reference) near it. 3. Return {"status": "PINPOINT OK"} when every citation has one, otherwise {"status": "REMINDER", "missing_pinpoints": [...]}.
+Refuses: Nothing is blocked and the payload is never edited; this is the pre-export reminder R2 asks for.
+Tests: test_lsi03_pinpoint_ok (normal) and test_lsi03_reminder_lists_missing_pinpoint (bad input).
+Done means: Before export, the user sees every cited authority that still needs a pinpoint.
+Not checked: None (BC Provincial Court point, read 2026-11-05).
+
+### LS-I04: PLAIN_AI_NOTE (R2_VERIFIED section 1)
+Function: `plain_ai_note(db_path) -> dict`
+Does: 1. Take the bc_provincial card's 8 points. 2. Build a plain-language note headed "Check AI before you use it". 3. End the note with "Never submit anything without reading it." 4. Return {"status": "OK", "points": [...], "note": <the note text>}.
+Refuses: Uses no other card and no NOT CHECKED item, ever.
+Tests: test_lsi04_note_has_eight_verified_points (normal) and test_lsi04_note_excludes_not_checked_items (bad input).
+Done means: The note repeats only the VERIFIED Provincial Court points, in plain words.
 Not checked: None.
 
-### LS-I01: RULE_CARD_CIVIL_RESOLUTION_TRIBUNAL_AI_DECLARATION (BC court AI-rule cards)
-Function: rule_card_civil_resolution_tribunal_ai_declaration() -> dict
-Does:
-1. Returns {"court": "Civil Resolution Tribunal", "declaration": "AI use declared", "rule": "The card is short and the AI output is not legal advice"}.
-Refuses:
-- Off-shape data or a declaration that does not state AI use, raising ValueError("LS_I01_OFF_SHAPE_AI_DECLARATION: <reason>").
-Tests:
-- test_ls_i_01_rule_card_civil_resolution_tribunal_ai_declaration_present_and_short
-- test_ls_i_01_rule_card_civil_resolution_tribunal_ai_declaration_declares_ai_use
-Done means: The Civil Resolution Tribunal AI declaration card is present, short, and states that AI use is declared.
-Not checked: None.
-
-### LS-I02: RULE_CARD_BC_SUPREME_COURT_PRACTICE_DIRECTION_1_AI_DECLARATION (BC court AI-rule cards)
-Function: rule_card_bc_supreme_court_practice_direction_1_ai_declaration() -> dict
-Does:
-1. Returns {"court": "BC Supreme Court", "declaration": "AI use declared", "rule": "A person must not put AI-written text into a filing unless a person has checked it"}.
-Refuses:
-- Off-shape data or a declaration that does not state AI use, raising ValueError("LS_I02_OFF_SHAPE_AI_DECLARATION: <reason>").
-Tests:
-- test_ls_i_02_rule_card_bc_supreme_court_practice_direction_1_ai_declaration_present_and_short
-- test_ls_i_02_rule_card_bc_supreme_court_practice_direction_1_ai_declaration_declares_ai_use
-Done means: The BC Supreme Court Practice Direction 1 AI declaration card is present, short, and states that AI use is declared.
-Not checked: None.
-
-### LS-I03: AI_RULE_CARD_PINPOINT_AND_VERDICT_FOR_CASE_ID (BC court AI-rule cards)
-Function: ai_rule_card_pinpoint_and_verdict_for_case_id(case_id: str, rule_card: dict) -> dict
-Does:
-1. Validates case_id and rule_card and verifies the court AI-rule card is present and short, with the AI declaration text.
-2. Checks that the declaration states AI use, and that the rule card text is short and clear.
-3. Returns {"status": "PINPOINT OK"} for a valid case and rule card, otherwise raises ValueError("LS_I03_OFF_SHAPE_AI_RULE_CARD: <reason>").
-Refuses:
-- If the court AI-rule card is missing, the declaration is unclear, or the rule card is off-shape, raising ValueError("LS_I03_AI_RULES_NOT_READY: <reason>").
-Tests:
-- test_ls_i_03_ai_rule_card_pinpoint_and_verdict_for_case_id_returns_pinpoint_ok
-- test_ls_i_03_ai_rule_card_pinpoint_and_verdict_for_case_id_refuses_off_shape
-Done means: The AI-rule card for a case is present, short, and states that AI use is declared.
-Not checked: None.
-
-### LS-I04: VALIDATE_COURT_AI_RULES_BEFORE_SHOWING_CARDS (BC court AI-rule cards)
-Function: validate_court_ai_rules_before_showing_cards(rule_cards: list) -> bool
-Does:
-1. Validates that rule_cards is a non-empty list and that every card has exact keys court, declaration, rule.
-2. Checks that the BC Supreme Court and Civil Resolution Tribunal cards are present and short, with the AI declaration text.
-3. Confirms the declaration steps are short and clear, returning True if all checks pass.
-Refuses:
-- If any court AI-rule card is missing, the declaration is unclear, or the rule card is off-shape, raising ValueError("LS_I04_AI_RULES_NOT_READY: <reason>").
-Tests:
-- test_ls_i_04_validate_court_ai_rules_before_showing_cards_returns_true
-- test_ls_i_04_validate_court_ai_rules_before_showing_cards_refuses_missing_card
-Done means: The court AI rules are validated before the cards are shown, and the declaration steps are short and clear.
-Not checked: None.
-
-### LS-I05: RUN_W9_REGISTRAR_CHECK_AFTER_AI_RULE_CARDS (BC court AI-rule cards)
-Function: run_w9_registrar_check_after_ai_rule_cards(registry_path: str) -> dict
-Does:
-1. Locates the Registrar's file in the registry and returns a Registrar's file note (the Registrar's office has a specific form).
-2. The note has the form <the note text> and the Registrar's note is a file note for the AI-rule cards, not a legal document.
-3. The note is a file note, not a legal document, and the Registrar's office is the place to file the note.
-4. The note is returned as a dict with keys note, form, and registrar, and the note is a file note for the AI-rule cards.
-Refuses:
-- If the Registrar's file is missing, the note is off-shape, or the Registrar's office is not the place to file the note, raising ValueError("LS_I05_REGISTRAR_NOTE_NOT_READY: <reason>").
-Tests:
-- test_ls_i_05_run_w9_registrar_check_after_ai_rule_cards_returns_note
-- test_ls_i_05_run_w9_registrar_check_after_ai_rule_cards_refuses_missing_note
-Done means: The Registrar's file note is present, short, and states that AI use is declared.
-Not checked: None.
+### LS-I05: CHECK_FAKE_MATERIAL_GUARD (R2_VERIFIED section 2)
+Function: `check_fake_material_guard(db_path, evidence_text) -> dict`
+Does: 1. Run check_citations_in_library on evidence_text. 2. Flag every citation whose status is not FOUND_LOCKED as a possible fake. 3. Flag any mention of a hold-list authority as NOT CHECKED — not as a rule and not as a fake. 4. Log every flag in bc_court_ai_audit. 5. Return {"proceed": bool, "flagged": [...], "not_checked": [...]}.
+Refuses: proceed is False while any flag stands; export waits for the person's own confirmation. This function sends nothing anywhere.
+Tests: test_lsi05_unknown_citation_flagged, test_lsi05_verified_citation_passes and test_lsi05_hold_authority_marked_not_checked.
+Done means: Fake-looking citations are caught, real verified ones pass, and NOT CHECKED authorities are labelled honestly.
+Not checked: Gerber and Zhang v. Chen stay NOT CHECKED (R2 sections 3-4).
 
 End of Batch LS-I.
