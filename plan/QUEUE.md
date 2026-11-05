@@ -1797,3 +1797,623 @@ Anchors are saved in the add-only table `paragraph_anchors`.
 7. **Refusals match the core.** They use `ValueError` with the code first, as `uclrcde_core` does.
 
 End of Batch LS-E.
+
+## Batch LS-F (evidence map, court-ready drawing and the request size limit). Target repository: someonee12345678-hue/uclrcde
+
+Architect: Gemini wrote the wording (log record `20261104-1946-GE`). Claude audited and corrected it on 2026-11-04 (log Entry 0228). Source: the architect's file `plan/architect/BATCH_LSF_2026-11-04.md`; the queue copies it word for word. Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`. Sources: Addendum 11 (T33) and Addendum 12 (T34, T35) in Drive › Claude 2.
+
+Why: T33 links a person's documents to points and cases, with exact quote proof and a person's confirmation. T34 draws a timeline and the evidence map from checked data only. T35 puts a hard limit on what each AI request carries.
+
+**Build only after Batch LS-E is merged on uclrcde `main`.**
+
+**Target repository and rules:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
+- standard library only, and never import APCCS code;
+- made-up data only;
+- information, not advice;
+- one pull request, which the owner merges.
+
+**Network:** none. Every instruction gets at least one normal-use test and one bad-input test.
+
+**Refusals:** every refusal raises `ValueError` whose message starts with the code shown.
+
+**Tables:** new tables are created with `CREATE TABLE IF NOT EXISTS`, through `open_uclrcde_db` only. Every new table is add-only: no function updates or deletes a row.
+
+**Cards:** LS-E's card table is `document_cards`. A card's id is `"CARD:" + doc_id`. Wherever the wording below says `case_document_cards`, read `document_cards`.
+
+### Architect's corrections. Read these first: they override Gemini's wording below wherever the two differ.
+
+1. **Files.**
+   - Put the code in a new file, `code/uclrcde_evidence.py`.
+   - Put the tests in a new file, `code/test_uclrcde_evidence.py`, class `UclrcdeBatchLSFTests`.
+   - Don't use `uclrcde_sources.py` or `test_uclrcde_sources.py`.
+2. **LS-F01 link fields.**
+   - Required fields: `matter_id` (a registered matter), `from_doc_id`, `to_ref`, `link_type`, `pinpoint` and `basis_quote`. `page_num` is optional: `None`, or an `int` of at least 1.
+   - `from_doc_id` is a locked document in that matter.
+   - `to_ref` is non-empty text: a point id, a `card_id` or a citation.
+   - `pinpoint` is non-empty text.
+   - `basis_quote` must pass `uclrcde_sources.verify_quote_in_locked_document(db_path, from_doc_id, basis_quote)` with the status that function gives an exact match.
+3. **LS-F01 link types.** Use exactly T33's list, in snake case: `cites`, `follows`, `distinguishes`, `overrules`, `reverses`, `applies`, `supports_point`, `contradicts_point` and `exhibit_of`.
+   - Drop `supports`, `contradicts` and `mentions`.
+   - `reverses` is added because T33's warning rule names it.
+4. **LS-F01 ids and repeats.**
+   - `link_id` is `"LINK-"` plus the row number.
+   - The same link sent twice (same matter, from, to, type, pinpoint and quote) returns the stored link with `status` `"ALREADY_LINKED"`.
+5. **LS-F02 is add-only.**
+   - A confirmation adds a row to a new table, `evidence_link_reviews`, with columns `link_id`, `status`, `checked_by` (1 to 8 letters) and `checked_on` (ISO).
+   - The link row is never updated. A link's current status is its latest review, or `UNVERIFIED` when it has none.
+   - At confirmation time, the basis quote is checked again.
+6. **LS-F03 seeding.**
+   - Rename the `case_id` parameter to `cited_ref`.
+   - Seeded `cites` links have an empty `basis_quote` and stay `UNVERIFIED`. LS-F02 refuses to confirm them until a person adds a passing quote in a new link. So drop `AUTO_VERIFY_REFUSED`.
+7. **LS-F03 warnings are worked out when asked for, never stored.**
+   - When any link of type `overrules` or `reverses` points at a `to_ref`, every other link in the matter with that same `to_ref` gets `warning` `"OVERRULED_WARNING"` in the result.
+   - The result also says whether the overruling link itself is verified.
+8. **LS-F04 inputs.**
+   - `events_list` is a list of dicts, each with `event_date` (ISO), `label` and `doc_id`.
+   - Each label must pass the same quote check in its `doc_id`. Each drawn element carries that `doc_id` plus the start and end offsets the check returns.
+   - Links come from `evidence_map_links` for the matter, with their current status from LS-F02.
+9. **LS-F04 drawing.**
+   - Order: events by date, then label; links by `link_id`.
+   - Canvas: `width="612" height="792"` (points, 8.5 × 11 inches). Text is escaped with `html.escape`.
+   - Each element has `href="uclrcde:doc/<doc_id>?start=<s>&end=<e>"`.
+   - Unverified links are dashed and labelled `UNVERIFIED`.
+   - If the content doesn't fit on one page, refuse with `TOO_MUCH_FOR_ONE_PAGE`.
+   - The function returns the SVG text and its SHA-256.
+10. **LS-F05 inputs.**
+    - `evidence_items` is a list of strings, and `char_count` is the sum of their lengths.
+    - `max_chars` comes from the caller (a person sets it). `max_items` defaults to 8, as in LS-A02.
+    - Over either limit, refuse. Never trim.
+
+### Gemini's wording (the corrections above override it)
+
+BATCH LS-F: Evidence map and court-ready visuals (Addendum 11, T33; Addendum 12, T34, T35). Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: EVIDENCE = MAP -> bridge`.
+
+Build only after: Batch LS-E is merged.
+
+Files: add to the end of code/uclrcde_sources.py. Tests go in code/test_uclrcde_sources.py, class UclrcdeBatchLSFTests.
+
+### LS-F01: CREATE_EVIDENCE_MAP_LINK (Addendum 11, T33; Addendum 12)
+
+Function: `create_evidence_map_link(db_path, link_dict) -> dict`
+
+Does:
+1. Creates table `evidence_map_links` if needed with columns `link_id`, `matter_id`, `from_id`, `to_id`, `link_type`, `page_num`, `pinpoint`, `basis_quote`, `status`, `checked_by`, and `checked_on`.
+2. Checks that `link_type` is in `("supports", "contradicts", "mentions", "cites", "follows", "distinguishes", "overrules", "applies", "exhibit_of")` and `page_num` is an integer of at least 1.
+3. Verifies that `basis_quote` passes `verify_quote_in_locked_document` or matches the sealed document card text for `from_id`.
+4. Stores the link with `status: "UNVERIFIED"` and blank reviewer fields, and returns the saved record.
+
+Refuses: Missing required field (`MISSING_LINK_FIELD`), unlisted `link_type` (`INVALID_LINK_TYPE`), `page_num` less than 1 (`INVALID_PAGE_NUM`), or a `basis_quote` that fails the exact quote check (`QUOTE_CHECK_FAILED`).
+
+Tests: `test_lsf01_create_evidence_map_link_valid` and `test_lsf01_create_evidence_map_link_refuses_bad_quote_or_type`.
+
+Done means: Links from cards to claims store page and exact quote proof and always start as `UNVERIFIED`.
+
+Not checked: External knowledge-graph schemas (NOT CHECKED).
+
+### LS-F02: CONFIRM_EVIDENCE_MAP_LINK (Addendum 11, T33)
+
+Function: `confirm_evidence_map_link(db_path, link_id, reviewer_initials, checked_on) -> dict`
+
+Does:
+1. Loads the link row for `link_id` from `evidence_map_links`.
+2. Verifies that `basis_quote` is non-empty, `reviewer_initials` is a non-empty initials string, and `checked_on` matches ISO `YYYY-MM-DD`.
+3. Updates `status` to `"VERIFIED_BY_PERSON"`, saves `checked_by` and `checked_on`, and builds `treatment_label` as `"treatment checked by [initials] on [date]"`.
+4. Returns the updated link dictionary and never outputs the phrase `"still good law"`.
+
+Refuses: Unknown `link_id` (`LINK_NOT_FOUND`), empty `reviewer_initials` (`MISSING_INITIALS`), non-ISO `checked_on` (`INVALID_ISO_DATE`), or missing `basis_quote` (`MISSING_BASIS_QUOTE`).
+
+Tests: `test_lsf02_confirm_evidence_map_link_sets_verified` and `test_lsf02_confirm_evidence_map_link_refuses_missing_initials_or_date`.
+
+Done means: A link becomes `VERIFIED_BY_PERSON` only with an exact quote, reviewer initials, and an ISO date, and never says `"still good law"`.
+
+Not checked: Commercial citator treatment codes (NOT CHECKED).
+
+### LS-F03: SEED_CITING_LINKS_AND_OVERRULED_WARNING (Addendum 11, T33)
+
+Function: `seed_citing_links_and_overruled_warning(db_path, matter_id, case_id, citing_ids) -> dict`
+
+Does:
+1. Inserts each citation in `citing_ids` into `evidence_map_links` as `link_type: "cites"` and `status: "UNVERIFIED"` with no treatment type assumed.
+2. Queries `evidence_map_links` in `matter_id` for any row where `link_type` is `"overrules"` and `to_id` equals `case_id`.
+3. Flags every link in `matter_id` that uses an overruled `case_id` with `warning: "OVERRULED_WARNING"`.
+4. Returns the count of seeded `"cites"` links and the list of flagged link IDs.
+
+Refuses: Empty `matter_id` or `case_id` (`INVALID_IDENTIFIER`), non-list `citing_ids` (`INVALID_CITING_LIST`), or any attempt to seed a citing link as `"VERIFIED_BY_PERSON"` (`AUTO_VERIFY_REFUSED`).
+
+Tests: `test_lsf03_seed_citing_links_unverified_only` and `test_lsf03_overruled_case_attaches_warning_to_all_uses`.
+
+Done means: Citing lists seed `UNVERIFIED` `"cites"` links only, and every use of an overruled case gets an `OVERRULED_WARNING`.
+
+Not checked: Whether external citing lists cover all courts (NOT CHECKED).
+
+### LS-F04: RENDER_COURT_READY_EVIDENCE_SVG (Addendum 12, T34)
+
+Function: `render_court_ready_evidence_svg(db_path, matter_id, events_list) -> dict`
+
+Does:
+1. Validates that every label in `events_list` and every link in `evidence_map_links` for `matter_id` is an exact substring of its source document with a character offset.
+2. Computes a fixed US Letter layout (`8.5 x 11 inches`, `612 x 792 pt`) containing the case timeline, key-events table, and evidence-map links.
+3. Renders `UNVERIFIED` links with dashed lines and the text `"UNVERIFIED"`, and `VERIFIED_BY_PERSON` links with solid lines and source links.
+4. Returns deterministic SVG text and its SHA-256 hex digest so identical inputs produce byte-identical output.
+
+Refuses: Empty `matter_id` (`INVALID_MATTER_ID`), any label not found verbatim in its source document (`LABEL_QUOTE_CHECK_FAILED`), or missing source document ID or character offset (`MISSING_SOURCE_TRACE`).
+
+Tests: `test_lsf04_render_court_ready_evidence_svg_byte_identical` and `test_lsf04_render_court_ready_evidence_svg_refuses_unverified_label`.
+
+Done means: Drawing twice produces byte-identical Letter-size SVG output with dashed `UNVERIFIED` links, and any label not in its source is refused.
+
+Not checked: Printer driver margins across physical devices (NOT CHECKED).
+
+### LS-F05: ENFORCE_AI_REQUEST_CHAR_LIMIT (Addendum 12, T35)
+
+Function: `enforce_ai_request_char_limit(db_path, matter_id, evidence_items, max_chars, max_items=8) -> dict`
+
+Does:
+1. Creates table `ai_request_size_log` if needed with columns `log_id`, `matter_id`, `item_count`, `char_count`, `max_chars`, and `status`.
+2. Counts the total characters across `evidence_items` and checks that `len(evidence_items)` is at most `max_items` and `char_count` is at most `max_chars`.
+3. Writes `item_count`, `char_count`, `max_chars`, and `status` to `ai_request_size_log` without storing any request text.
+4. Returns `status: "OK"` with the unchanged items when within limits, or refuses without silently trimming when over the limit.
+
+Refuses: `max_chars` less than 1 or `max_items` less than 1 (`INVALID_LIMIT`), `char_count` greater than `max_chars` (`CHAR_LIMIT_EXCEEDED`), or `len(evidence_items)` greater than `max_items` (`ITEM_LIMIT_EXCEEDED`).
+
+Tests: `test_lsf05_enforce_ai_request_char_limit_allows_within_budget` and `test_lsf05_enforce_ai_request_char_limit_refuses_one_char_over`.
+
+Done means: A request one character over the limit is refused without truncation, and the log stores only the size and never the request text.
+
+Not checked: Third-party tokenizer ratios (NOT CHECKED).
+
+End of Batch LS-F.
+
+## Batch LS-G (case links for long cases and the BC licence statement check). Target repository: someonee12345678-hue/uclrcde
+
+Architect: Gemini wrote the wording (log record `20261104-1946-GE`). Claude audited and corrected it on 2026-11-04 (log Entry 0228). Source: the architect's file `plan/architect/BATCH_LSG_2026-11-04.md`; the queue copies it word for word. Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`. Sources: Addendum 15 (T41) and its link-table decision, and Batch LS-D (LS-D01).
+
+Why: T41 suggests document-to-document links (for example, a Form 2 responds to a notice of claim) from a person-reviewed links.csv. Links can be corrected, added or retired, and nothing is overwritten. G05 explains why a pasted BC licence statement isn't exact.
+
+**Build only after Batch LS-F is merged on uclrcde `main`.**
+
+**Target repository and rules:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
+- standard library only, and never import APCCS code;
+- made-up data only;
+- information, not advice;
+- one pull request, which the owner merges.
+
+**Network:** none. Every instruction gets at least one normal-use test and one bad-input test.
+
+**Refusals:** every refusal raises `ValueError` whose message starts with the code shown.
+
+**Tables:** new tables are created with `CREATE TABLE IF NOT EXISTS`, through `open_uclrcde_db` only. Every new table is add-only: no function updates or deletes a row.
+
+**Cards:** LS-E's card table is `document_cards`. A card's id is `"CARD:" + doc_id`. Wherever the wording below says `case_document_cards`, read `document_cards`.
+
+### Architect's corrections. Read these first: they override Gemini's wording below wherever the two differ.
+
+1. **Files.**
+   - Add the code to the end of `code/uclrcde_evidence.py`, which LS-F creates.
+   - Put the tests in a new file, `code/test_uclrcde_links.py`, class `UclrcdeBatchLSGTests`.
+   - Don't use `uclrcde_sources.py` or `test_uclrcde_sources.py`.
+2. **LS-G01 link words.**
+   - Use exactly the seven words from Addendum 15's link-table decision: `responds to`, `proves service of`, `supports`, `must come before`, `asks for`, `results in` and `amends`.
+   - T33's evidence link types belong to LS-F, not to `links.csv`.
+3. **LS-G01 error codes.**
+   - The codes are `INVALID_CSV_HEADER`, `INVALID_COLUMN_COUNT`, `INVALID_LINK_WORD` and `INVALID_DATE`. The message names the row number.
+   - Any one of these refuses the whole file.
+   - A row with an empty `checked_by` or `checked_on` is "not reviewed yet". That isn't an error.
+4. **Forms.**
+   - A card's form is its `doc_type`, for example `Form 2`.
+   - A CSV row's `from` and `to` match a card only when they equal its `doc_type` exactly.
+   - LS-G02 drops the `form_code` parameter; the form comes from the new card.
+5. **LS-G02 matching.**
+   - Rows match when `from` equals the new card's `doc_type`.
+   - Candidates are the other cards in the same matter whose `doc_type` equals the row's `to`, newest `date_received` first.
+   - A suggestion that already exists isn't added again.
+6. **LS-G03.** `document_card_versions` is an add-only table with columns `card_id`, `version_status`, `replaced_by`, `initials` and `action_date`. The prior card is never changed.
+7. **LS-G04.**
+   - Case links join one document to another, so confirming one needs no basis quote. Drop `MISSING_BASIS_QUOTE`.
+   - `CHECK_AGAIN` is set when the latest `custody_checks` row (from LS-E02) for either card is `CUSTODY_MISMATCH`.
+8. **LS-G05 is a diagnostic. It never accepts a different text.**
+   - Rename it `check_kpl_statement(candidate_text)`.
+   - It returns `VERBATIM_OK` only when the text equals `uclrcde_oracle.BC_KPL_STATEMENT`; its SHA-256 is `BC_KPL_STATEMENT_SHA256`.
+   - Otherwise it returns `status` `"NOT_VERBATIM"` with `differences`, a sorted list drawn from: `CURLY_APOSTROPHE`, `HYPHEN_NOT_EN_DASH`, `HTTPS_FIRST_ADDRESS`, `EXTRA_WHITESPACE` and `OTHER_WORDING`.
+   - It raises `INVALID_TEXT_INPUT` for empty or non-string input.
+
+### Gemini's wording (the corrections above override it)
+
+BATCH LS-G: Case links for long cases and KPL apostrophe check (Addendum 15, T41; Batch LS-D, LS-D01). Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: LINKS = HISTORY -> ledger`.
+
+Build only after: Batch LS-F is merged.
+
+Files: add to the end of code/uclrcde_sources.py. Tests go in code/test_uclrcde_sources.py, class UclrcdeBatchLSGTests.
+
+### LS-G01: LOAD_REVIEWED_LINK_TABLE_CSV (Addendum 15, T41)
+
+Function: `load_reviewed_link_table_csv(csv_text) -> dict`
+
+Does:
+1. Parses UTF-8 `csv_text` with `csv.reader` and verifies the exact header `from,link,to,rule,exact_words,checked_by,checked_on`.
+2. Checks each row for 7 columns and verifies that `link` is in `("responds to", "proves service of", "supports", "must come before", "asks for", "results in", "amends", "cites", "follows", "distinguishes", "overrules", "applies", "supports this point", "contradicts this point", "exhibit of")`.
+3. Separates rows with both `checked_by` initials and an ISO `YYYY-MM-DD` date in `checked_on` into `reviewed_rows`, and puts rows missing either one into `not_reviewed_yet`.
+4. Returns `{"status": "LOADED", "reviewed_rows": reviewed_rows, "not_reviewed_yet": not_reviewed_yet}`.
+
+Refuses: Wrong header (`INVALID_CSV_HEADER`), wrong column count (`INVALID_COLUMN_COUNT_ROW_N`), unlisted link word (`INVALID_LINK_WORD_ROW_N`), or non-ISO `checked_on` date when present (`INVALID_DATE_ROW_N`).
+
+Tests: `test_lsg01_load_reviewed_link_table_csv_splits_reviewed_and_unreviewed` and `test_lsg01_load_reviewed_link_table_csv_refuses_bad_link_word`.
+
+Done means: A valid `links.csv` loads reviewed rows and lists unreviewed rows as `"not reviewed yet"`, while an invalid link word refuses the file and names the row.
+
+Not checked: BC Laws rule text inside `exact_words` unless locked in the database (NOT CHECKED).
+
+### LS-G02: SUGGEST_PROCEDURAL_DOCUMENT_LINKS (Addendum 15, T41)
+
+Function: `suggest_procedural_document_links(db_path, matter_id, new_card_id, form_code, reviewed_rows) -> dict`
+
+Does:
+1. Creates table `case_link_history` if needed with columns `row_id`, `link_id`, `matter_id`, `from_card_id`, `link_word`, `to_card_id`, `pinpoint`, `status`, `source_note`, `replaces_row_id`, `action`, `initials`, `action_date`, and `note`.
+2. Finds all rows in `reviewed_rows` where `from` equals `form_code` and searches `case_document_cards` in `matter_id` for cards matching `to`, ordered newest first.
+3. Writes each candidate into `case_link_history` as `status: "UNVERIFIED"`, `action: "suggest"`, and `source_note: "link table row [n], reviewed by [initials]"`.
+4. Returns all suggested links with zero AI calls and zero network activity.
+
+Refuses: Unknown `new_card_id` (`CARD_NOT_FOUND`), empty `form_code` (`INVALID_FORM_CODE`), or any row in `reviewed_rows` missing `checked_by` or `checked_on` (`UNREVIEWED_RULE_ROW`).
+
+Tests: `test_lsg02_suggest_procedural_document_links_newest_first` and `test_lsg02_suggest_procedural_document_links_refuses_unreviewed_row`.
+
+Done means: Adding a carded form suggests `UNVERIFIED` procedural links newest-first from reviewed CSV rows with no AI needed.
+
+Not checked: External court registry filing sequences (NOT CHECKED).
+
+### LS-G03: HANDLE_AMENDED_DOCUMENT_LINKS (Addendum 15, T41)
+
+Function: `handle_amended_document_links(db_path, matter_id, new_card_id, prior_card_id, reviewer_initials, confirmed_on) -> dict`
+
+Does:
+1. Verifies that `new_card_id` and `prior_card_id` belong to `matter_id` in `case_document_cards`.
+2. Appends a confirmed `"amends"` link from `new_card_id` to `prior_card_id` in `case_link_history` with `reviewer_initials` and ISO `confirmed_on`.
+3. Marks `prior_card_id` with `version_status: "replaced"` in a `document_card_versions` table while keeping the prior card and its history intact.
+4. Copies confirmed links touching `prior_card_id` as new `UNVERIFIED` link suggestions for `new_card_id` and returns the summary.
+
+Refuses: Unknown card ID (`CARD_NOT_FOUND`), cards from different matters (`MATTER_MISMATCH`), empty `reviewer_initials` (`MISSING_INITIALS`), or non-ISO `confirmed_on` (`INVALID_ISO_DATE`).
+
+Tests: `test_lsg03_handle_amended_document_links_marks_replaced_and_suggests` and `test_lsg03_handle_amended_document_links_refuses_matter_mismatch`.
+
+Done means: Confirming an amended document marks the older version `"replaced"` without deleting it and offers its confirmed links as `UNVERIFIED` suggestions.
+
+Not checked: Court rules on deadlines for amended pleadings (NOT CHECKED).
+
+### LS-G04: EDIT_CASE_LINK_APPEND_ONLY (Addendum 15, T41)
+
+Function: `edit_case_link_append_only(db_path, edit_dict) -> dict`
+
+Does:
+1. Validates `action` in `("add", "edit", "confirm", "retire")`, `link_word` against the shared allowed list, `initials` as non-empty, and `action_date` as ISO `YYYY-MM-DD`.
+2. If `action` is `"confirm"` on an evidence link, verifies that `basis_quote` passes the exact quote check; if a card's custody fingerprint changed, sets `status: "CHECK_AGAIN"`.
+3. Appends a new row to `case_link_history` with `replaces_row_id` pointing to the prior row without updating or deleting any existing row.
+4. Returns both the active view (latest row per `link_id`) and the full history view for `link_id`.
+
+Refuses: Unlisted `link_word` (`INVALID_LINK_WORD`), missing `initials` or non-ISO `action_date` (`INVALID_AUDIT_METADATA`), confirming an evidence link without a verified `basis_quote` (`MISSING_BASIS_QUOTE`), or unknown `replaces_row_id` (`PRIOR_ROW_NOT_FOUND`).
+
+Tests: `test_lsg04_edit_case_link_append_only_preserves_history` and `test_lsg04_edit_case_link_append_only_flags_fingerprint_change`.
+
+Done means: Every link edit writes a new history row without overwriting old rows, and a changed document fingerprint flags linked items `"CHECK_AGAIN"`.
+
+Not checked: Multi-device sync conflict resolution (NOT CHECKED).
+
+### LS-G05: CHECK_KPL_STATEMENT_APOSTROPHE (Batch LS-D, LS-D01)
+
+Function: `check_kpl_statement_apostrophe(candidate_text) -> dict`
+
+Does:
+1. Compares `candidate_text` against the required BC King's Printer Licence v1.1 s.3.3 credit statement from `https://www.bclaws.gov.bc.ca/standards/Licence.html`.
+2. Detects whether `"King's"` in `candidate_text` uses a straight apostrophe (`U+0027`) or a curly apostrophe (`U+2019`).
+3. Computes the UTF-8 SHA-256 hex digest of `candidate_text` and checks whether the straight-apostrophe version matches `7a463e1b4a83751245f0e64f1f9b0d206901e321f42c85c10278bf0e5c2b3645`.
+4. Returns `status: "VERBATIM_OK"`, `apostrophe_kind` (`"straight"` or `"curly"`), and `sha256` when the wording matches.
+
+Refuses: Empty or non-string `candidate_text` (`INVALID_TEXT_INPUT`), missing `"http://www.bclaws.gov.bc.ca"` (`MISSING_HTTP_PREFIX`), or any wording difference outside the apostrophe character (`STATEMENT_TEXT_MISMATCH`).
+
+Tests: `test_lsg05_check_kpl_statement_apostrophe_accepts_straight_and_reports_curly` and `test_lsg05_check_kpl_statement_apostrophe_refuses_altered_words`.
+
+Done means: The KPL v1.1 credit checker verifies the exact s.3.3 wording and SHA-256 hash and reports whether the apostrophe is straight or curly.
+
+Not checked: Future revisions after King's Printer Licence v1.1 (NOT CHECKED).
+
+End of Batch LS-G.
+
+## Batch LS-H (clerk, not judge: guard, step order, brief check and trap test set). Target repository: someonee12345678-hue/uclrcde
+
+Architect: Gemini wrote the wording (log record `20261104-1946-GE`). Claude audited and corrected it on 2026-11-04 (log Entry 0228). Source: the architect's file `plan/architect/BATCH_LSH_2026-11-04.md`; the queue copies it word for word. Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`. Source: Addendum 7 (T21, T22 and its additions).
+
+Why: UCLRCDE is a research clerk, never a judge. LS-B built the verified notes and the order-swap guard. This batch adds what's left: a reply guard for judge profiling and advice, person-written step lists with order warnings, a brief that may cite only verified notes, and a test set with trap answers.
+
+**Build only after Batch LS-G is merged on uclrcde `main`.**
+
+**Target repository and rules:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
+- standard library only, and never import APCCS code;
+- made-up data only;
+- information, not advice;
+- one pull request, which the owner merges.
+
+**Network:** none. Every instruction gets at least one normal-use test and one bad-input test.
+
+**Refusals:** every refusal raises `ValueError` whose message starts with the code shown.
+
+**Tables:** new tables are created with `CREATE TABLE IF NOT EXISTS`, through `open_uclrcde_db` only. Every new table is add-only: no function updates or deletes a row.
+
+**Cards:** LS-E's card table is `document_cards`. A card's id is `"CARD:" + doc_id`. Wherever the wording below says `case_document_cards`, read `document_cards`.
+
+Claude rewrote this batch. Gemini's LS-H01, LS-H02 and LS-H04 repeated work that LS-B already built: `is_prediction_request`, `save_verified_note` / `list_verified_notes` and `ask_twice_order_swapped` in `uclrcde_oracle.py`. This batch reuses those and builds only what Addendum 7 still lacks.
+
+**Target files:**
+- A new `code/uclrcde_clerk.py`.
+- Tests in a new `code/test_uclrcde_clerk.py`, class `UclrcdeBatchLSHTests`.
+- No other file changes.
+
+**Canary:** `Canary check: CLERK = NEUTRAL -> gavel`.
+
+### LS-H01: CLERK_REPLY_GUARD (T22 part 3)
+
+`check_clerk_text(text) -> dict`
+
+- **Refuses:** non-string or empty input, with `INVALID_TEXT_INPUT`.
+- **Prediction check:**
+  - First it uses `uclrcde_oracle.is_prediction_request(text)`.
+  - It then also checks, ignoring case, for:
+    - judge profiling: `this judge usually`, `judge's reversal rate`, `judge leans`;
+    - directive advice: `you should file`, `you must argue`, `your best strategy is`, `you will prevail`.
+- **Returns:**
+  - `{"status": "CLERK_SAFE"}` when nothing matches.
+  - Otherwise `status` is `OUTCOME_PREDICTION_REFUSED`, `JUDGE_PROFILING_REFUSED` or `LEGAL_ADVICE_WITHHELD`, with `matched` (the phrase found) and `notice` equal to `uclrcde_core.LEGAL_INFORMATION_NOTICE`.
+  - When more than one kind matches, it reports the first kind in the order listed.
+- **Done means:**
+  - "You will win this" is refused.
+  - "What form starts a small claim?" passes.
+  - "This judge usually rules for landlords" is refused.
+
+### LS-H02: MATTER_STEP_LIST (T21 procedure check)
+
+`record_matter_steps(db_path, matter_type, steps, written_by, written_on) -> dict`
+
+- **Who writes it:** a person writes an ordered step list for a matter type, for example `["filed", "served", "proof_of_service"]`. AI never writes these lists.
+- **Inputs:**
+  - `matter_type` is a non-empty string.
+  - `steps` is a list of at least 2 distinct non-empty strings.
+  - `written_by` is 1 to 8 letters of initials.
+  - `written_on` is an ISO date.
+- **Saves:** add-only table `matter_step_lists`, with columns `matter_type`, `version`, `steps_json`, `written_by`, `written_on` and `steps_sha256`.
+- **New versions:**
+  - A new list for the same type becomes the next version; the old one stays.
+  - The same list sent again returns `"ALREADY_RECORDED"`.
+- **Refuses:** `MISSING_FIELD`, `INVALID_STEPS`, `INVALID_INITIALS`, `INVALID_ISO_DATE`.
+- **Done means:** version 2 is added without changing version 1.
+
+### LS-H03: STEP_ORDER_WARNING (T21 done-means 3)
+
+`check_step_order(db_path, matter_type, steps_done) -> dict`
+
+- **Reads:** the latest step list for `matter_type`.
+- **Returns:**
+  - `"IN_ORDER"` when `steps_done` follows that order: steps may be missing at the end, but not skipped in between.
+  - Otherwise `"STEP_OUT_OF_ORDER"`, with `warnings`: one line for each problem, naming the step and what should come before it.
+- **This is a warning, not a refusal.** A person decides, as T21 says.
+- **Refuses:**
+  - `NO_STEP_LIST` when no list exists for the type;
+  - `UNKNOWN_STEP` for a step that isn't on the list;
+  - `INVALID_STEPS_DONE` when `steps_done` isn't a list of strings.
+- **Done means:**
+  - `["filed", "served"]` is in order.
+  - `["served", "filed"]` gives a warning that names `filed`.
+
+### LS-H04: BRIEF_CITES_ONLY_VERIFIED_NOTES (T21 done-means 1–2, plus the T15 brief layout)
+
+`check_brief(db_path, case_id, brief) -> dict`
+
+- **Input:** `brief` is a list of sections. Each section is a dict with `heading`, `text` and `note_ids`, a list of at least one id.
+- **Checks:**
+  - Every `note_id` must be one of `uclrcde_oracle.list_verified_notes(db_path, case_id)`.
+  - The headings must be exactly the T15 layout, in this order: `Issue`, `What the law says`, `How it may apply`, `What you still need to find out`.
+  - No heading or section text may contain the word `decision` as a whole word, ignoring case.
+  - Every section's `text` must pass LS-H01.
+- **Returns:**
+  - `"BRIEF_OK"` with the count of notes cited.
+  - Otherwise `"BRIEF_BLOCKED"` with `problems`: one line each, naming the section.
+- **Refuses:** `INVALID_BRIEF` when the brief's shape is wrong.
+- **Done means:**
+  - A brief citing a verified note passes.
+  - A brief citing an unknown note is blocked.
+  - A heading "Decision" is blocked.
+
+### LS-H05: CLERK_TEST_SET_WITH_TRAPS (Addendum 7, additions: held test set)
+
+`score_clerk_test_set(test_set_json, answer_fn) -> dict`
+
+- **The test set:** `test_set_json` is JSON text, a list of items. Each item has:
+  - `id`;
+  - `question`;
+  - `right` (the right answer);
+  - `rigid_trap`: the rule applied blindly;
+  - `ungrounded_trap`: an answer relying on facts not in the record;
+  - `record`: the made-up facts.
+- **The run:** for each item, `answer_fn(question, record, options)` is called with the three answers in an order fixed by the item's `id` (sorted by the SHA-256 of `id + option text`). It must return one of the options.
+- **Scoring:** software counts `right`, `rigid` and `ungrounded` picks.
+- **Returns:**
+  - `total`, `right`, `rigid` and `ungrounded`;
+  - `failed_ids`: sorted;
+  - `status`: `"PASS"` only when every pick is right, else `"NEEDS_A_PERSON"`.
+- **The test set is the frozen judge.** This function never changes the set and never sees an earlier answer.
+- **Refuses:**
+  - `INVALID_TEST_SET` for bad JSON or a missing field;
+  - `INVALID_ANSWER` when `answer_fn` returns something that isn't one of the three options.
+- **Done means:**
+  - A made-up 3-item set with a stand-in that always picks the right answer gives `PASS`.
+  - A stand-in that picks the rigid trap on one item gives `NEEDS_A_PERSON` and lists that id.
+
+### Not checked
+
+- The full LawThinker method; only its ideas are used.
+- Whether BC courts publish formal step lists. Step lists are written by a person.
+
+### Gemini's original LS-H (kept for the record only; not to be built)
+
+Gemini's LS-H01 to LS-H05 are kept in the audit log, Entry 0228. Don't build them.
+
+End of Batch LS-H.
+
+## Batch LS-K (backup helper routes by role, public or made-up text only). Target repository: someonee12345678-hue/uclrcde
+
+Architect: Gemini wrote the wording (log record `20261104-1946-GE`). Claude audited and corrected it on 2026-11-04 (log Entry 0228). Source: the architect's file `plan/architect/BATCH_LSK_2026-11-04.md`; the queue copies it word for word. Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`. Sources: Addendum 13 (route map, data classes) and plan rules R1–R3.
+
+Why: If one AI company stops working, the work moves to the next allowed route, and in the end to No AI. Case files never go to an online route.
+
+**Build only after Batch LS-H is merged on uclrcde `main`.**
+
+**Target repository and rules:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
+- standard library only, and never import APCCS code;
+- made-up data only;
+- information, not advice;
+- one pull request, which the owner merges.
+
+**Network:** none. Every instruction gets at least one normal-use test and one bad-input test.
+
+**Refusals:** every refusal raises `ValueError` whose message starts with the code shown.
+
+**Tables:** new tables are created with `CREATE TABLE IF NOT EXISTS`, through `open_uclrcde_db` only. Every new table is add-only: no function updates or deletes a row.
+
+**Cards:** LS-E's card table is `document_cards`. A card's id is `"CARD:" + doc_id`. Wherever the wording below says `case_document_cards`, read `document_cards`.
+
+### Architect's corrections. Read these first: they override Gemini's wording below wherever the two differ.
+
+1. **Files.**
+   - Put the code in a new file, `code/uclrcde_routes.py`.
+   - Put the tests in a new file, `code/test_uclrcde_routes.py`, class `UclrcdeBatchLSKTests`.
+   - Don't use `uclrcde_oracle.py` or `test_uclrcde_oracle.py`.
+2. **Why it's in UCLRCDE.** Addendum 13 puts the full router (T36) in APCCS. UCLRCDE keeps this small copy so it can run alone (plan rule R2). Record-and-replay tests (T37) come in a later UCLRCDE batch.
+3. **Roles are fixed in code; routes are named in settings.**
+   - The roles are `Finder`, `Critic`, `Builder` and `Inspector`.
+   - Each route in the settings has these fields:
+     - `name`: any label. Company names may appear here, in settings only, never in code.
+     - `roles`: a list drawn from the four roles.
+     - `access_type`
+     - `cost`
+     - `allowed_data`: a subset of `MADE_UP`, `PUBLIC` and `CASE_FILE`.
+     - `online`: a `bool`.
+     - `daily_cap`: an `int` of 0 or more.
+     - `healthy`: a `bool`.
+     - `request_options`: a dict, which may be empty.
+   - Drop `BRAND_NAME_ROLE_REFUSED`; an unknown role raises `UNKNOWN_ROLE`. No list of company names goes in code.
+4. **LS-K01 refuses the whole settings file** when any route is online and allows `CASE_FILE`, with `CASE_FILE_ONLINE_ROUTE_FORBIDDEN`.
+5. **The "No AI" route is built in.** Code adds it, not settings, and settings can't remove it. It has:
+   - `name` `"No AI"`;
+   - `access_type` `none`;
+   - offline;
+   - all three data classes;
+   - always healthy;
+   - always last.
+6. **LS-K02 daily caps.**
+   - It takes `used_today`, a dict from route name to count.
+   - A route is usable while its count is below its `daily_cap`.
+   - `CASE_FILE` can pick only offline routes: `on_device` or the built-in "No AI".
+7. **LS-K03.**
+   - Don't add `"data_collection": "deny"` or any other fixed option. Copy the route's own `request_options` unchanged.
+   - The personal-details scan covers email addresses, phone numbers (7 or more digits, allowing spaces, dots, dashes and brackets) and the marker `private — don't share`.
+   - Street addresses aren't scanned, because the pattern is unreliable. Add them to Not checked.
+   - Nothing is sent.
+8. **LS-K04.** Add the columns `route_name` and `logged_at`.
+9. **LS-K05.** Use `uclrcde_core.search_locked_documents` and `uclrcde_core.LEGAL_INFORMATION_NOTICE`.
+
+### Gemini's wording (the corrections above override it)
+
+BATCH LS-K: Backup helper routes by role for public or made-up text (Addendum 13, T36; Rules R1, R2, R3). Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: ROUTE = ROLE -> switch`.
+
+Build only after: Batch LS-H is merged.
+
+Files: add to the end of code/uclrcde_oracle.py. Tests go in code/test_uclrcde_oracle.py, class UclrcdeBatchLSKTests.
+
+### LS-K01: LOAD_HELPER_ROUTES_BY_ROLE (Addendum 13, T36; Rule R1)
+
+Function: `load_helper_routes_by_role(settings_json) -> dict`
+
+Does:
+1. Parses `settings_json` and verifies that routes are keyed by role (`"Finder"`, `"Critic"`, `"Builder"`, `"Inspector"`, `"On_Device"`, `"No_AI"`) and never by company brand names.
+2. Checks each route for `role`, `access_type`, `cost`, `allowed_data`, `online`, `daily_cap`, and `healthy`.
+3. Validates `access_type` in `("app", "official_cli", "api_key", "self_hosted", "on_device", "none")` and `cost == 0`.
+4. Returns the validated route table with `"No_AI"` always present and healthy at the end of the fallback order.
+
+Refuses: Invalid JSON (`INVALID_SETTINGS_JSON`), company brand name used as a role key (`BRAND_NAME_ROLE_REFUSED`), `access_type` in `("browser_automation", "session_harvesting")` (`FORBIDDEN_ACCESS_TYPE`), or `cost` greater than 0 without explicit owner flag (`NON_ZERO_COST_REFUSED`).
+
+Tests: `test_lsk01_load_helper_routes_by_role_valid` and `test_lsk01_load_helper_routes_by_role_refuses_browser_automation_and_brands`.
+
+Done means: The route registry loads $0 role-named helper routes and refuses company role names, browser automation, and session harvesting.
+
+Not checked: Third-party provider uptime guarantees (NOT CHECKED).
+
+### LS-K02: PICK_HELPER_ROUTE_FOR_DATA_CLASS (Addendum 13, T36)
+
+Function: `pick_helper_route_for_data_class(routes_table, role_name, data_class) -> dict`
+
+Does:
+1. Validates `data_class` in `("MADE_UP", "PUBLIC", "CASE_FILE")`.
+2. If `data_class` is `"CASE_FILE"`, filters out every route with `online == True` so case files can only pick `"on_device"` or `"none"` (`"No_AI"`).
+3. For `"MADE_UP"` or `"PUBLIC"`, picks the first route matching `role_name` that is `healthy == True`, under `daily_cap`, and lists `data_class` in `allowed_data`.
+4. Falls back to `"No_AI"` if no other route qualifies and returns the selected route dictionary.
+
+Refuses: Unknown `data_class` (`INVALID_DATA_CLASS`), unknown `role_name` (`UNKNOWN_ROLE`), or a route configuration that marks an online route as allowed for `"CASE_FILE"` (`CASE_FILE_ONLINE_ROUTE_FORBIDDEN`).
+
+Tests: `test_lsk02_pick_helper_route_blocks_case_file_from_online_routes` and `test_lsk02_pick_helper_route_falls_back_to_no_ai`.
+
+Done means: Backup helper routes serve only `"MADE_UP"` or `"PUBLIC"` text, `"CASE_FILE"` never selects an online route, and `"No_AI"` always works as fallback.
+
+Not checked: Local on-phone model memory footprint on every Android phone (NOT CHECKED).
+
+### LS-K03: PREPARE_PUBLIC_HELPER_REQUEST (Addendum 13; Addendum 2, T6)
+
+Function: `prepare_public_helper_request(route_dict, payload_text, data_class, approved_by_person, max_chars) -> dict`
+
+Does:
+1. Refuses immediately if `data_class` is `"CASE_FILE"` or not in `("MADE_UP", "PUBLIC")`.
+2. Scans `payload_text` to block emails, phone numbers, street addresses, or `"private — don't share"` markers, and checks `len(payload_text)` is at most `max_chars`.
+3. Requires `approved_by_person == True` whenever `route_dict["online"]` is `True`.
+4. Attaches `"data_collection": "deny"` to the request options and returns the prepared request dictionary without sending anything over the network.
+
+Refuses: `data_class == "CASE_FILE"` (`CASE_FILE_OFF_PHONE_REFUSED`), `approved_by_person` not `True` for an online route (`PERSON_APPROVAL_REQUIRED`), PII detected in `payload_text` (`PII_IN_PUBLIC_REQUEST`), or `len(payload_text)` greater than `max_chars` (`CHAR_LIMIT_EXCEEDED`).
+
+Tests: `test_lsk03_prepare_public_helper_request_sets_data_collection_deny` and `test_lsk03_prepare_public_helper_request_refuses_unapproved_or_case_file`.
+
+Done means: Any online helper request requires person approval, carries `"data_collection": "deny"`, fits the size cap, and refuses case files or PII.
+
+Not checked: External provider enforcement of `data_collection: "deny"` (NOT CHECKED).
+
+### LS-K04: LOG_HELPER_ROUTE_CALL_HASH_ONLY (Addendum 13, T36)
+
+Function: `log_helper_route_call_hash_only(db_path, role_name, access_type, data_class, payload_text, status) -> dict`
+
+Does:
+1. Creates table `helper_route_audit` if needed with columns `audit_id`, `role_name`, `access_type`, `data_class`, `payload_sha256`, `char_count`, and `status`.
+2. Computes `payload_sha256` from UTF-8 `payload_text` and counts `char_count`.
+3. Inserts the audit row storing only the SHA-256 fingerprint and character count, never `payload_text`.
+4. Returns the saved audit record.
+
+Refuses: Empty `role_name` or `status` (`MISSING_AUDIT_FIELD`), invalid `data_class` (`INVALID_DATA_CLASS`), or non-string `payload_text` (`INVALID_PAYLOAD_TEXT`).
+
+Tests: `test_lsk04_log_helper_route_call_stores_hash_without_text` and `test_lsk04_log_helper_route_call_refuses_missing_role`.
+
+Done means: Every helper route decision is logged by role, data class, character count, and SHA-256 hash with zero prompt text stored.
+
+Not checked: External server log retention policies (NOT CHECKED).
+
+### LS-K05: EXECUTE_NO_AI_ROLE_FALLBACK (Addendum 13, R7; Rule R2)
+
+Function: `execute_no_ai_role_fallback(db_path, case_id, query_words) -> dict`
+
+Does:
+1. Runs `search_locked_documents(db_path, case_id, query_words)` using the standard-library SQLite core only.
+2. Formats matching locked passages with document ID, title, and character offsets.
+3. Attaches `route_role: "No_AI"`, `ai_used: False`, and `LEGAL_INFORMATION_NOTICE`.
+4. Returns the deterministic result dictionary with zero AI calls and zero network calls.
+
+Refuses: Empty `case_id` (`INVALID_CASE_ID`) or empty `query_words` (`EMPTY_QUERY_WORDS`).
+
+Tests: `test_lsk05_execute_no_ai_role_fallback_returns_locked_hits` and `test_lsk05_execute_no_ai_role_fallback_refuses_empty_query`.
+
+Done means: When all AI helpers are off or unavailable, the `No_AI` fallback searches locked sources locally and returns exact passages.
+
+Not checked: Synonym matching without embeddings (NOT CHECKED).
+
+End of Batch LS-K.
