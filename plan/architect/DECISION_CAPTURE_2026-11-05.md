@@ -70,4 +70,4 @@ Does:
 
 Refuses unknown modes, non-boolean review values and an ON action without Owner review. Tests cover all valid modes and invalid/unreviewed input.
 
-**Acceptance boundary:** This is wording for a future batch, not implementation authorization. Append it to `plan/QUEUE.md) only through a separately reviewed plan change if approved. No code, tests, runtime behavior, or logic-gate table is changed by this PR.
+**Acceptance boundary:** This is wording for a future batch, not implementation authorization. Append it to `plan/QUEUE.md only through a separately reviewed plan change if approved. No code, tests, runtime behavior, or logic-gate table is changed by this PR.
