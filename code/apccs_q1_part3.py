@@ -2408,3 +2408,26 @@ def create_automation_loop_local_server(host="127.0.0.1", port=8501, vault_dir=N
     return server
 
 
+# Batch 33 root binding correction: Part 2's frozen core binds its approved
+# storage categories to the vault root, not to the SQLite file's immediate
+# parent (`vault/state`). Keep the original Batch 33 call sites and bind the
+# imported core to the configured vault when the database is inside it.
+def _b33_import_core_for_vault(db_path):
+    path = _b33_db_path(db_path)
+    configured = os.environ.get("APCCS_VAULT_ROOT")
+    root = None
+    if configured:
+        candidate = _b31_vault_root(configured)
+        if path.is_relative_to(candidate):
+            root = candidate
+    if root is None:
+        parent = path.parent
+        root = parent.parent if parent.name == "state" else parent
+        root = _b31_vault_root(root)
+    return verify_and_import_cp150_modules(root)["core_module"]
+
+
+_b33_import_core = _b33_import_core_for_vault
+
+
+
