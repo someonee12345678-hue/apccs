@@ -1293,6 +1293,139 @@ class Part3Batch38Tests(unittest.TestCase):
             part3.create_batch38_local_server("0.0.0.0", port, self.vault, page)
 
 
+class Part3Batch39Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        print(part3.B39_CANARY_LINE, flush=True)
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="apccs_part3_b39_")
+        self.root = Path(self.temp.name)
+        self.vault = self.root / "vault"
+        self.vault.mkdir()
+        (self.vault / "state").mkdir()
+        self.db = self.vault / "state" / "sample.sqlite3"
+        with part3._b39_sqlite3.connect(self.db) as db:
+            db.execute("CREATE TABLE sample (value TEXT)")
+            db.execute("INSERT INTO sample VALUES ('synthetic')")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def prepare_checkpoint_inputs(self):
+        part3.generate_batch38_control_panel_html(self.vault / "START_OUR_OWN_SYSTEM.html", self.vault)
+        (self.vault / "RECOVER.md").write_text("Checkpoint status: DONE\n", encoding="utf-8")
+        (self.vault / "state" / "pass_tests_q1_part3.json").write_text(
+            json.dumps({"batch": 38, "state": "DONE", "checks": [{"status": "DONE"}]}),
+            encoding="utf-8")
+
+    def test_191_continuity_verifies_all_markers_and_expected_symbols(self):
+        source = (part3.Path(part3.__file__).read_text(encoding="utf-8"))
+        result = part3.verify_151_to_195_continuity(source)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["markers_expected"], 35)
+        self.assertEqual(result["markers_missing"], [])
+        self.assertEqual(result["duplicate_symbols"], [])
+        self.assertFalse(result["uclrcde_imported_or_read"])
+
+    def test_191_continuity_detects_dropped_symbol_duplicate_and_bad_syntax(self):
+        source = part3.Path(part3.__file__).read_text(encoding="utf-8")
+        start = source.index("def handle_batch38_api(")
+        end = source.index("\n\n_B38_UI_PANEL", start)
+        dropped = source[:start] + source[end + 2:]
+        result = part3.verify_151_to_195_continuity(dropped)
+        self.assertFalse(result["passed"])
+        self.assertIn("handle_batch38_api", result["symbols_missing"])
+        duplicate = source + "\n\ndef Part3Error():\n    return None\n"
+        duplicate_result = part3.verify_151_to_195_continuity(duplicate)
+        self.assertIn("Part3Error", duplicate_result["duplicate_symbols"])
+        syntax = part3.verify_151_to_195_continuity("def broken(:\n")
+        self.assertEqual(syntax["reason"], "SOURCE_SYNTAX_ERROR")
+
+    def test_192_coherence_verifies_frozen_modules_sqlite_and_all_panel_routes(self):
+        self.prepare_checkpoint_inputs()
+        result = part3.verify_cp195_three_module_coherence(self.vault)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["sqlite_integrity"], "PASS")
+        self.assertEqual(result["route_coverage"], "PASS")
+        self.assertEqual(result["missing_routes"], [])
+        self.assertTrue(result["frozen_cp100_cp150_verified"])
+
+    def test_192_coherence_blocks_missing_route_and_missing_database(self):
+        self.prepare_checkpoint_inputs()
+        page = self.vault / "START_OUR_OWN_SYSTEM.html"
+        page.write_text(page.read_text(encoding="utf-8").replace("/api/packet/verify", "/api/missing"),
+                        encoding="utf-8")
+        (self.vault / "state" / "sample.sqlite3").unlink()
+        result = part3.verify_cp195_three_module_coherence(self.vault)
+        self.assertFalse(result["passed"])
+        self.assertIn("CONTROL_PANEL_ROUTE_COVERAGE_FAILED", result["findings"])
+        self.assertIn("NO_SQLITE_DATABASES_FOUND", result["findings"])
+
+    def test_193_scorecard_writes_cp195_instruction_counts_and_separation(self):
+        self.prepare_checkpoint_inputs()
+        result = part3.generate_cp195_scorecard(self.vault)
+        text = Path(result["path"]).read_text(encoding="utf-8")
+        self.assertEqual(result["apccs_built_count"], 180)
+        self.assertEqual(result["accepted_apccs_before_batch39"], 175)
+        self.assertEqual(result["external_uclrcde_count"], 15)
+        self.assertIn("141–145 and 171–180, built in uclrcde", text)
+        self.assertIn(part3.B39_CANARY_LINE, text)
+
+    def test_193_scorecard_refuses_a_file_as_vault(self):
+        file_path = self.root / "not_a_vault"
+        file_path.write_text("synthetic", encoding="utf-8")
+        with self.assertRaises(part3.Part3Error):
+            part3.generate_cp195_scorecard(file_path)
+
+    def test_194_recovery_and_nested_json_replace_pending_labels(self):
+        recover = self.vault / "RECOVER.md"
+        recover.write_text("Batch 38: PENDING\n", encoding="utf-8")
+        json_path = self.vault / "state" / "pass_tests_nested.json"
+        json_path.write_text(json.dumps({"state": "PENDING", "rows": [{"status": "PENDING"}]}),
+                             encoding="utf-8")
+        result = part3.synchronize_all_pass_tests_and_recover(self.vault)
+        self.assertEqual(result["stale_pending_count"], 0)
+        self.assertIn("180 APCCS-built instructions", recover.read_text(encoding="utf-8"))
+        self.assertNotIn("PENDING", recover.read_text(encoding="utf-8"))
+        self.assertFalse(part3._b39_find_pending(json.loads(json_path.read_text(encoding="utf-8"))))
+        self.assertEqual(result["external_uclrcde_instructions"], 15)
+
+    def test_194_recovery_rejects_wrong_checkpoint_values_and_unsafe_json(self):
+        with self.assertRaises(part3.Part3Error):
+            part3.synchronize_all_pass_tests_and_recover(self.vault, completed_num=194)
+        bad = self.vault / "state" / "pass_tests_bad.json"
+        bad.write_text("{bad", encoding="utf-8")
+        with self.assertRaises(part3.Part3Error):
+            part3.synchronize_all_pass_tests_and_recover(self.vault)
+
+    def test_195_checkpoint_seals_and_verifies_both_master_archives(self):
+        self.prepare_checkpoint_inputs()
+        result = part3.lock_checkpoint_cp195(self.vault)
+        self.assertEqual(result["status"], "SEALED")
+        self.assertTrue(Path(result["lock_path"]).is_file())
+        self.assertEqual(set(result["archives"]), {"APPCS_MASTER_BUILD.zip", "APCCS_MASTER_BUILD.zip"})
+        one = result["archives"]["APPCS_MASTER_BUILD.zip"]
+        two = result["archives"]["APCCS_MASTER_BUILD.zip"]
+        self.assertEqual(one["verification"]["status"], "PASS")
+        self.assertEqual(two["verification"]["status"], "PASS")
+        self.assertEqual(one["sha256"], two["sha256"])
+
+    def test_195_checkpoint_refuses_incoherent_vault_and_detects_archive_tampering(self):
+        with self.assertRaises(part3.Part3Error):
+            part3.lock_checkpoint_cp195(self.vault)
+        self.prepare_checkpoint_inputs()
+        result = part3.lock_checkpoint_cp195(self.vault)
+        archive_path = Path(result["archives"]["APPCS_MASTER_BUILD.zip"]["path"])
+        with part3._b37_zipfile.ZipFile(archive_path, "r") as archive:
+            members = {name: archive.read(name) for name in archive.namelist()}
+        members["code/apccs_q1_part3.py"] += b"# tampered\n"
+        tampered = self.vault / "tampered_cp195.zip"
+        tampered.write_bytes(part3._b34_zip_bytes(members))
+        with self.assertRaises(part3.Part3Error):
+            part3._b39_verify_cp195_archive(tampered)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

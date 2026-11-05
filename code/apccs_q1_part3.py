@@ -3111,3 +3111,324 @@ PART3_CONTRACT_SPECS[38] = (
 
 
 
+# Batch 39 (INST-0191..INST-0195): continuity, coherent CP-195 scorecard,
+# state compaction and deterministic checkpoint archives. INST-0162,
+# INST-0163 and INST-0164 are required Batch 33 source markers.
+import sqlite3 as _b39_sqlite3
+
+B39_CANARY_LINE = "Canary check: T = W -> compass"
+_B39_EXPECTED_SYMBOLS = (
+    "CloudPRWorkerAdapter", "LocalOpenWeightHTTPAdapter", "Part3Error", "TermuxCLIWorkerAdapter",
+    "WorkerDriverRegistry", "_b31_assertion_name", "_b31_batch_number", "_b31_batch_range",
+    "_b31_contract_body_digest", "_b31_contract_entries", "_b31_contract_names", "_b31_contract_target",
+    "_b31_count", "_b31_inspect_test", "_b31_instruction_number", "_b31_is_constant", "_b31_load_contract",
+    "_b31_load_module", "_b31_manifest", "_b31_previous_report", "_b31_public_api", "_b31_read_lock_digests",
+    "_b31_relative_path", "_b31_sha256_bytes", "_b31_tree_manifest", "_b31_vault_root", "_b31_verify_contract",
+    "_b31_verify_cp150_modules", "_b31_workflow_names", "_b31_write_atomic", "_b32_advance_fencing",
+    "_b32_canary_probe", "_b32_cell", "_b32_contract", "_b32_expected_canary", "_b32_finding_text",
+    "_b32_fit_items", "_b32_frozen_check", "_b32_last_part3_gate", "_b32_latest_contract_batch",
+    "_b32_new_directory", "_b32_plan_batch", "_b32_read_master_build", "_b32_repo_file", "_b32_repo_root",
+    "_b32_run_tests", "_b32_secret_findings", "_b32_signature_findings", "_b32_visibility",
+    "_b33_db_path", "_b33_import_core", "_b33_import_core_for_vault", "_b33_json_sha256", "_b34_git",
+    "_b34_next_fencing_token", "_b34_porcelain_paths", "_b34_repo_files", "_b34_repo_root",
+    "_b34_verify_archive", "_b34_verify_stop_and_fence", "_b34_zip_bytes", "_b37_ping_pong_expected",
+    "_b37_remove_shadow", "_b37_repair_ping_pong_slots", "_b38_starter_members", "advance_batch_on_verified_merge",
+    "build_cross_tab_sync_envelope", "build_worker_driver_registry", "compile_batch_test_contract",
+    "compile_next_batch_pr_packet", "compute_worker_poll_schedule", "create_automation_loop_local_server",
+    "create_batch38_local_server", "create_part3_local_server", "create_shadow_sandbox_clone",
+    "create_shadow_sandbox_local_server", "diagnose_and_propose_one_tap_fix", "emit_github_actions_gate_yaml",
+    "evaluate_batch_attempt_circuit_breaker", "evaluate_shadow_cutover_safety", "execute_ci_gate_suite",
+    "export_portable_starter_bundle", "export_verified_git_tree", "format_pr_gate_comment",
+    "generate_automation_loop_control_panel_html", "generate_batch38_control_panel_html",
+    "generate_part3_control_panel_html", "generate_shadow_sandbox_control_panel_html", "handle_automation_loop_api",
+    "handle_batch38_api", "handle_part3_control_panel_api", "handle_shadow_sandbox_api", "preview_ci_gate",
+    "record_and_select_worker_transport", "route_task_by_brain_tier", "run_ci_gate_cli",
+    "run_deterministic_fault_injection_drill", "run_local_git_batch_cycle", "run_part3_contract_gate_check",
+    "score_ten_batch_stability_gate", "sync_master_zip_from_verified_merge", "verify_and_import_cp150_modules",
+    "verify_global_stop_and_fence_state", "verify_handoff_packet_integrity", "verify_protected_tree_untouched",
+    "verify_test_contract_compliance", "verify_151_to_195_continuity", "verify_cp195_three_module_coherence",
+    "generate_cp195_scorecard", "synchronize_all_pass_tests_and_recover", "lock_checkpoint_cp195",
+)
+_B39_INSTRUCTION_NUMBERS = tuple(range(151, 171)) + tuple(range(181, 196))
+_B39_ROUTE_PATHS = ("/api/ci/preview", "/api/automation/transport", "/api/automation/circuit_breaker",
+                    "/api/automation/stability", "/api/automation/local_cycle", "/api/shadow/dry_run",
+                    "/api/shadow/auto_fix", "/api/shadow/fault_drill", "/api/packet/verify",
+                    "/api/brain/route", "/api/tabs/sync_envelope", "/api/export/edition")
+_B39_REQUIRED_FILES = ("code/apccs_core.py", "code/apccs_q1_part2.py", "code/test_apccs_q1_part2.py",
+                       "code/apccs_q1_part3.py", "code/test_apccs_q1_part3.py",
+                       "START_OUR_OWN_SYSTEM.html", "RECOVER.md", "audit/OWNER_SCORECARD_CP195.txt")
+
+
+def _b39_audit_dir(vault):
+    directory = vault / "audit"
+    if directory.is_symlink():
+        raise Part3Error("Audit directory cannot be a symlink")
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _b39_find_pending(value):
+    if isinstance(value, str):
+        return bool(re.search(r"\bPENDING\b", value))
+    if isinstance(value, dict):
+        return any(_b39_find_pending(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_b39_find_pending(item) for item in value)
+    return False
+
+
+def _b39_replace_pending(value):
+    if isinstance(value, str):
+        return re.sub(r"\bPENDING\b", "DONE", value)
+    if isinstance(value, dict):
+        return {key: _b39_replace_pending(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_b39_replace_pending(item) for item in value]
+    return value
+
+
+def verify_151_to_195_continuity(part3_source_text):
+    """INST-0191: verify the APCCS Part 3 marker, syntax and symbol inventory."""
+    if not isinstance(part3_source_text, str) or len(part3_source_text.encode("utf-8")) > _MAX_SOURCE_BYTES:
+        raise Part3Error("part3_source_text must be UTF-8 text within the source size limit")
+    try:
+        tree = ast.parse(part3_source_text)
+    except SyntaxError as error:
+        return {"status": "BLOCKED", "passed": False, "reason": "SOURCE_SYNTAX_ERROR",
+                "line": error.lineno}
+    names = [node.name for node in tree.body
+             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+    counts = {}
+    for name in names:
+        counts[name] = counts.get(name, 0) + 1
+    duplicates = sorted(name for name, count in counts.items() if count > 1)
+    expected = tuple("INST-%04d" % number for number in _B39_INSTRUCTION_NUMBERS)
+    missing_markers = [marker for marker in expected if marker not in part3_source_text]
+    missing_symbols = sorted(set(_B39_EXPECTED_SYMBOLS) - set(names))
+    passed = not missing_markers and not missing_symbols and not duplicates
+    return {"status": "PASS" if passed else "BLOCKED", "passed": passed,
+            "markers_expected": len(expected), "markers_missing": missing_markers,
+            "symbols_expected": len(_B39_EXPECTED_SYMBOLS), "symbols_found": len(names),
+            "symbols_missing": missing_symbols, "duplicate_symbols": duplicates,
+            "external_instructions": {"141-145": "built in uclrcde", "171-180": "built in uclrcde"},
+            "uclrcde_imported_or_read": False}
+
+
+def verify_cp195_three_module_coherence(vault_dir):
+    """INST-0192: check frozen modules, Part 3 continuity, state DBs and UI routes."""
+    vault = _b31_vault_root(vault_dir)
+    findings = []
+    try:
+        bridge = verify_and_import_cp150_modules(vault)
+        if bridge.get("passed") is not True:
+            findings.append("CP100_OR_CP150_FINGERPRINT_FAILED")
+        module_path = Path(__file__).resolve()
+        part3_text = module_path.read_text(encoding="utf-8")
+        continuity = verify_151_to_195_continuity(part3_text)
+        if continuity["passed"] is not True:
+            findings.append("PART3_CONTINUITY_FAILED")
+        state_dir = vault / "state"
+        databases = []
+        if state_dir.is_symlink() or not state_dir.is_dir():
+            findings.append("STATE_DIRECTORY_MISSING_OR_UNSAFE")
+        else:
+            for candidate in state_dir.rglob("*"):
+                if candidate.suffix.lower() not in {".db", ".sqlite", ".sqlite3"}:
+                    continue
+                if candidate.is_symlink() or not candidate.is_file() or not candidate.resolve().is_relative_to(vault.resolve()):
+                    findings.append("UNSAFE_SQLITE_PATH")
+                    continue
+                try:
+                    with _b39_sqlite3.connect(candidate.resolve().as_uri() + "?mode=ro", uri=True, timeout=5) as db:
+                        integrity = db.execute("PRAGMA integrity_check").fetchone()
+                    databases.append({"path": candidate.relative_to(vault).as_posix(),
+                                      "integrity": integrity[0] if integrity else "missing"})
+                    if not integrity or integrity[0] != "ok":
+                        findings.append("SQLITE_INTEGRITY_FAILED")
+                except _b39_sqlite3.Error:
+                    findings.append("SQLITE_INTEGRITY_FAILED")
+        if not databases:
+            findings.append("NO_SQLITE_DATABASES_FOUND")
+        page = vault / "START_OUR_OWN_SYSTEM.html"
+        if page.is_symlink() or not page.is_file():
+            findings.append("CONTROL_PANEL_MISSING_OR_UNSAFE")
+        else:
+            html = page.read_text(encoding="utf-8")
+            missing_routes = [route for route in _B39_ROUTE_PATHS if route not in html]
+            if missing_routes:
+                findings.append("CONTROL_PANEL_ROUTE_COVERAGE_FAILED")
+        result = {"status": "PASS" if not findings else "BLOCKED", "passed": not findings,
+                  "frozen_cp100_cp150_verified": bridge.get("passed") is True,
+                  "part3_continuity": continuity, "sqlite_databases": databases,
+                  "sqlite_integrity": "PASS" if databases and not any(x.startswith("SQLITE_") for x in findings) else "BLOCKED",
+                  "route_coverage": "PASS" if "CONTROL_PANEL_ROUTE_COVERAGE_FAILED" not in findings and "CONTROL_PANEL_MISSING_OR_UNSAFE" not in findings else "BLOCKED",
+                  "missing_routes": missing_routes if page.is_file() and not page.is_symlink() else list(_B39_ROUTE_PATHS),
+                  "findings": findings, "uclrcde_imported_or_read": False}
+        return result
+    except (Part3Error, OSError, UnicodeError) as error:
+        return {"status": "BLOCKED", "passed": False, "findings": ["COHERENCE_CHECK_ERROR"],
+                "detail": str(error), "uclrcde_imported_or_read": False}
+
+
+def generate_cp195_scorecard(vault_dir):
+    """INST-0193: write the APCCS and separate UCLRCDE checkpoint coverage card."""
+    vault = _b31_vault_root(vault_dir)
+    coherence = verify_cp195_three_module_coherence(vault)
+    if coherence["passed"] is not True:
+        raise Part3Error("CP-195 scorecard requires passing three-module coherence")
+    text = ("APCCS OWNER SCORECARD — CP-195\n"
+            "Completed catalog range: 1–195 (180 APCCS-built instructions).\n"
+            "Accepted before Batch 39: 190 total (175 APCCS-built and 15 listed as built in uclrcde).\n"
+            "APCCS-built instructions: 1–140, 146–170, 181–195.\n"
+            "Separate legal-engine instructions: 141–145 and 171–180, built in uclrcde.\n"
+            "Frozen CP-100 Core and CP-150 Part 2 fingerprints: verified.\n"
+            "Active Part 3 instructions 151–170 and 181–195: continuity verified.\n"
+            "SQLite integrity and START_OUR_OWN_SYSTEM.html APCCS route coverage: verified.\n"
+            "Batch 39 canary: " + B39_CANARY_LINE + "\n")
+    audit = _b39_audit_dir(vault)
+    target = audit / "OWNER_SCORECARD_CP195.txt"
+    digest = _b31_write_atomic(target, text)
+    return {"status": "READY", "path": str(target), "sha256": digest,
+            "completed_num": 195, "apccs_built_count": 180, "accepted_num": 190,
+            "accepted_apccs_before_batch39": 175, "external_uclrcde_count": 15,
+            "coherence": coherence}
+
+
+def synchronize_all_pass_tests_and_recover(vault_dir, completed_num=195, accepted_num=190,
+                                           canary_line="Canary check: T = W -> compass"):
+    """INST-0194: compact stale PENDING labels and record the CP-195 state."""
+    vault = _b31_vault_root(vault_dir)
+    if type(completed_num) is not int or completed_num != 195:
+        raise Part3Error("completed_num must be 195 for CP-195")
+    if type(accepted_num) is not int or accepted_num != 190:
+        raise Part3Error("accepted_num must be 190 for CP-195")
+    if canary_line != B39_CANARY_LINE:
+        raise Part3Error("canary_line must match the Batch 39 canary")
+    prepared = []
+    for candidate in sorted(vault.rglob("pass_tests*.json")):
+        if candidate.is_symlink() or not candidate.is_file() or not candidate.resolve().is_relative_to(vault.resolve()):
+            raise Part3Error("Pass-tests JSON path is unsafe")
+        if candidate.stat().st_size > 2 * 1024 * 1024:
+            raise Part3Error("Pass-tests JSON exceeds the size limit")
+        try:
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise Part3Error("Pass-tests JSON is unreadable or invalid") from error
+        updated = _b39_replace_pending(data)
+        if _b39_find_pending(updated):
+            raise Part3Error("A stale PENDING state remains in pass-tests JSON")
+        prepared.append((candidate, json.dumps(updated, ensure_ascii=False, sort_keys=True, indent=2) + "\n"))
+    recover = vault / "RECOVER.md"
+    if recover.is_symlink():
+        raise Part3Error("RECOVER.md cannot be a symlink")
+    try:
+        old_recover = recover.read_text(encoding="utf-8") if recover.is_file() else ""
+    except (OSError, UnicodeDecodeError) as error:
+        raise Part3Error("RECOVER.md is unreadable") from error
+    normalized = re.sub(r"\bPENDING\b", "DONE", old_recover)
+    marker = "## CP-195 checkpoint"
+    if marker in normalized:
+        normalized = normalized.split(marker, 1)[0].rstrip() + "\n\n"
+    normalized += (marker + "\nCompleted: 180 APCCS-built instructions through 195.\n"
+                   "Accepted: 175 APCCS-built instructions before Batch 39, plus 15 instructions listed as built in uclrcde.\n"
+                   "Separate instruction ranges: 141–145 and 171–180 (built in uclrcde).\n"
+                   "Canary: " + canary_line + "\n")
+    if re.search(r"\bPENDING\b", normalized):
+        raise Part3Error("A stale PENDING label remains in RECOVER.md")
+    for path, data in prepared:
+        _b31_write_atomic(path, data)
+    recover_sha = _b31_write_atomic(recover, normalized)
+    return {"status": "READY", "completed_num": completed_num, "accepted_num": accepted_num,
+            "apccs_completed": 180, "apccs_accepted_before_batch39": 175,
+            "external_uclrcde_instructions": 15, "updated_pass_tests_files": len(prepared),
+            "recover_path": str(recover), "recover_sha256": recover_sha,
+            "stale_pending_count": 0, "canary": canary_line}
+
+
+def _b39_verify_cp195_archive(path):
+    try:
+        with _b37_zipfile.ZipFile(path, "r") as archive:
+            if archive.testzip() is not None:
+                raise Part3Error("CP-195 archive CRC verification failed")
+            members = {name: archive.read(name) for name in archive.namelist()}
+    except (_b37_zipfile.BadZipFile, OSError) as error:
+        raise Part3Error("CP-195 archive is unreadable") from error
+    try:
+        lock = json.loads(members["audit/CP-195_LOCK.json"].decode("utf-8"))
+    except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Part3Error("CP-195 archive lock is invalid") from error
+    expected = lock.get("files_sha256") if isinstance(lock, dict) else None
+    actual = {name: _b31_sha256_bytes(raw) for name, raw in members.items() if name != "audit/CP-195_LOCK.json"}
+    if lock.get("checkpoint") != "CP-195" or expected != actual:
+        raise Part3Error("CP-195 archive members do not match their sealed hashes")
+    if lock.get("apccs_built_count") != 180 or lock.get("external_uclrcde_count") != 15:
+        raise Part3Error("CP-195 archive instruction counts do not match the plan")
+    return {"status": "PASS", "members": len(members), "sha256": _b31_sha256_bytes(Path(path).read_bytes())}
+
+
+def lock_checkpoint_cp195(vault_dir):
+    """INST-0195: seal CP-195 evidence and both named deterministic ZIP builds."""
+    vault = _b31_vault_root(vault_dir)
+    coherence = verify_cp195_three_module_coherence(vault)
+    if coherence["passed"] is not True:
+        raise Part3Error("CP-195 lock requires passing three-module coherence")
+    recovery = synchronize_all_pass_tests_and_recover(vault)
+    scorecard = generate_cp195_scorecard(vault)
+    source_root = Path(__file__).resolve().parent
+    members = {}
+    for relative in _B39_REQUIRED_FILES:
+        if relative.startswith("code/"):
+            path = source_root / relative.split("/", 1)[1]
+        else:
+            path = vault.joinpath(*relative.split("/"))
+        if path.is_symlink() or not path.is_file():
+            raise Part3Error("Required CP-195 input is missing or unsafe: " + relative)
+        members[relative] = path.read_bytes()
+    for name, digest in FROZEN_CP150_FILES.items():
+        if _b31_sha256_bytes(members[name]) != digest:
+            raise Part3Error("Frozen CP-150 fingerprint changed: " + name)
+    for candidate in sorted(vault.rglob("pass_tests*.json")):
+        if candidate.is_symlink() or not candidate.is_file() or not candidate.resolve().is_relative_to(vault.resolve()):
+            raise Part3Error("Pass-tests JSON path is unsafe for CP-195 archive")
+        relative = candidate.relative_to(vault).as_posix()
+        members[relative] = candidate.read_bytes()
+    lock = {"checkpoint": "CP-195", "completed_num": 195, "accepted_num": 190,
+            "apccs_built_count": 180, "apccs_accepted_before_batch39": 175,
+            "external_uclrcde_count": 15, "external_instruction_ranges": ["141-145", "171-180"],
+            "canary": B39_CANARY_LINE,
+            "files_sha256": {name: _b31_sha256_bytes(raw) for name, raw in sorted(members.items())}}
+    audit = _b39_audit_dir(vault)
+    lock_path = audit / "CP-195_LOCK.json"
+    lock_bytes = (json.dumps(lock, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    _b31_write_atomic(lock_path, lock_bytes)
+    members["audit/CP-195_LOCK.json"] = lock_bytes
+    payload = _b34_zip_bytes(members)
+    results = {}
+    for name in ("APPCS_MASTER_BUILD.zip", "APCCS_MASTER_BUILD.zip"):
+        target = vault / name
+        digest = _b31_write_atomic(target, payload)
+        verified = _b39_verify_cp195_archive(target)
+        if verified["status"] != "PASS":
+            raise Part3Error("CP-195 master archive did not verify: " + name)
+        results[name] = {"path": str(target), "sha256": digest, "verification": verified}
+    return {"status": "SEALED", "checkpoint": "CP-195", "lock_path": str(lock_path),
+            "lock_sha256": _b31_sha256_bytes(lock_bytes), "archives": results,
+            "scorecard": scorecard, "recovery": recovery, "coherence": coherence}
+
+
+PART3_CONTRACT_SPECS[39] = (
+    {"instruction": "INST-0191", "function": "verify_151_to_195_continuity",
+     "parameters": ["part3_source_text"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0192", "function": "verify_cp195_three_module_coherence",
+     "parameters": ["vault_dir"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0193", "function": "generate_cp195_scorecard",
+     "parameters": ["vault_dir"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0194", "function": "synchronize_all_pass_tests_and_recover",
+     "parameters": ["vault_dir", "completed_num", "accepted_num", "canary_line"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0195", "function": "lock_checkpoint_cp195",
+     "parameters": ["vault_dir"], "min_assertions": 4, "min_negative_tests": 1},
+)
+
+
+
