@@ -89,3 +89,21 @@ Done means: Every requirement has an explicit safe AI mode, defaults to OFF, and
 Not checked: None.
 
 **Acceptance boundary:** This is wording for a future batch, not implementation authorization. Append it to `plan/QUEUE.md` only through a separately reviewed plan change if approved. No code, tests, runtime behavior, or logic-gate table is changed by this PR.
+
+
+## Owner-approved queue-promotion addendum — Addendum 6 (2026-11-05)
+
+The Owner approved this queue promotion at 14:03 America/Vancouver. This addendum supersedes conflicting proposal status or session-guard wording above. The session guard is **not part of A6**. Session-guard settings are exercised by pilot P-SG1; placement into a later batch is decided only after the pilot results. A6 has one additional approved instruction, A606, bringing A6 to six instructions by explicit Owner approval in Addendum 6.
+
+### A606: DECISION_REPLAY_TEST (source: Owner-approved Addendum 6, section 2)
+Function: `replay_recorded_gate_decisions(decision_rows, gate_inputs, logic_gate_table) -> dict`
+
+Does:
+1. In the tests, use every recorded decision in a complete A2-chain fixture under a temporary folder; rerun each original gate input through the same local logic gate and rule table.
+2. Compare every replayed answer with the recorded answer and return a pass result only when all answers are unchanged.
+3. Run this replay test on every test-suite run. Any changed answer fails the check; never rewrite the expected result automatically or touch production history.
+
+Refuses missing or malformed replay inputs, duplicate decision IDs, invalid chain records, or any changed answer. A changed answer makes the test fail.
+Tests: `test_a606_01_replays_every_recorded_fixture_decision` (normal) and `test_a606_02_fails_when_a_replayed_answer_changes` (bad input).
+Done means: Every decision recorded in the test fixture is replayed through the logic gate on each run, and a changed answer fails visibly.
+Not checked: Whether future production records contain enough original input to replay is outside this test-fixture requirement and must be confirmed before implementation.

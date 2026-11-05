@@ -106,3 +106,8 @@ This plan does not claim that the source adapters exist, that the checker improv
 **Evidence status:** The existing APCCS shapes-versus-prose plan is the design source. A measured APCCS benefit is **NOT CHECKED**. AutoPie and GitHub-to-inbox capability in this account is **NOT CHECKED**.
 
 **Acceptance boundary:** This is a proposal for a future A7 batch, not implementation authorization. Add queue wording only through a separately reviewed plan change after the A6 prerequisite is resolved. No code, tests, inbox, connector, runtime behavior, or queue entry is changed by this PR.
+
+
+## Owner-approved queue-order clarification (2026-11-05)
+
+The approved Whole Product Plan v1 Part 6 assigns A7 to the Readability Gate. The Open Standards Readability Gate is the A7 wording promoted to the authoritative queue in a later plan PR. This Shaper Generator proposal is not in the queue and its A7 label does not authorize its position or build. Its batch number and order remain unresolved until a separate owner-reviewed plan change. Do not build this proposal as A7.
