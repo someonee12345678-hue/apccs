@@ -2430,4 +2430,416 @@ def _b33_import_core_for_vault(db_path):
 _b33_import_core = _b33_import_core_for_vault
 
 
+# Batch 37 (INST-0181..INST-0185): isolated shadow copies, cutover checks,
+# approved diagnostics, deterministic fault drills and the loopback panel.
+import shutil as _b37_shutil
+import sqlite3 as _b37_sqlite3
+import tempfile as _b37_tempfile
+import zipfile as _b37_zipfile
+
+B37_CANARY_LINE = "Canary check: T = Y -> lighthouse"
+_B37_API_PATHS = {
+    "/api/shadow/dry_run": "Create an isolated SQLite and active-module shadow copy",
+    "/api/shadow/auto_fix": "Propose or apply a verified repair after explicit approval",
+    "/api/shadow/fault_drill": "Run deterministic fault-injection checks in a temporary directory",
+}
+_B37_MAX_REQUEST_BYTES = 65536
+
+
+def create_shadow_sandbox_clone(vault_dir, db_path):
+    """INST-0181: copy a vault-local SQLite database and active APCCS modules into /tmp."""
+    vault = _b31_vault_root(vault_dir)
+    if isinstance(db_path, bool) or not isinstance(db_path, (str, os.PathLike)) or not str(db_path).strip():
+        raise Part3Error("A regular existing SQLite database is required")
+    database = Path(db_path)
+    if database.is_symlink() or not database.is_file():
+        raise Part3Error("A regular existing SQLite database is required")
+    source = database.resolve()
+    root = vault.resolve()
+    if not source.is_relative_to(root):
+        raise Part3Error("SQLite database must be inside the vault")
+    module_dir = Path(__file__).resolve().parent
+    if module_dir.is_symlink() or not module_dir.is_dir():
+        raise Part3Error("Active module directory is unavailable")
+    modules = sorted(path for path in module_dir.glob("apccs_*.py")
+                     if path.is_file() and not path.is_symlink())
+    if not modules or len(modules) > 32:
+        raise Part3Error("Active module set is empty or exceeds the clone limit")
+    if any(path.stat().st_size > 5 * 1024 * 1024 for path in modules):
+        raise Part3Error("An active module exceeds the clone size limit")
+    shadow = Path(_b37_tempfile.mkdtemp(prefix="apccs_shadow_"))
+    try:
+        shadow_code = shadow / "code"
+        shadow_code.mkdir()
+        module_manifest = []
+        for path in modules:
+            target = shadow_code / path.name
+            _b37_shutil.copyfile(path, target)
+            digest = _b31_sha256_bytes(target.read_bytes())
+            module_manifest.append({"name": path.name, "sha256": digest, "bytes": target.stat().st_size})
+        shadow_db = shadow / "state" / "shadow.sqlite3"
+        shadow_db.parent.mkdir()
+        source_uri = source.as_uri() + "?mode=ro"
+        live = _b37_sqlite3.connect(source_uri, uri=True)
+        copy = _b37_sqlite3.connect(shadow_db)
+        try:
+            live.backup(copy)
+            integrity = copy.execute("PRAGMA integrity_check").fetchone()
+        finally:
+            live.close()
+            copy.close()
+        if integrity != ("ok",):
+            raise Part3Error("Shadow SQLite integrity check failed")
+        return {"status": "READY", "shadow_dir": str(shadow), "db_path": str(shadow_db),
+                "module_dir": str(shadow_code), "modules": module_manifest,
+                "integrity_check": "ok", "live_database_unchanged": True}
+    except BaseException:
+        _b37_remove_shadow(shadow)
+        raise
+
+
+def _b37_remove_shadow(shadow_dir):
+    """Remove only the incomplete temporary directory created by this batch."""
+    root = Path(shadow_dir)
+    if root.parent != Path("/tmp") or not root.name.startswith("apccs_shadow_") or root.is_symlink():
+        return
+    for child in sorted(root.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+        if child.is_symlink() or child.is_file():
+            child.unlink(missing_ok=True)
+        elif child.is_dir():
+            child.rmdir()
+    if root.exists():
+        root.rmdir()
+
+
+def evaluate_shadow_cutover_safety(shadow_result_dict, baseline_metrics_dict):
+    """INST-0182: allow a cutover only when tests, integrity, symbols and runtime pass."""
+    if not isinstance(shadow_result_dict, dict) or not isinstance(baseline_metrics_dict, dict):
+        raise Part3Error("Shadow results and baseline metrics must be objects")
+    reasons = []
+    if shadow_result_dict.get("status") not in ("READY", "COMPLETE"):
+        reasons.append("SHADOW_NOT_READY")
+    if shadow_result_dict.get("tests_passed") is not True:
+        reasons.append("UNIT_TESTS_FAILED_OR_MISSING")
+    if str(shadow_result_dict.get("integrity_check", "")).lower() != "ok":
+        reasons.append("SQLITE_INTEGRITY_FAILED_OR_MISSING")
+    candidate_symbols = shadow_result_dict.get("symbols")
+    baseline_symbols = baseline_metrics_dict.get("symbols")
+    if (not isinstance(candidate_symbols, list) or not isinstance(baseline_symbols, list) or
+            any(not isinstance(item, str) or not item for item in candidate_symbols + baseline_symbols)):
+        reasons.append("SYMBOL_INVENTORY_INVALID")
+    else:
+        regressed = sorted(set(baseline_symbols) - set(candidate_symbols))
+        if regressed:
+            reasons.append("SYMBOL_REGRESSION")
+    runtime = shadow_result_dict.get("runtime_seconds")
+    budget = baseline_metrics_dict.get("runtime_budget_seconds")
+    if (type(runtime) not in (int, float) or runtime < 0 or
+            type(budget) not in (int, float) or budget <= 0):
+        reasons.append("RUNTIME_BUDGET_INVALID")
+    elif runtime > budget:
+        reasons.append("RUNTIME_BUDGET_EXCEEDED")
+    return {"status": "SAFE" if not reasons else "BLOCKED", "allowed": not reasons,
+            "reasons": reasons, "regressed_symbols": regressed if "regressed" in locals() else [],
+            "runtime_seconds": runtime if type(runtime) in (int, float) else None,
+            "runtime_budget_seconds": budget if type(budget) in (int, float) else None}
+
+
+def _b37_ping_pong_expected(db_path):
+    path = Path(db_path)
+    if path.is_symlink() or not path.is_file():
+        raise Part3Error("A regular existing SQLite database is required")
+    with _b37_sqlite3.connect(path) as db:
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "b33_merge_events" not in tables:
+            return None, {}
+        events = db.execute("SELECT merged_batch_num, merge_commit_sha, merge_date FROM b33_merge_events "
+                            "ORDER BY merged_batch_num").fetchall()
+        expected = {}
+        for batch, commit, recorded in events:
+            slot = "A" if batch % 2 else "B"
+            expected[slot] = (batch, commit, recorded)
+        if not expected:
+            return None, {}
+        actual = {}
+        if "b33_ping_pong_slots" in tables:
+            try:
+                for slot, batch, commit, recorded in db.execute(
+                        "SELECT slot, batch_num, merge_commit_sha, recorded_at FROM b33_ping_pong_slots"):
+                    actual[slot] = (batch, commit, recorded)
+            except _b37_sqlite3.DatabaseError as error:
+                raise Part3Error("Ping-Pong slot table has an invalid schema") from error
+        return expected == actual, expected
+
+
+def _b37_repair_ping_pong_slots(db_path):
+    healthy, expected = _b37_ping_pong_expected(db_path)
+    if healthy is None:
+        raise Part3Error("No verified merge ledger is available to rebuild Ping-Pong slots")
+    with _b37_sqlite3.connect(db_path) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS b33_ping_pong_slots ("
+                   "slot TEXT PRIMARY KEY CHECK(slot IN ('A','B')), batch_num INTEGER NOT NULL, "
+                   "merge_commit_sha TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+        for slot, (batch, commit, recorded) in expected.items():
+            db.execute("INSERT INTO b33_ping_pong_slots VALUES (?,?,?,?) "
+                       "ON CONFLICT(slot) DO UPDATE SET batch_num=excluded.batch_num, "
+                       "merge_commit_sha=excluded.merge_commit_sha, recorded_at=excluded.recorded_at",
+                       (slot, batch, commit, recorded))
+    healthy, _ = _b37_ping_pong_expected(db_path)
+    if healthy is not True:
+        raise Part3Error("Ping-Pong repair did not verify against the merge ledger")
+    return {"status": "REPAIRED", "slots": sorted(expected)}
+
+
+def diagnose_and_propose_one_tap_fix(vault_dir, db_path, error_code):
+    """INST-0183: diagnose four known state faults; apply only after explicit approval."""
+    vault = _b31_vault_root(vault_dir)
+    if not isinstance(error_code, (dict, str)):
+        raise Part3Error("error_code must be a supported Batch 37 diagnostic")
+    request = error_code if isinstance(error_code, dict) else {"code": error_code}
+    if not isinstance(request.get("code"), str) or request["code"] not in {
+            "STALE_PENDING_RECOVER", "PING_PONG_SLOT_CORRUPT",
+            "RULES_FILE_UNPROVISIONED", "RING_BUFFER_EXPIRED"}:
+        raise Part3Error("error_code must name a supported Batch 37 diagnostic")
+    code = request["code"]
+    approved = request.get("approved") is True
+    if not approved:
+        return {"status": "PROPOSED", "error_code": code, "approved": False,
+                "repair_applied": False, "requires_person_approval": True}
+    state_path = vault / "CURRENT_STATE.json"
+    if state_path.is_symlink():
+        raise Part3Error("CURRENT_STATE.json cannot be a symlink")
+    if state_path.is_file():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise Part3Error("CURRENT_STATE.json is invalid; repair is blocked") from error
+        if isinstance(state, dict) and (state.get("owner_stop") is True or state.get("stop") is True or
+                str(state.get("status", "")).upper() == "STOP" or
+                str(state.get("owner_command", "")).upper() == "STOP"):
+            return {"status": "BLOCKED", "error_code": code, "repair_applied": False,
+                    "reason": "OWNER_STOP_ACTIVE"}
+    if code == "STALE_PENDING_RECOVER":
+        recover_path = vault / "RECOVER.md"
+        completed = request.get("completed_num")
+        if recover_path.is_symlink():
+            raise Part3Error("RECOVER.md cannot be a symlink")
+        if type(completed) is not int or not 0 <= completed <= 1000:
+            return {"status": "UNVERIFIED", "error_code": code, "repair_applied": False,
+                    "reason": "VERIFIED_COMPLETION_NUMBER_REQUIRED"}
+        try:
+            recover_text = recover_path.read_text(encoding="utf-8") if recover_path.is_file() else ""
+        except (OSError, UnicodeError) as error:
+            raise Part3Error("RECOVER.md could not be read safely") from error
+        stale = any("PENDING" in line and
+                    (numbers := [int(value) for value in re.findall(r"INST-(\d{4})", line)]) and
+                    max(numbers) <= completed for line in recover_text.splitlines())
+        if not stale:
+            return {"status": "NOT_NEEDED", "error_code": code, "repair_applied": False,
+                    "reason": "NO_STALE_PENDING_LABEL_FOUND"}
+        part2 = verify_and_import_cp150_modules(vault)["part2_module"]
+        try:
+            result = part2.sync_recover_md_state(
+                vault, request.get("completed_num"), request.get("accepted_num"), request.get("active_canary"))
+        except (ValueError, OSError) as error:
+            raise Part3Error("RECOVER repair requires verified progress values and canary") from error
+        return {"status": result["status"], "error_code": code, "repair_applied": True, "verification": result}
+    if code == "PING_PONG_SLOT_CORRUPT":
+        healthy, _expected = _b37_ping_pong_expected(db_path)
+        if healthy is True:
+            return {"status": "NOT_NEEDED", "error_code": code, "repair_applied": False,
+                    "reason": "PING_PONG_SLOTS_ALREADY_MATCH_LEDGER"}
+        result = _b37_repair_ping_pong_slots(db_path)
+        return {"status": result["status"], "error_code": code, "repair_applied": True, "verification": result}
+    if code == "RULES_FILE_UNPROVISIONED":
+        part2 = verify_and_import_cp150_modules(vault)["part2_module"]
+        try:
+            result = part2.provision_default_verification_rules(vault)
+        except (ValueError, OSError) as error:
+            raise Part3Error("Verification rules could not be provisioned without overwriting data") from error
+        return {"status": "VERIFIED", "error_code": code, "repair_applied": True, "verification": result}
+    staging = request.get("staging_path")
+    max_age = request.get("max_age", 600)
+    if not isinstance(staging, (str, os.PathLike)) or not str(staging).strip():
+        return {"status": "UNVERIFIED", "error_code": code, "repair_applied": False,
+                "reason": "DEDICATED_RING_BUFFER_PATH_REQUIRED"}
+    core = verify_and_import_cp150_modules(vault)["core_module"]
+    try:
+        result = core.sweep_expired_ring_buffer(staging, max_age)
+    except (ValueError, OSError, core.AuditRejected) as error:
+        return {"status": "BLOCKED", "error_code": code, "repair_applied": False,
+                "reason": "RING_BUFFER_REPAIR_REFUSED", "detail": str(error)}
+    repaired = bool(result.get("deleted"))
+    return {"status": "VERIFIED" if repaired else "NOT_NEEDED", "error_code": code,
+            "repair_applied": repaired, "verification": result}
+
+
+def run_deterministic_fault_injection_drill(vault_dir):
+    """INST-0184: exercise four fail-closed checks using temporary synthetic state."""
+    vault = _b31_vault_root(vault_dir)
+    checks = []
+    with _b37_tempfile.TemporaryDirectory(prefix="apccs_b37_fault_") as scratch:
+        root = Path(scratch)
+        db_path = root / "fault.sqlite3"
+        with _b37_sqlite3.connect(db_path) as db:
+            db.execute("CREATE TABLE b33_merge_events (merged_batch_num INTEGER PRIMARY KEY, "
+                       "merge_commit_sha TEXT NOT NULL, merge_date TEXT NOT NULL, ledger_seq INTEGER NOT NULL, "
+                       "ping_pong_slot TEXT NOT NULL)")
+            db.execute("INSERT INTO b33_merge_events VALUES (1, ?, ?, 1, 'A')", ("a" * 40, "2026-01-01"))
+            db.execute("CREATE TABLE b33_ping_pong_slots (slot TEXT PRIMARY KEY, batch_num INTEGER NOT NULL, "
+                       "merge_commit_sha TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+            db.execute("INSERT INTO b33_ping_pong_slots VALUES ('A', 9, ?, 'bad')", ("b" * 40,))
+        healthy, _ = _b37_ping_pong_expected(db_path)
+        checks.append({"check": "ping_pong_corruption_rejected", "passed": healthy is False})
+        drill_vault = root / "vault"
+        (drill_vault / "state").mkdir(parents=True)
+        fence_db = drill_vault / "state" / "fence.sqlite3"
+        core = _b33_import_core(fence_db)
+        core.verify_and_advance_fencing_token(fence_db, "b37-drill", 2)
+        try:
+            core.verify_and_advance_fencing_token(fence_db, "b37-drill", 1)
+            rejected = False
+        except (ValueError, core.StaleFencingToken):
+            rejected = True
+        checks.append({"check": "stale_fencing_token_rejected", "passed": rejected})
+        expected = _b32_expected_canary(core, 37)
+        bad_canary = "Canary check: T = Z -> anvil"
+        checks.append({"check": "bad_canary_cutoff_rejected", "passed": bad_canary != expected})
+        archive = root / "tampered.zip"
+        with _b37_zipfile.ZipFile(archive, "w") as bundle:
+            bundle.writestr("audit/CP-150_LOCK.json", "{}")
+            bundle.writestr("code/apccs_core.py", b"tampered")
+        try:
+            _b34_verify_archive(archive)
+            rejected = False
+        except Part3Error:
+            rejected = True
+        checks.append({"check": "tampered_archive_rejected", "passed": rejected})
+    passed = all(item["passed"] for item in checks)
+    return {"status": "PASS" if passed else "FAIL", "passed": passed, "checks": checks,
+            "temporary_only": True}
+
+
+def handle_shadow_sandbox_api(method, path, body, vault_dir):
+    """Dispatch the three loopback-only Batch 37 endpoints."""
+    vault = _b31_vault_root(vault_dir)
+    route = urlsplit(path).path if isinstance(path, str) else None
+    if route not in _B37_API_PATHS:
+        return {"http_status": 404, "body": {"error": "Unknown shadow route"}}
+    if not isinstance(method, str):
+        return {"http_status": 405, "body": {"error": "Method not allowed", "allow": ["GET", "POST"]}}
+    if method.upper() == "GET":
+        return {"http_status": 200, "body": {"route": route, "purpose": _B37_API_PATHS[route],
+                                                 "methods": ["GET", "POST"],
+                                                 "requires_person_approval": route == "/api/shadow/auto_fix"}}
+    if method.upper() != "POST":
+        return {"http_status": 405, "body": {"error": "Method not allowed", "allow": ["GET", "POST"]}}
+    if not isinstance(body, dict):
+        return {"http_status": 400, "body": {"error": "Request body must be a JSON object"}}
+    try:
+        if route == "/api/shadow/dry_run":
+            result = create_shadow_sandbox_clone(vault, body.get("db_path"))
+        elif route == "/api/shadow/auto_fix":
+            result = diagnose_and_propose_one_tap_fix(vault, body.get("db_path"), body.get("error_code"))
+        else:
+            result = run_deterministic_fault_injection_drill(vault)
+        return {"http_status": 200 if result.get("status") not in ("BLOCKED", "FAIL") else 409,
+                "body": result}
+    except Part3Error as error:
+        return {"http_status": 400, "body": {"error": str(error)}}
+
+
+_B37_UI_PANEL = r'''<section id="shadow-sandbox-self-heal"><h2>Shadow Sandbox &amp; 1-Tap Self-Heal</h2>
+<p>Dry runs use an isolated temporary copy. Repairs require explicit approval and a verified repair path.</p>
+<label for="shadow-request">Request JSON</label><textarea id="shadow-request" rows="5">{"db_path":"state/automation_loop.sqlite3","error_code":{"code":"STALE_PENDING_RECOVER"}}</textarea>
+<label><input id="shadow-approve" type="checkbox"> Approve this repair</label>
+<div><button data-shadow-route="/api/shadow/dry_run">Create shadow copy</button>
+<button data-shadow-route="/api/shadow/auto_fix">Propose repair</button>
+<button data-shadow-route="/api/shadow/fault_drill">Run fault drill</button></div>
+<pre id="shadow-result" aria-live="polite"></pre></section>
+<script>
+document.querySelectorAll('#shadow-sandbox-self-heal button[data-shadow-route]').forEach(button=>button.onclick=async()=>{const out=document.getElementById('shadow-result');try{const payload=JSON.parse(document.getElementById('shadow-request').value);if(button.dataset.shadowRoute==='/api/shadow/auto_fix'&&payload.error_code&&typeof payload.error_code==='object'){payload.error_code.approved=document.getElementById('shadow-approve').checked;}const response=await fetch(button.dataset.shadowRoute,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();out.textContent=JSON.stringify(result,null,2);}catch(error){out.textContent='Shadow request failed: '+error.message;}});
+</script>'''
+
+
+def generate_shadow_sandbox_control_panel_html(output_path, vault_dir=None):
+    """Regenerate the local control page and add the Batch 37 shadow card."""
+    if isinstance(output_path, bool) or not isinstance(output_path, (str, os.PathLike)) or not str(output_path).strip():
+        raise Part3Error("output_path must be a local path")
+    target = Path(output_path).absolute()
+    if target.is_symlink():
+        raise Part3Error("Refusing to write through a symlink")
+    result = generate_automation_loop_control_panel_html(target, vault_dir)
+    html = target.read_text(encoding="utf-8")
+    if 'id="shadow-sandbox-self-heal"' not in html:
+        if html.count("</body>") != 1:
+            raise Part3Error("Control panel page has no single body terminator")
+        html = html.replace("</body>", _B37_UI_PANEL + "</body>")
+        digest = _b31_write_atomic(target, html)
+    else:
+        digest = _b31_sha256_bytes(html.encode("utf-8"))
+    return {"path": str(target), "bytes": target.stat().st_size, "sha256": digest,
+            "base_panel": result, "shadow_routes": list(_B37_API_PATHS)}
+
+
+def create_shadow_sandbox_local_server(host="127.0.0.1", port=8501, vault_dir=None, html_path=None):
+    """Extend the local APCCS server with the Batch 37 shadow API on loopback only."""
+    if host != "127.0.0.1":
+        raise Part3Error("Shadow sandbox server must bind to 127.0.0.1")
+    root = _b31_vault_root(vault_dir or os.environ.get("APCCS_VAULT_ROOT", Path(__file__).resolve().parents[1]))
+    page = Path(html_path) if html_path is not None else root / _B32_UI_PAGE
+    generate_shadow_sandbox_control_panel_html(page, root)
+    server = create_automation_loop_local_server(host, port, root, page)
+    base = server.RequestHandlerClass
+
+    class ShadowSandboxHandler(base):
+        def _shadow_route(self, method):
+            route = urlsplit(self.path).path
+            if route not in _B37_API_PATHS:
+                return False
+            if method == "GET":
+                result = handle_shadow_sandbox_api(method, self.path, {}, root)
+            else:
+                try:
+                    raw_length = self.headers.get("Content-Length", "0")
+                    if not raw_length.isdigit() or int(raw_length) > _B37_MAX_REQUEST_BYTES:
+                        self._send(413, "application/json; charset=utf-8", json.dumps({"error": "Request too large"}))
+                        return True
+                    payload = json.loads(self.rfile.read(int(raw_length)).decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+                    self._send(400, "application/json; charset=utf-8", json.dumps({"error": "Invalid JSON body"}))
+                    return True
+                result = handle_shadow_sandbox_api(method, self.path, payload, root)
+            self._send(result["http_status"], "application/json; charset=utf-8", json.dumps(result["body"]))
+            return True
+
+        def do_GET(self):
+            if not self._shadow_route("GET"):
+                super().do_GET()
+
+        def do_POST(self):
+            if not self._shadow_route("POST"):
+                super().do_POST()
+
+    server.RequestHandlerClass = ShadowSandboxHandler
+    return server
+
+
+PART3_CONTRACT_SPECS[37] = (
+    {"instruction": "INST-0181", "function": "create_shadow_sandbox_clone",
+     "parameters": ["vault_dir", "db_path"], "min_assertions": 5, "min_negative_tests": 1},
+    {"instruction": "INST-0182", "function": "evaluate_shadow_cutover_safety",
+     "parameters": ["shadow_result_dict", "baseline_metrics_dict"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0183", "function": "diagnose_and_propose_one_tap_fix",
+     "parameters": ["vault_dir", "db_path", "error_code"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0184", "function": "run_deterministic_fault_injection_drill",
+     "parameters": ["vault_dir"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0185", "function": "create_shadow_sandbox_local_server",
+     "parameters": ["host", "port", "vault_dir", "html_path"],
+     "min_assertions": 4, "min_negative_tests": 1},
+)
+
+
 

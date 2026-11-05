@@ -962,6 +962,184 @@ class ApccsBatch34Tests(unittest.TestCase):
             part3.create_automation_loop_local_server("0.0.0.0", port, self.vault, page)
 
 
+class Part3Batch37Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        print(part3.B37_CANARY_LINE, flush=True)
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="apccs_part3_b37_")
+        self.root = Path(self.temp.name)
+        self.vault = self.root / "vault"
+        self.vault.mkdir()
+        (self.vault / "state").mkdir()
+        self.db = self.vault / "state" / "fixture.sqlite3"
+        with part3._b37_sqlite3.connect(self.db) as connection:
+            connection.execute("CREATE TABLE sample(value TEXT)")
+            connection.execute("INSERT INTO sample VALUES ('synthetic')")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_181_shadow_clone_isolated_and_preserves_database_state(self):
+        result = part3.create_shadow_sandbox_clone(self.vault, self.db)
+        try:
+            self.assertEqual(result["status"], "READY")
+            self.assertEqual(result["integrity_check"], "ok")
+            self.assertTrue(result["live_database_unchanged"])
+            self.assertTrue(Path(result["shadow_dir"]).is_relative_to(Path("/tmp")))
+            self.assertTrue((Path(result["module_dir"]) / "apccs_q1_part3.py").is_file())
+            with part3._b37_sqlite3.connect(result["db_path"]) as copy:
+                self.assertEqual(copy.execute("SELECT value FROM sample").fetchone(), ("synthetic",))
+            with part3._b37_sqlite3.connect(self.db) as live:
+                self.assertEqual(live.execute("SELECT value FROM sample").fetchone(), ("synthetic",))
+        finally:
+            part3._b37_shutil.rmtree(result["shadow_dir"], ignore_errors=True)
+
+    def test_181_shadow_clone_refuses_missing_or_outside_database(self):
+        with self.assertRaises(part3.Part3Error):
+            part3.create_shadow_sandbox_clone(self.vault, self.vault / "missing.sqlite3")
+        with self.assertRaises(part3.Part3Error):
+            part3.create_shadow_sandbox_clone(self.vault, self.root / "outside.sqlite3")
+
+    def test_182_cutover_is_allowed_only_when_every_baseline_invariant_passes(self):
+        safe = part3.evaluate_shadow_cutover_safety(
+            {"status": "COMPLETE", "tests_passed": True, "integrity_check": "ok",
+             "symbols": ["alpha", "beta"], "runtime_seconds": 0.4},
+            {"symbols": ["alpha", "beta"], "runtime_budget_seconds": 1.0})
+        self.assertTrue(safe["allowed"])
+        self.assertEqual(safe["status"], "SAFE")
+
+    def test_182_cutover_blocks_failed_tests_integrity_regression_and_over_budget(self):
+        blocked = part3.evaluate_shadow_cutover_safety(
+            {"status": "COMPLETE", "tests_passed": False, "integrity_check": "corrupt",
+             "symbols": ["alpha"], "runtime_seconds": 2.0},
+            {"symbols": ["alpha", "beta"], "runtime_budget_seconds": 1.0})
+        self.assertFalse(blocked["allowed"])
+        self.assertEqual(blocked["status"], "BLOCKED")
+        self.assertIn("UNIT_TESTS_FAILED_OR_MISSING", blocked["reasons"])
+        self.assertIn("SQLITE_INTEGRITY_FAILED_OR_MISSING", blocked["reasons"])
+        self.assertIn("SYMBOL_REGRESSION", blocked["reasons"])
+        self.assertIn("RUNTIME_BUDGET_EXCEEDED", blocked["reasons"])
+        with self.assertRaises(part3.Part3Error):
+            part3.evaluate_shadow_cutover_safety([], {})
+
+    def test_183_diagnostic_requires_approval_and_repairs_recover_rules_and_ping_pong(self):
+        recover = self.vault / "RECOVER.md"
+        recover.write_text("INST-0149 PENDING\n", encoding="utf-8")
+        proposal = part3.diagnose_and_propose_one_tap_fix(
+            self.vault, self.db, "STALE_PENDING_RECOVER")
+        self.assertEqual(proposal["status"], "PROPOSED")
+        self.assertIn("PENDING", recover.read_text(encoding="utf-8"))
+        recover_result = part3.diagnose_and_propose_one_tap_fix(self.vault, self.db, {
+            "code": "STALE_PENDING_RECOVER", "approved": True, "completed_num": 150,
+            "accepted_num": 150, "active_canary": part3.B37_CANARY_LINE})
+        self.assertTrue(recover_result["repair_applied"])
+        self.assertNotIn("PENDING", recover.read_text(encoding="utf-8"))
+        rules = part3.diagnose_and_propose_one_tap_fix(
+            self.vault, self.db, {"code": "RULES_FILE_UNPROVISIONED", "approved": True})
+        self.assertEqual(rules["status"], "VERIFIED")
+        self.assertTrue((self.vault / "rules" / "core_verification_rules.json").is_file())
+        with part3._b37_sqlite3.connect(self.db) as connection:
+            connection.execute("CREATE TABLE b33_merge_events (merged_batch_num INTEGER PRIMARY KEY, "
+                               "merge_commit_sha TEXT NOT NULL, merge_date TEXT NOT NULL, ledger_seq INTEGER NOT NULL, "
+                               "ping_pong_slot TEXT NOT NULL)")
+            connection.execute("INSERT INTO b33_merge_events VALUES (1, ?, ?, 1, 'A')",
+                               ("a" * 40, "2026-01-01"))
+            connection.execute("CREATE TABLE b33_ping_pong_slots (slot TEXT PRIMARY KEY, batch_num INTEGER NOT NULL, "
+                               "merge_commit_sha TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+            connection.execute("INSERT INTO b33_ping_pong_slots VALUES ('A', 2, ?, 'stale')", ("b" * 40,))
+        repaired = part3.diagnose_and_propose_one_tap_fix(
+            self.vault, self.db, {"code": "PING_PONG_SLOT_CORRUPT", "approved": True})
+        self.assertEqual(repaired["status"], "REPAIRED")
+
+    def test_183_diagnostic_blocks_unknown_code_stop_and_unverified_ring_path(self):
+        with self.assertRaises(part3.Part3Error):
+            part3.diagnose_and_propose_one_tap_fix(self.vault, self.db, "UNLISTED")
+        ring = part3.diagnose_and_propose_one_tap_fix(
+            self.vault, self.db, {"code": "RING_BUFFER_EXPIRED", "approved": True})
+        self.assertEqual(ring["status"], "UNVERIFIED")
+        (self.vault / "CURRENT_STATE.json").write_text(json.dumps({"owner_command": "STOP"}), encoding="utf-8")
+        blocked = part3.diagnose_and_propose_one_tap_fix(
+            self.vault, self.db, {"code": "RULES_FILE_UNPROVISIONED", "approved": True})
+        self.assertEqual(blocked["reason"], "OWNER_STOP_ACTIVE")
+        self.assertFalse((self.vault / "rules").exists())
+
+    def test_184_fault_drill_passes_all_four_faults_and_refuses_bad_vault(self):
+        result = part3.run_deterministic_fault_injection_drill(self.vault)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(len(result["checks"]), 4)
+        self.assertTrue(all(check["passed"] for check in result["checks"]))
+        self.assertTrue(result["temporary_only"])
+        with self.assertRaises(part3.Part3Error):
+            part3.run_deterministic_fault_injection_drill(None)
+
+    def test_185_shadow_routes_and_generated_panel_are_connected(self):
+        preview = part3.handle_shadow_sandbox_api("GET", "/api/shadow/auto_fix", {}, self.vault)
+        self.assertEqual(preview["http_status"], 200)
+        self.assertTrue(preview["body"]["requires_person_approval"])
+        bad = part3.handle_shadow_sandbox_api("POST", "/api/shadow/dry_run", [], self.vault)
+        unknown = part3.handle_shadow_sandbox_api("GET", "/api/shadow/unknown", {}, self.vault)
+        method = part3.handle_shadow_sandbox_api("DELETE", "/api/shadow/fault_drill", {}, self.vault)
+        self.assertEqual(bad["http_status"], 400)
+        self.assertEqual(unknown["http_status"], 404)
+        self.assertEqual(method["http_status"], 405)
+        page = self.root / "START_OUR_OWN_SYSTEM.html"
+        panel = part3.generate_shadow_sandbox_control_panel_html(page, self.vault)
+        html = page.read_text(encoding="utf-8")
+        self.assertIn('id="shadow-sandbox-self-heal"', html)
+        self.assertIn('id="shadow-approve"', html)
+        for route in part3._B37_API_PATHS:
+            self.assertIn(route, html)
+        self.assertEqual(set(panel["shadow_routes"]), set(part3._B37_API_PATHS))
+
+    def test_185_loopback_server_exposes_shadow_fault_drill_and_refuses_public_bind(self):
+        import http.client
+        import socket
+        import threading
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        page = self.root / "START_OUR_OWN_SYSTEM.html"
+        server = part3.create_shadow_sandbox_local_server("127.0.0.1", port, self.vault, page)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+            connection.request("GET", "/api/shadow/dry_run")
+            preview = connection.getresponse()
+            preview_data = json.loads(preview.read().decode("utf-8"))
+            self.assertEqual(preview.status, 200)
+            self.assertEqual(preview_data["route"], "/api/shadow/dry_run")
+            connection.request("POST", "/api/shadow/dry_run", body=json.dumps({"db_path": str(self.db)}),
+                               headers={"Content-Type": "application/json"})
+            response = connection.getresponse()
+            clone = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.status, 200)
+            self.assertEqual(clone["status"], "READY")
+            part3._b37_remove_shadow(clone["shadow_dir"])
+            connection.request("POST", "/api/shadow/auto_fix",
+                               body=json.dumps({"error_code": "STALE_PENDING_RECOVER"}),
+                               headers={"Content-Type": "application/json"})
+            proposal_response = connection.getresponse()
+            proposal = json.loads(proposal_response.read().decode("utf-8"))
+            self.assertEqual(proposal_response.status, 200)
+            self.assertEqual(proposal["status"], "PROPOSED")
+            connection.request("POST", "/api/shadow/fault_drill", body="{}",
+                               headers={"Content-Type": "application/json"})
+            response = connection.getresponse()
+            result = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.status, 200)
+            self.assertEqual(result["status"], "PASS")
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+        with self.assertRaises(part3.Part3Error):
+            part3.create_shadow_sandbox_local_server("0.0.0.0", port, self.vault, page)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
