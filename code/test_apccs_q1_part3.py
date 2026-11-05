@@ -588,5 +588,136 @@ class Part3Batch32Tests(unittest.TestCase):
             part3.create_part3_local_server("0.0.0.0", 0, self.root)
 
 
+import sqlite3
+
+class Part3Batch33Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        print(part3.B33_CANARY_LINE, flush=True)
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="apccs_part3_b33_")
+        self.root = Path(self.temp.name) / "vault"
+        self.root.mkdir()
+        self.db = self.root / "state" / "batch33.sqlite"
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_161_records_verified_probe_receipts_and_selects_fallback_order(self):
+        results = {
+            "GH_PR_AGENT": {"status": "FAIL", "verified": True},
+            "TERMUX_CLI_WORKER": {"status": "PASS", "verified": True},
+            "LOCAL_HTTP_WORKER": {"status": "PASS", "verified": True},
+        }
+        selected = part3.record_and_select_worker_transport(self.db, results)
+        self.assertEqual(selected["active_transport"], "TERMUX_CLI_WORKER")
+        self.assertEqual(selected["fallback_order"], ["GH_PR_AGENT", "TERMUX_CLI_WORKER", "LOCAL_HTTP_WORKER"])
+        with sqlite3.connect(self.db) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM b33_transport_probe_receipts").fetchone()[0], 3)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM b33_transport_probe_receipts WHERE probe_status='PASS'").fetchone()[0], 2)
+
+    def test_161_refuses_unverified_or_incomplete_probe_results(self):
+        good = {name: "PASS" for name in ("GH_PR_AGENT", "TERMUX_CLI_WORKER", "LOCAL_HTTP_WORKER")}
+        with self.assertRaises(part3.Part3Error):
+            part3.record_and_select_worker_transport(self.db, {"GH_PR_AGENT": "PASS"})
+        good["GH_PR_AGENT"] = {"status": "PASS", "verified": False}
+        with self.assertRaises(part3.Part3Error):
+            part3.record_and_select_worker_transport(self.db, good)
+        good["GH_PR_AGENT"] = "UNKNOWN"
+        with self.assertRaises(part3.Part3Error):
+            part3.record_and_select_worker_transport(self.db, good)
+
+    def test_162_first_failure_emits_short_repair_prompt_and_second_latches_andon(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"APCCS_VAULT_ROOT": str(self.root)}):
+            first = part3.evaluate_batch_attempt_circuit_breaker(self.db, "B33", 1, False, "missing assertion")
+            second = part3.evaluate_batch_attempt_circuit_breaker(self.db, "B33", 2, False, "same check still fails")
+        self.assertEqual(first["status"], "REPAIR_REQUIRED")
+        self.assertLess(len(first["repair_prompt"]), 1400)
+        self.assertEqual(first["strikes"], 1)
+        self.assertEqual(second["status"], "ANDON_PULLED")
+        self.assertTrue(second["andon"]["halted"])
+        self.assertTrue((self.root.parent / "01_STAGING_INBOX" / "release_control" / "ANDON.json").is_file())
+
+    def test_162_rejects_attempt_gaps_and_resets_strikes_after_pass(self):
+        first = part3.evaluate_batch_attempt_circuit_breaker(self.db, "B33", 1, False, "failed")
+        with self.assertRaises(part3.Part3Error):
+            part3.evaluate_batch_attempt_circuit_breaker(self.db, "B33", 3, False, "gap")
+        passed = part3.evaluate_batch_attempt_circuit_breaker(self.db, "B33", 2, True, "")
+        next_failure = part3.evaluate_batch_attempt_circuit_breaker(self.db, "B33", 3, False, "new failure")
+        self.assertEqual(first["strikes"], 1)
+        self.assertEqual(passed["strikes"], 0)
+        self.assertEqual(next_failure["strikes"], 1)
+        self.assertEqual(next_failure["status"], "REPAIR_REQUIRED")
+
+    def test_163_clear_state_advances_fence_and_stale_token_is_blocked(self):
+        import os
+        from unittest.mock import patch
+        state = self.root / "CURRENT_STATE.json"
+        state.write_text(json.dumps({"status": "RUNNING", "owner_stop": False}), encoding="utf-8")
+        with patch.dict(os.environ, {"APCCS_VAULT_ROOT": str(self.root)}):
+            allowed = part3.verify_global_stop_and_fence_state(self.root, self.db, 5)
+            stale = part3.verify_global_stop_and_fence_state(self.root, self.db, 5)
+        self.assertTrue(allowed["allowed"])
+        self.assertEqual(allowed["fencing_token"], 5)
+        self.assertFalse(stale["allowed"])
+        self.assertEqual(stale["reason"], "FENCING_TOKEN_REJECTED")
+
+    def test_163_owner_stop_and_missing_state_fail_closed(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"APCCS_VAULT_ROOT": str(self.root)}):
+            missing = part3.verify_global_stop_and_fence_state(self.root, self.db, 1)
+            (self.root / "CURRENT_STATE.json").write_text(json.dumps({"owner_command": "STOP"}), encoding="utf-8")
+            stopped = part3.verify_global_stop_and_fence_state(self.root, self.db, 1)
+        self.assertEqual(missing["reason"], "CURRENT_STATE_MISSING")
+        self.assertEqual(stopped["reason"], "OWNER_STOP_ACTIVE")
+        with sqlite3.connect(self.db) as db:
+            tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            self.assertNotIn("b2c_tokens", tables)
+
+    def test_164_records_merge_updates_ping_pong_and_queues_next_branch(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"APCCS_VAULT_ROOT": str(self.root)}):
+            result = part3.advance_batch_on_verified_merge(self.db, self.root, 32, "a" * 40)
+            again = part3.advance_batch_on_verified_merge(self.db, self.root, 32, "a" * 40)
+        self.assertEqual(result["ledger"]["status"], "APPENDED")
+        self.assertEqual(again["ledger"]["status"], "MOUNTED_DUPLICATE")
+        self.assertEqual(result["ping_pong_slot"], "B")
+        self.assertEqual(result["next_batch"]["branch"], "batch/B33")
+        with sqlite3.connect(self.db) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM b16_ledger").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT batch_num FROM b33_ping_pong_slots WHERE slot='B'").fetchone()[0], 32)
+            self.assertEqual(db.execute("SELECT branch FROM b33_next_batch_queue WHERE batch_num=33").fetchone()[0], "batch/B33")
+
+    def test_164_refuses_invalid_batch_or_commit_id(self):
+        with self.assertRaises(part3.Part3Error):
+            part3.advance_batch_on_verified_merge(self.db, self.root, 0, "a" * 40)
+        with self.assertRaises(part3.Part3Error):
+            part3.advance_batch_on_verified_merge(self.db, self.root, 32, "not-a-commit")
+
+    def test_165_requires_ten_clean_batches_and_owner_yes(self):
+        records = [{"pasted_chars": 0, "stuck_batches": 0, "failed_assertions": [], "passed": True} for _ in range(10)]
+        result = part3.score_ten_batch_stability_gate(self.db, records, "YES")
+        self.assertTrue(result["auto_merge_allowed"])
+        self.assertEqual(result["consecutive_passes"], 10)
+        self.assertEqual(result["required_consecutive_passes"], 10)
+
+    def test_165_keeps_manual_mode_for_short_or_failed_history_and_bad_input(self):
+        clean = {"pasted_chars": 0, "stuck_batches": 0, "failed_assertions": []}
+        dirty = {"pasted_chars": 1, "stuck_batches": 0, "failed_assertions": []}
+        short = part3.score_ten_batch_stability_gate(self.db, [clean] * 9, "YES")
+        failed = part3.score_ten_batch_stability_gate(self.db, [clean] * 9 + [dirty], "YES")
+        no_owner = part3.score_ten_batch_stability_gate(self.db, [clean] * 10, "NO")
+        self.assertFalse(short["auto_merge_allowed"])
+        self.assertFalse(failed["auto_merge_allowed"])
+        self.assertFalse(no_owner["auto_merge_allowed"])
+        with self.assertRaises(part3.Part3Error):
+            part3.score_ten_batch_stability_gate(self.db, {}, "YES")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

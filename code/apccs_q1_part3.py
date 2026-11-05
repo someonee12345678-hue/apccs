@@ -1534,3 +1534,244 @@ def emit_github_actions_gate_yaml(repo_dir):
         "page_sha256": page["sha256"],
         "api_route": "/api/ci/preview",
     }
+
+# Batch 33 (INST-0161..INST-0165): verified worker transports, two-strike
+# circuit breaking, global STOP/fencing checks, post-merge handoff, and stability.
+import datetime as _b33_datetime
+import sqlite3 as _b33_sqlite3
+
+
+_B33_TRANSPORTS = ("GH_PR_AGENT", "TERMUX_CLI_WORKER", "LOCAL_HTTP_WORKER")
+B33_CANARY_LINE = "Canary check: T = Z -> anvil"
+
+
+def _b33_db_path(db_path):
+    if isinstance(db_path, bool) or not isinstance(db_path, (str, os.PathLike)) or not str(db_path).strip():
+        raise Part3Error("A nonempty SQLite database path is required")
+    path = Path(db_path).absolute()
+    if path.is_symlink():
+        raise Part3Error("SQLite database path cannot be a symlink")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _b33_json_sha256(value):
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return _b31_sha256_bytes(raw)
+
+
+def _b33_import_core(db_path):
+    root = Path(db_path).absolute().parent
+    root.mkdir(parents=True, exist_ok=True)
+    return verify_and_import_cp150_modules(root)["core_module"]
+
+
+def record_and_select_worker_transport(db_path, probe_results_dict):
+    """Store validated PASS/FAIL receipts and select the first passing route."""
+    path = _b33_db_path(db_path)
+    if not isinstance(probe_results_dict, dict) or set(probe_results_dict) != set(_B33_TRANSPORTS):
+        raise Part3Error("Probe results must name each supported worker transport exactly once")
+    normalized = {}
+    for transport in _B33_TRANSPORTS:
+        value = probe_results_dict[transport]
+        if isinstance(value, str):
+            status = value
+        elif isinstance(value, dict):
+            status = value.get("status")
+            if value.get("verified") is not True:
+                raise Part3Error("Probe receipt must be explicitly verified")
+        else:
+            raise Part3Error("Probe result must be PASS/FAIL or a verified status object")
+        if not isinstance(status, str) or status not in {"PASS", "FAIL"}:
+            raise Part3Error("Probe status must be PASS or FAIL")
+        normalized[transport] = status
+    timestamp = _b33_datetime.datetime.now(_b33_datetime.timezone.utc).isoformat()
+    with _b33_sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS b33_transport_probe_receipts ("
+                   "receipt_id INTEGER PRIMARY KEY AUTOINCREMENT, transport TEXT NOT NULL, "
+                   "probe_status TEXT NOT NULL CHECK(probe_status IN ('PASS','FAIL')), "
+                   "receipt_sha256 TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+        for transport in _B33_TRANSPORTS:
+            receipt = {"transport": transport, "status": normalized[transport], "verified": True}
+            db.execute("INSERT INTO b33_transport_probe_receipts "
+                       "(transport,probe_status,receipt_sha256,recorded_at) VALUES (?,?,?,?)",
+                       (transport, normalized[transport], _b33_json_sha256(receipt), timestamp))
+    selected = next((name for name in _B33_TRANSPORTS if normalized[name] == "PASS"), None)
+    return {"receipts": normalized, "active_transport": selected,
+            "fallback_order": list(_B33_TRANSPORTS), "status": "SELECTED" if selected else "NO_TRANSPORT_AVAILABLE"}
+
+
+def evaluate_batch_attempt_circuit_breaker(db_path, batch_id, attempt_num, ci_passed, failure_summary):
+    """Record attempts; issue a short repair prompt on strike one and latch STOP on two."""
+    path = _b33_db_path(db_path)
+    if not isinstance(batch_id, str) or not batch_id.strip():
+        raise Part3Error("batch_id must be a nonempty string")
+    if type(attempt_num) is not int or attempt_num < 1:
+        raise Part3Error("attempt_num must be a positive integer")
+    if type(ci_passed) is not bool:
+        raise Part3Error("ci_passed must be a boolean")
+    if not isinstance(failure_summary, str) or len(failure_summary) > 10000:
+        raise Part3Error("failure_summary must be text of at most 10000 characters")
+    if not ci_passed and not failure_summary.strip():
+        raise Part3Error("A failed CI attempt needs a failure summary")
+    with _b33_sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS b33_batch_attempts ("
+                   "batch_id TEXT NOT NULL, attempt_num INTEGER NOT NULL, ci_passed INTEGER NOT NULL "
+                   "CHECK(ci_passed IN (0,1)), failure_sha256 TEXT NOT NULL, "
+                   "PRIMARY KEY(batch_id,attempt_num))")
+        previous = db.execute("SELECT attempt_num,ci_passed FROM b33_batch_attempts "
+                              "WHERE batch_id=? ORDER BY attempt_num DESC LIMIT 1", (batch_id,)).fetchone()
+        expected = previous[0] + 1 if previous else 1
+        if attempt_num != expected:
+            raise Part3Error("attempt_num must follow the previous recorded attempt")
+        db.execute("INSERT INTO b33_batch_attempts VALUES (?,?,?,?)",
+                   (batch_id, attempt_num, int(ci_passed), _b33_json_sha256({"failure_summary": failure_summary})))
+        prior_failures = db.execute("SELECT ci_passed FROM b33_batch_attempts WHERE batch_id=? "
+                                    "AND attempt_num<? ORDER BY attempt_num DESC", (batch_id, attempt_num)).fetchall()
+    strikes = 0
+    if not ci_passed:
+        strikes = 1
+        for (prior_passed,) in prior_failures:
+            if prior_passed:
+                break
+            strikes += 1
+    if ci_passed:
+        return {"batch_id": batch_id, "attempt_num": attempt_num, "ci_passed": True,
+                "strikes": 0, "status": "PASS", "repair_prompt": None, "andon": None}
+    repair_prompt = ("Repair batch %s after CI attempt %d. Address this failure and rerun the checks: %s"
+                     % (batch_id, attempt_num, failure_summary[:1100]))
+    if len(repair_prompt) >= 1400:
+        repair_prompt = repair_prompt[:1399]
+    if strikes < 2:
+        return {"batch_id": batch_id, "attempt_num": attempt_num, "ci_passed": False,
+                "strikes": strikes, "status": "REPAIR_REQUIRED", "repair_prompt": repair_prompt,
+                "andon": None}
+    core = _b33_import_core(path)
+    if core.MultiConstraintGovernor().parameters.get("circuit_breaker_strikes") != 2:
+        raise Part3Error("Frozen circuit-breaker policy is not two strikes")
+    andon = core.trigger_andon_cord("Batch %s failed CI on strike 2" % batch_id)
+    return {"batch_id": batch_id, "attempt_num": attempt_num, "ci_passed": False,
+            "strikes": strikes, "status": "ANDON_PULLED", "repair_prompt": None, "andon": andon}
+
+
+def verify_global_stop_and_fence_state(vault_dir, db_path, proposed_token):
+    """Fail closed on missing/invalid/STOP state, then atomically advance the fence."""
+    root = _b31_vault_root(vault_dir)
+    path = _b33_db_path(db_path)
+    if type(proposed_token) is not int or proposed_token < 1:
+        raise Part3Error("proposed_token must be a positive integer")
+    state_path = root / "CURRENT_STATE.json"
+    if state_path.is_symlink() or not state_path.is_file():
+        return {"allowed": False, "status": "BLOCKED", "reason": "CURRENT_STATE_MISSING", "fencing_token": None}
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {"allowed": False, "status": "BLOCKED", "reason": "CURRENT_STATE_INVALID", "fencing_token": None}
+    if not isinstance(state, dict):
+        return {"allowed": False, "status": "BLOCKED", "reason": "CURRENT_STATE_INVALID", "fencing_token": None}
+    stop = (state.get("owner_stop") is True or state.get("stop") is True or
+            str(state.get("status", "")).upper() == "STOP" or
+            str(state.get("state", "")).upper() == "STOP" or
+            str(state.get("owner_command", "")).upper() == "STOP")
+    if stop:
+        return {"allowed": False, "status": "BLOCKED", "reason": "OWNER_STOP_ACTIVE", "fencing_token": None}
+    core = _b33_import_core(path)
+    try:
+        core.verify_and_advance_fencing_token(path, "global-stop", proposed_token)
+    except (ValueError, core.StaleFencingToken) as exc:
+        return {"allowed": False, "status": "BLOCKED", "reason": "FENCING_TOKEN_REJECTED",
+                "detail": str(exc), "fencing_token": None}
+    return {"allowed": True, "status": "CLEAR", "reason": "STOP_CLEAR_AND_FENCE_ADVANCED",
+            "fencing_token": proposed_token}
+
+
+def advance_batch_on_verified_merge(db_path, vault_dir, merged_batch_num, merge_commit_sha):
+    """Record a verified merge, refresh alternating slots, and queue branch B(N+1)."""
+    path = _b33_db_path(db_path)
+    root = _b31_vault_root(vault_dir)
+    if root != path and root not in path.parents:
+        raise Part3Error("SQLite database must be inside the vault")
+    if type(merged_batch_num) is not int or merged_batch_num < 1 or merged_batch_num >= 999:
+        raise Part3Error("merged_batch_num must be an integer from 1 through 998")
+    if not isinstance(merge_commit_sha, str) or re.fullmatch(r"[0-9a-fA-F]{40}", merge_commit_sha) is None:
+        raise Part3Error("merge_commit_sha must be a 40-character hexadecimal commit ID")
+    merge_commit_sha = merge_commit_sha.lower()
+    next_batch_num = merged_batch_num + 1
+    next_branch = "batch/B%02d" % next_batch_num
+    slot = "A" if merged_batch_num % 2 else "B"
+    with _b33_sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS b33_merge_events ("
+                   "merged_batch_num INTEGER PRIMARY KEY, merge_commit_sha TEXT NOT NULL UNIQUE, "
+                   "merge_date TEXT NOT NULL, ledger_seq INTEGER NOT NULL, ping_pong_slot TEXT NOT NULL)")
+        db.execute("CREATE TABLE IF NOT EXISTS b33_next_batch_queue ("
+                   "batch_num INTEGER PRIMARY KEY, branch TEXT NOT NULL, source_merge_sha TEXT NOT NULL)")
+        existing = db.execute("SELECT merge_commit_sha,merge_date,ledger_seq,ping_pong_slot "
+                              "FROM b33_merge_events WHERE merged_batch_num=?", (merged_batch_num,)).fetchone()
+        if existing and existing[0] != merge_commit_sha:
+            raise Part3Error("A different merge SHA is already recorded for this batch")
+        queued = db.execute("SELECT branch,source_merge_sha FROM b33_next_batch_queue WHERE batch_num=?",
+                            (merged_batch_num + 1,)).fetchone()
+        if queued and queued != ("batch/B%02d" % (merged_batch_num + 1), merge_commit_sha):
+            raise Part3Error("A different source merge is already queued for the next batch")
+    if existing:
+        merge_date = existing[1]
+        ledger = {"status": "MOUNTED_DUPLICATE", "duplicate": True, "seq": existing[2], "date": merge_date}
+        slot = existing[3]
+    else:
+        core = _b33_import_core(path)
+        merge_date = _b33_datetime.datetime.now(_b33_datetime.timezone.utc).date().isoformat()
+        ledger = core.append_chronological_ledger(
+            path, "APCCS", merge_date, "BATCH_MERGED",
+            "Batch %d was recorded as merged" % merged_batch_num, merge_commit_sha)
+    with _b33_sqlite3.connect(path) as db:
+        if not existing:
+            db.execute("INSERT INTO b33_merge_events VALUES (?,?,?,?,?)",
+                       (merged_batch_num, merge_commit_sha, merge_date, ledger["seq"], slot))
+        db.execute("CREATE TABLE IF NOT EXISTS b33_ping_pong_slots ("
+                   "slot TEXT PRIMARY KEY CHECK(slot IN ('A','B')), batch_num INTEGER NOT NULL, "
+                   "merge_commit_sha TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+        db.execute("INSERT INTO b33_ping_pong_slots VALUES (?,?,?,?) "
+                   "ON CONFLICT(slot) DO UPDATE SET batch_num=excluded.batch_num, "
+                   "merge_commit_sha=excluded.merge_commit_sha, recorded_at=excluded.recorded_at",
+                   (slot, merged_batch_num, merge_commit_sha, _b33_datetime.datetime.now(_b33_datetime.timezone.utc).isoformat()))
+        db.execute("CREATE TABLE IF NOT EXISTS b33_next_batch_queue ("
+                   "batch_num INTEGER PRIMARY KEY, branch TEXT NOT NULL, source_merge_sha TEXT NOT NULL)")
+        db.execute("INSERT OR IGNORE INTO b33_next_batch_queue VALUES (?,?,?)",
+                   (next_batch_num, next_branch, merge_commit_sha))
+    return {"status": "RECORDED", "merged_batch_num": merged_batch_num,
+            "merge_commit_sha": merge_commit_sha, "ledger": ledger,
+            "ping_pong_slot": slot, "next_batch": {"batch_num": next_batch_num,
+            "branch": next_branch, "source_merge_sha": merge_commit_sha, "status": "READY"}}
+
+
+def score_ten_batch_stability_gate(db_path, run_records_list, owner_yes_flag):
+    """Allow auto-merge only after ten consecutive clean runs and exact Owner YES."""
+    path = _b33_db_path(db_path)
+    if not isinstance(run_records_list, list):
+        raise Part3Error("run_records_list must be a list")
+    if any(not isinstance(record, dict) for record in run_records_list):
+        raise Part3Error("Every run record must be an object")
+    consecutive = 0
+    for record in reversed(run_records_list):
+        clean = (type(record.get("pasted_chars")) is int and record["pasted_chars"] == 0 and
+                 type(record.get("stuck_batches")) is int and record["stuck_batches"] == 0 and
+                 record.get("failed_assertions") == [] and record.get("passed", True) is True)
+        if not clean:
+            break
+        consecutive += 1
+    owner_yes = owner_yes_flag == "YES"
+    allowed = consecutive >= 10 and owner_yes
+    digest = _b33_json_sha256({"records": run_records_list, "owner_yes_flag": owner_yes_flag})
+    with _b33_sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS b33_stability_evaluations ("
+                   "evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT, consecutive_passes INTEGER NOT NULL, "
+                   "owner_yes INTEGER NOT NULL CHECK(owner_yes IN (0,1)), auto_merge_allowed INTEGER NOT NULL "
+                   "CHECK(auto_merge_allowed IN (0,1)), records_sha256 TEXT NOT NULL, evaluated_at TEXT NOT NULL)")
+        db.execute("INSERT INTO b33_stability_evaluations "
+                   "(consecutive_passes,owner_yes,auto_merge_allowed,records_sha256,evaluated_at) "
+                   "VALUES (?,?,?,?,?)", (consecutive, int(owner_yes), int(allowed), digest,
+                   _b33_datetime.datetime.now(_b33_datetime.timezone.utc).isoformat()))
+    return {"status": "STABLE" if allowed else "MANUAL_REVIEW_REQUIRED",
+            "consecutive_passes": consecutive, "required_consecutive_passes": 10,
+            "owner_yes": owner_yes, "auto_merge_allowed": allowed}
+
