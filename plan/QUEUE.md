@@ -2882,3 +2882,94 @@ Done means: Rules can be dry-run with pretend triggers and masked secrets while 
 Not checked: None.
 
 End of Batch A4.
+
+## Batch LS-I (BC court AI-rule cards). Target repository: someonee12345678-hue/uclrcde
+
+Checker: Muse, after the Owner's 2026-11-05 order. Source: Drive › Claude 2 › AUDITED_WORDING_U5_LSI_AND_A5_2026-11-05 — Plan only, no code.
+
+Function: plan_ls_i_bc_court_ai_rule_cards() -> None
+Does:
+1. Adds BC court AI-rule cards to the "What a person needs to check" page.
+2. Keeps the cards read-only.
+3. The cards are short — BC Supreme Court Practice Direction 1 (2024): a person must declare AI use and must not put AI-written text into a filing unless a person has checked it.
+4. The cards also show BC Provincial Court Civil Resolution Tribunal rule: a person must declare AI use; the card is short and the AI output is not legal advice.
+5. The rules and the declaration steps are short and clear.
+Refuses:
+- If the court AI rules are missing or the declaration steps are unclear, the batch is not done, raising ValueError("LS_I_AI_RULES_NOT_READY: <reason>").
+Tests:
+- test_ls_i_01_bc_court_ai_rule_cards_present_and_short
+- test_ls_i_02_bc_court_ai_rule_cards_declare_ai_use
+- test_ls_i_03_bc_court_ai_rule_cards_refuse_off_shape
+- test_ls_i_04_bc_court_ai_rule_cards_refuse_missing_declaration
+- test_ls_i_05_bc_court_ai_rule_cards_refuse_unclear_declaration
+Done means: The court AI rules are short and clear, and the declaration steps are easy to follow.
+Not checked: None.
+
+### LS-I01: RULE_CARD_CIVIL_RESOLUTION_TRIBUNAL_AI_DECLARATION (BC court AI-rule cards)
+Function: rule_card_civil_resolution_tribunal_ai_declaration() -> dict
+Does:
+1. Returns {"court": "Civil Resolution Tribunal", "declaration": "AI use declared", "rule": "The card is short and the AI output is not legal advice"}.
+Refuses:
+- Off-shape data or a declaration that does not state AI use, raising ValueError("LS_I01_OFF_SHAPE_AI_DECLARATION: <reason>").
+Tests:
+- test_ls_i_01_rule_card_civil_resolution_tribunal_ai_declaration_present_and_short
+- test_ls_i_01_rule_card_civil_resolution_tribunal_ai_declaration_declares_ai_use
+Done means: The Civil Resolution Tribunal AI declaration card is present, short, and states that AI use is declared.
+Not checked: None.
+
+### LS-I02: RULE_CARD_BC_SUPREME_COURT_PRACTICE_DIRECTION_1_AI_DECLARATION (BC court AI-rule cards)
+Function: rule_card_bc_supreme_court_practice_direction_1_ai_declaration() -> dict
+Does:
+1. Returns {"court": "BC Supreme Court", "declaration": "AI use declared", "rule": "A person must not put AI-written text into a filing unless a person has checked it"}.
+Refuses:
+- Off-shape data or a declaration that does not state AI use, raising ValueError("LS_I02_OFF_SHAPE_AI_DECLARATION: <reason>").
+Tests:
+- test_ls_i_02_rule_card_bc_supreme_court_practice_direction_1_ai_declaration_present_and_short
+- test_ls_i_02_rule_card_bc_supreme_court_practice_direction_1_ai_declaration_declares_ai_use
+Done means: The BC Supreme Court Practice Direction 1 AI declaration card is present, short, and states that AI use is declared.
+Not checked: None.
+
+### LS-I03: AI_RULE_CARD_PINPOINT_AND_VERDICT_FOR_CASE_ID (BC court AI-rule cards)
+Function: ai_rule_card_pinpoint_and_verdict_for_case_id(case_id: str, rule_card: dict) -> dict
+Does:
+1. Validates case_id and rule_card and verifies the court AI-rule card is present and short, with the AI declaration text.
+2. Checks that the declaration states AI use, and that the rule card text is short and clear.
+3. Returns {"status": "PINPOINT OK"} for a valid case and rule card, otherwise raises ValueError("LS_I03_OFF_SHAPE_AI_RULE_CARD: <reason>").
+Refuses:
+- If the court AI-rule card is missing, the declaration is unclear, or the rule card is off-shape, raising ValueError("LS_I03_AI_RULES_NOT_READY: <reason>").
+Tests:
+- test_ls_i_03_ai_rule_card_pinpoint_and_verdict_for_case_id_returns_pinpoint_ok
+- test_ls_i_03_ai_rule_card_pinpoint_and_verdict_for_case_id_refuses_off_shape
+Done means: The AI-rule card for a case is present, short, and states that AI use is declared.
+Not checked: None.
+
+### LS-I04: VALIDATE_COURT_AI_RULES_BEFORE_SHOWING_CARDS (BC court AI-rule cards)
+Function: validate_court_ai_rules_before_showing_cards(rule_cards: list) -> bool
+Does:
+1. Validates that rule_cards is a non-empty list and that every card has exact keys court, declaration, rule.
+2. Checks that the BC Supreme Court and Civil Resolution Tribunal cards are present and short, with the AI declaration text.
+3. Confirms the declaration steps are short and clear, returning True if all checks pass.
+Refuses:
+- If any court AI-rule card is missing, the declaration is unclear, or the rule card is off-shape, raising ValueError("LS_I04_AI_RULES_NOT_READY: <reason>").
+Tests:
+- test_ls_i_04_validate_court_ai_rules_before_showing_cards_returns_true
+- test_ls_i_04_validate_court_ai_rules_before_showing_cards_refuses_missing_card
+Done means: The court AI rules are validated before the cards are shown, and the declaration steps are short and clear.
+Not checked: None.
+
+### LS-I05: RUN_W9_REGISTRAR_CHECK_AFTER_AI_RULE_CARDS (BC court AI-rule cards)
+Function: run_w9_registrar_check_after_ai_rule_cards(registry_path: str) -> dict
+Does:
+1. Locates the Registrar's file in the registry and returns a Registrar's file note (the Registrar's office has a specific form).
+2. The note has the form <the note text> and the Registrar's note is a file note for the AI-rule cards, not a legal document.
+3. The note is a file note, not a legal document, and the Registrar's office is the place to file the note.
+4. The note is returned as a dict with keys note, form, and registrar, and the note is a file note for the AI-rule cards.
+Refuses:
+- If the Registrar's file is missing, the note is off-shape, or the Registrar's office is not the place to file the note, raising ValueError("LS_I05_REGISTRAR_NOTE_NOT_READY: <reason>").
+Tests:
+- test_ls_i_05_run_w9_registrar_check_after_ai_rule_cards_returns_note
+- test_ls_i_05_run_w9_registrar_check_after_ai_rule_cards_refuses_missing_note
+Done means: The Registrar's file note is present, short, and states that AI use is declared.
+Not checked: None.
+
+End of Batch LS-I.
