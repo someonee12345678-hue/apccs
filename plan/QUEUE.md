@@ -1544,3 +1544,256 @@ This function never goes online. A person checks the live licence page and fills
 - several problems together give several reasons.
 
 End of Batch LS-D.
+
+## Batch LS-E (document cards for a person's own case documents). Target repository: someonee12345678-hue/uclrcde
+
+Architect: worded by Gemini (log record `20261104-1755-GE`), then audited and corrected by Claude on 2026-11-04. Source: the architect's file `plan/architect/BATCH_LSE_2026-11-04.md` (the queue copies this wording word for word). Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`, chunk U1. The owner approved the plan on 2026-11-04 (Claude log Entries 0208 and 0211). Merging this pull request is the go to build.
+
+Why: this is test T32 of Addendum 11 (Drive › Claude 2 › `PROJECT_RESEARCH_TIER_ON_HOLD_ADDENDUM_11_2026-11-04`). Each of a person's own case documents (an affidavit, a notice of hearing, a letter from the other side) gets a card. The card says what the document is, where it came from and what its fingerprint was when it arrived.
+- A later copy can be checked against that fingerprint.
+- Numbered paragraphs become pinpoints, such as "Affidavit #1 of Jane Roe, para 15".
+- Exhibit mentions link to the existing exhibit stamps (INST-0143).
+- Nothing on a card may leave the phone.
+
+Batch LS-F (the evidence map, T33) and the later block map (T41, T42) build on these cards.
+
+**Build only after Batch LS-D is merged on uclrcde `main`.** It is merged: PR #7, fixed by PR #8.
+
+**Target repository and rules:** `someonee12345678-hue/uclrcde`. Follow its `AGENTS.md`:
+- standard library only, and never import APCCS code;
+- made-up data only;
+- information, not advice;
+- one pull request, which the owner merges.
+
+**Target files:**
+- A new `code/uclrcde_cards.py` holds LS-E01 to LS-E05.
+- All tests go in one new test class, `UclrcdeBatchLSETests`, in a new `code/test_uclrcde_cards.py`. Its final `if __name__ == "__main__":` block stays last.
+- No other file changes.
+
+**Canary:** `Canary check: CARD = CUSTODY -> seal`.
+
+**Reuse:**
+- From `uclrcde_core`: `open_uclrcde_db`, the `matters` table (a card's `matter_id` must be a registered matter), `ingest_and_lock_legal_source_document`, the sealed-document check (`_verified_document`) and the helper that seals text with SHA-256.
+- A card never stores a second copy of the text. Its document is the locked `source_documents` row named by `doc_id`, and that row's `case_id` must equal the card's `matter_id`.
+- New tables are created with `CREATE TABLE IF NOT EXISTS`, through `open_uclrcde_db` only.
+- Every table in this batch is add-only: no function updates or deletes a row.
+- Stored times use the same clock helper as `uclrcde_core`.
+
+**Made-up test data only.** For example:
+- matter `MATTER-SYNTH-0001`;
+- deponent `Jane Roe`;
+- court `Made-Up Supreme Court Registry`;
+- an 8-paragraph made-up affidavit with Exhibits A and B.
+
+Real use allows names on a card, because the card never leaves the phone. Tests still use made-up names only.
+
+**Network:** none.
+
+**Tests:** every instruction gets at least one normal-use test and one bad-input test, named `test_lse01_...` to `test_lse05_...`.
+
+**Refusals:** every refusal raises `ValueError`, and its message starts with the code shown (for example `INVALID_PAGES: pages must be a whole number of at least 1`).
+
+### LS-E01: CREATE_DOCUMENT_CARD (T32 part 1)
+
+`create_document_card(db_path, card, allowed_doc_types) -> dict`
+
+**Inputs:**
+- `card` is a dict.
+  - Required keys: `doc_id`, `matter_id`, `doc_type`, `court`, `jurisdiction`, `author_or_deponent`, `date_received`, `source`, `text_status` and `pages`.
+  - Optional key: `date_signed`, which is `None` for an unsigned document.
+- `allowed_doc_types` is the person's own list of document types: a non-empty list of non-empty strings, for example `["affidavit", "notice_of_hearing", "letter"]`.
+
+**Checks:**
+- `doc_type` is in `allowed_doc_types`.
+- `source` is one of `court_registry`, `other_side` or `me`.
+- `text_status` is one of `typed`, `scanned` or `ocr`.
+- `date_received`, and `date_signed` when given, are real calendar dates written `YYYY-MM-DD`.
+- `pages` is an `int` of at least 1, and not a `bool`.
+- Every text field is a non-empty string.
+- `matter_id` is a registered matter.
+- `doc_id` is a locked document whose seal still matches and whose `case_id` equals `matter_id`.
+
+**Storage:**
+- Creates table `document_cards` with these columns: `card_id` (primary key), `doc_id` (unique), `matter_id`, `doc_type`, `court`, `jurisdiction`, `author_or_deponent`, `date_signed`, `date_received`, `source`, `text_status`, `pages`, `private_flag`, `sha256_at_receipt` and `created_at`.
+- `card_id` is `"CARD:" + doc_id`.
+- `sha256_at_receipt` is copied from the locked document's SHA-256.
+- `private_flag` is always 1.
+
+**Returns:**
+- The stored card as a dict, with `status` `"SEALED"`.
+- Sending the same card again returns the stored card, with `status` `"ALREADY_CARDED"`.
+- A different card for the same `doc_id` is refused with `CARD_EXISTS`. Nothing is overwritten.
+
+**Refuses:**
+- `MISSING_REQUIRED_FIELD`
+- `INVALID_DOC_TYPE`, also when `allowed_doc_types` is not valid
+- `INVALID_ENUM`
+- `INVALID_ISO_DATE`
+- `INVALID_PAGES`
+- `UNKNOWN_MATTER`
+- `DOC_NOT_LOCKED`, also when the seal no longer matches or the document belongs to another matter
+- `CARD_EXISTS`
+
+**Done means:**
+- A made-up affidavit's card is sealed with its locked document's fingerprint.
+- Each bad field is refused with its code.
+- Nothing is overwritten.
+
+### LS-E02: VERIFY_DOCUMENT_CUSTODY (T32 part 2)
+
+`verify_document_custody(db_path, card_id, candidate_text) -> dict`
+
+**Does:**
+- Reads the card's `sha256_at_receipt`.
+- Computes the SHA-256 of `candidate_text` with the same helper `uclrcde_core` uses to seal text, with no trimming or other changes.
+
+**Returns:**
+- `card_id`, `sha256_at_receipt`, `candidate_sha256` and `status`.
+- `status` is `"CUSTODY_OK"` when the two match, and `"CUSTODY_MISMATCH"` when they don't.
+
+**Records:**
+- Every check goes into the add-only table `custody_checks`, with columns `card_id`, `candidate_sha256`, `status` and `checked_at`. It holds hashes only, never the text.
+- Never changes the card or the locked document.
+
+**Refuses:**
+- `INVALID_CARD_ID` (empty, or not a string)
+- `CARD_NOT_FOUND`
+- `INVALID_TEXT_INPUT` (not a string)
+
+**Done means:**
+- The original text gives `CUSTODY_OK`.
+- A copy with one character changed gives `CUSTODY_MISMATCH`.
+- Both checks are recorded.
+- The stored card and the document are unchanged.
+
+### LS-E03: INDEX_PARAGRAPH_ANCHORS (T32 part 3)
+
+`index_paragraph_anchors(db_path, card_id, doc_label, exhibit_stamps) -> dict`
+
+**Inputs:**
+- `doc_label` is a non-empty string, such as `"Affidavit #1 of Jane Roe"`.
+- `exhibit_stamps` is a dict from an exhibit letter (`"A"`, `"B"` and so on, as INST-0143 stamps them) to that exhibit's id. Keys and values are non-empty strings. The dict may be empty.
+
+**Reads:** the text of the card's locked document, through the sealed-document check.
+
+**Pages:**
+- Page 1 starts at the beginning of the text.
+- Each form-feed character (`\f`) starts the next page.
+
+**Paragraphs:**
+- A numbered paragraph starts at a line whose first non-space characters are one or more digits, then a full stop, then a space (for example `15. `).
+- It runs until the next numbered paragraph or the end of the text.
+- Only this simple format counts here. Messier formats are for T42.
+
+**Each anchor stores:**
+- `anchor_id`: `card_id + ":para" + number`
+- `card_id`
+- `para_num`: an int
+- `page_num`: the page where the paragraph starts
+- `char_offset` and `end_offset`: Python string offsets into the locked text
+- `snippet`: the first 80 characters
+- `pinpoint`: `doc_label + ", para " + number`
+
+Anchors are saved in the add-only table `paragraph_anchors`.
+
+**Exhibit mentions:**
+- A mention is the whole word `Exhibit`, one space, then 1 or 2 capital letters as a whole word, inside a paragraph.
+- Each mention is saved in table `anchor_exhibits`, with columns `anchor_id`, `exhibit_letter` and `exhibit_id`.
+- `exhibit_id` comes from `exhibit_stamps`. It is empty when the letter isn't stamped.
+
+**Returns:**
+- `card_id`
+- the anchors, in paragraph order
+- `unstamped_exhibits`: the letters mentioned but not stamped, sorted
+- `status`: `"INDEXED"`, or `"NEEDS_A_PERSON"` when any exhibit is unstamped. When unsure, flag it; never guess.
+
+**Repeat:** running it again for the same card returns the stored anchors, with `status` `"ALREADY_INDEXED"`, and changes nothing.
+
+**Refuses:**
+- `CARD_NOT_FOUND`
+- `INVALID_DOC_LABEL`
+- `INVALID_EXHIBIT_STAMPS` (not a dict of non-empty strings)
+- `NO_PARAGRAPHS_FOUND`
+- `DUPLICATE_PARAGRAPH_NUMBER` (the same number twice)
+
+**Done means:**
+- A made-up 8-paragraph affidavit over 2 pages gets 8 anchors with the correct pages, offsets and pinpoints, for example `Affidavit #1 of Jane Roe, para 5`.
+- "Exhibit A" links to its stamp.
+- An unstamped "Exhibit C" is listed for a person.
+- Numbers inside sentences, such as "on 3 occasions" or "$3,000", aren't counted as paragraphs.
+
+### LS-E04: RECORD_NOTICE_OF_HEARING (T32 part 4)
+
+`record_notice_of_hearing(db_path, card_id, hearing) -> dict`
+
+**Inputs:**
+- The card's `doc_type` must be `notice_of_hearing`.
+- `hearing` is a dict with five required keys:
+  - `hearing_date`: a real date, written `YYYY-MM-DD`;
+  - `hearing_time`: 24-hour `HH:MM`, from 00:00 to 23:59;
+  - `place`, `relief_sought` and `prepared_by`: non-empty strings.
+- A person fills these in. They are not read from the document.
+
+**Saves:** one row in the add-only table `hearing_notices`, with `card_id` as the primary key, the five fields and `recorded_at`.
+
+**Returns:** the saved fields, with `status` `"RECORDED"`.
+
+**Repeat:** a second call for the same card is refused with `ALREADY_RECORDED` and changes nothing. A correction will come in a later batch as an added history row, never an overwrite.
+
+**Refuses:**
+- `CARD_NOT_FOUND`
+- `NOT_A_HEARING_NOTICE`
+- `MISSING_HEARING_FIELD`
+- `INVALID_DATETIME`
+- `ALREADY_RECORDED`
+
+**Done means:**
+- A made-up notice is recorded.
+- Each of these is refused: a card of the wrong type, a missing field, the date `2026-02-30`, the time `25:00` and a second call.
+
+### LS-E05: GUARD_CARD_STAYS_ON_PHONE (T32 "nothing can be sent off the phone")
+
+`guard_card_destination(db_path, card_id, destination_kind) -> dict`
+
+**Allowed destinations:** only `local_screen` and `local_sqlite`. Every other value is refused, for example `network`, `cloud`, `email` or `external_ai`.
+
+**When allowed:**
+- Returns the card summary: `card_id`, `matter_id`, `doc_type`, `date_signed`, `date_received`, `author_or_deponent`, `pages` and `sha256_at_receipt`.
+- `status` is `"LOCAL_OK"`.
+
+**When refused:**
+- Returns only `card_id`, `destination_kind` and `status` `"CASE_FILE_OFF_PHONE_REFUSED"`, with no card fields.
+- Adds a row to the add-only table `card_destination_refusals`, with columns `card_id`, `destination_kind`, `sha256_at_receipt` and `refused_at`. It holds hashes only, never text.
+
+**For later batches:** this is the gate that every future export or send must call first. Any later batch that adds a way to send data must go through it.
+
+**Raises:**
+- `CARD_NOT_FOUND`
+- `INVALID_DESTINATION` (empty, or not a string)
+
+**Done means:**
+- `local_screen` returns the summary.
+- `cloud` and `external_ai` are refused and logged, and return no card fields.
+
+### Not checked (carried from Gemini's wording and Addendum 11)
+
+- SALI LMSS codes for document types. They are needed later, and only if UCLRCDE exchanges data with other tools.
+- Whether Canadian Judicial Council guidance shifts the custody-chain burden onto litigators.
+- Court naming and hyperlinking protocols for pinpoints. Addendum 11 names Ontario's; BC's aren't checked.
+- Official BC notice-of-hearing form layouts. LS-E04 records what a person types, so it doesn't depend on them.
+
+### Claude's audit of Gemini's wording: what changed and why
+
+1. **Files.** A new `uclrcde_cards.py` and `test_uclrcde_cards.py`, instead of adding to `uclrcde_sources.py`, which already holds source fetching. Smaller files are easier to review.
+2. **No second copy of the text.** The card points to the already-locked document (`doc_id`) and copies its fingerprint. It doesn't store `raw_text` again.
+3. **Names are allowed on the card.**
+   - T32 lists "author or deponent", and its pinpoint example is "Affidavit #1 of Jane Roe, para 15".
+   - Software can't reliably tell a name from a role, and a person's own case file never leaves the phone (LS-E05).
+   - So the personal-information refusals were removed. Tests still use made-up names only.
+   - This also corrects the plan's own short note, "roles (never real names)".
+4. **Exact rules where the wording left a guess:** the required fields, `card_id`, page breaks (`\f`), the paragraph pattern, the exhibit pattern and the pinpoint format.
+5. **Unstamped exhibits are flagged, not refused.** They are flagged for a person (`NEEDS_A_PERSON`), following the "flag it, never guess" rule in Addendum 16.
+6. **Nothing is lost or overwritten.** Every table is add-only, repeat calls change nothing, and each custody check is logged.
+7. **Refusals match the core.** They use `ValueError` with the code first, as `uclrcde_core` does.
+
+End of Batch LS-E.
