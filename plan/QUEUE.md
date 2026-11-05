@@ -2547,3 +2547,338 @@ Done means: Dependency cycles and unfinished prerequisites are refused, and the 
 Not checked: Live phone browser rendering of the status summary (NOT CHECKED).
 
 End of Batch A1.
+
+## Batch 41 hold (Architect's correction, 2026-11-05)
+
+Batch 41, INST-0204, is **NOT ready to build.** The exact allowed defect severity values couldn't be verified from the Genesis v0.2 reference, and they must not be guessed. Batch 41 stays on hold until an accessible source confirms the severity values and a later add-only correction records them. Batches 42–49 wait behind it. (Gemini's text, log record `20261105-0703-GE`; the Owner pasted it at 07:55, log Entry 0243.)
+
+## Batch A2 (Log v2 and Report v2: 8-line record, IDs, hash chain, reply shape check). Target repository: someonee12345678-hue/apccs
+
+Architect: Gemini wrote the wording (log record `20261105-0703-GE`), using CODE_MAP_APCCS_2026-11-04 and CODE_MAP_APCCS_ADDENDUM_2026-11-05. Claude audited it on 2026-11-05 (log Entry 0245). Source: the architect's file `plan/architect/BATCHES_A2_A4_2026-11-05.md`; the queue copies it word for word. Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`; features from `FEATURE_LEDGER_v1_2026-11-05`, approved by the Owner.
+
+**This batch has no instruction number.** BUILDER_RUNBOOK.md step 5 won't select it by itself; the Owner tells the builder to build it by name. The A-batches come before Batches 41–49.
+
+**Rules:** follow apccs `AGENTS.md`:
+- standard library only;
+- `apccs_core.py` and its test file stay frozen;
+- tests only grow;
+- every test file runs on its own;
+- each instruction gets a normal-use test and a bad-input test;
+- made-up data only;
+- tests write only inside temporary folders;
+- no network.
+
+Every refusal that raises uses `ValueError` with the code first, as the wording shows.
+
+**Build only after Batch A1 is merged on apccs `main`.**
+
+### Architect's corrections. Read these first: they override Gemini's wording below.
+1. **A205 verdict line.**
+   - The contract has exactly these keys: `required_first_line_prefix`, `required_headings`, `allowed_verdicts`, `required_last_line_prefix`.
+   - The verdict line is a line that is exactly `Verdict: <value>`, where `<value>` is in `contract["allowed_verdicts"]`.
+2. **A204.** The chain file is created on the first append. An empty or missing file counts as a valid empty chain.
+
+### Gemini's wording (the corrections above override it)
+
+BATCH A2: Log v2 and Report v2 (8-line record, time+agent IDs, hash chain, reply shape check). Target repository: someonee12345678-hue/apccs. Canary: Canary check: LOG = CHAIN -> beacon.
+Build only after: Batch A1 (code/apccs_status.py, PR #26) is merged.
+Files: add to the end of code/apccs_logs.py (new standalone module, standard library only, zero imports from apccs_core.py or other repo modules). Tests go in code/test_apccs_logs.py, class ApccsBatchA2LogsTests.
+
+Shared module constants required in code/apccs_logs.py:
+- LOG_V2_FIELD_ORDER = ("ID", "ASK", "DID", "RESULT", "CHANGED", "SOURCE", "OPEN", "NEXT")
+- ALLOWED_AGENT_CODES = ("GE", "MU", "CG", "CL", "MI")
+- ALLOWED_LOG_RESULTS = ("G", "R", "Y")
+- EXAMPLE_LOG_V2_RECORD: one complete 8-line worked example using made-up data.
+
+### A201: MAKE_LOG_V2_CORRELATION_ID (WHOLE_PRODUCT_PLAN_v1 Part 5, Chunk A2)
+Function: make_log_v2_correlation_id(timestamp_text: str, agent_code: str) -> str
+Does:
+1. Checks that timestamp_text matches the fixed 13-character shape YYYYMMDD-HHMM and represents a real calendar date and 24-hour clock time using datetime.strptime.
+2. Checks that agent_code is one of ALLOWED_AGENT_CODES (GE, MU, CG, CL, MI).
+3. Returns the formatted ID string <YYYYMMDD-HHMM>-<agent_code> and verifies the returned string against the compiled ID shape regex before returning.
+Refuses:
+- Non-string inputs, empty strings, bad date/time values, or unrecognised agent codes with ValueError("OFF_SHAPE_LOG_ID: <reason>").
+Tests:
+- test_a2_01_make_log_v2_correlation_id_valid and test_a2_01_make_log_v2_correlation_id_rejects_bad_inputs.
+Done means: Valid time and agent inputs produce a deterministic YYYYMMDD-HHMM-<AGENT> ID and off-shape inputs raise OFF_SHAPE_LOG_ID.
+Not checked: Official Python datetime docs (https://docs.python.org/3/library/datetime.html, checked 2026-10-09).
+
+### A202: BUILD_EIGHT_LINE_LOG_V2_RECORD (WHOLE_PRODUCT_PLAN_v1 Part 5, Chunk A2)
+Function: build_eight_line_log_v2_record(record_fields: dict) -> str
+Does:
+1. Verifies record_fields is a dict whose keys match LOG_V2_FIELD_ORDER (ID, ASK, DID, RESULT, CHANGED, SOURCE, OPEN, NEXT) with zero missing or extra keys.
+2. Validates record_fields["ID"] using make_log_v2_correlation_id rules and checks record_fields["RESULT"] is in ALLOWED_LOG_RESULTS (G, R, Y).
+3. Checks every field value is a single non-empty line containing no newline characters.
+4. Formats the 8 lines in exact LOG_V2_FIELD_ORDER, runs parse_and_check_log_v2_record on the output as a post-step check, and returns the 8-line string.
+Refuses:
+- Missing keys, extra keys, multiline values, blank values, or bad ID/RESULT values with ValueError("OFF_SHAPE_LOG_RECORD: <field>").
+Tests:
+- test_a2_02_build_eight_line_log_v2_record_valid and test_a2_02_build_eight_line_log_v2_record_rejects_off_shape.
+Done means: Only complete 8-field dicts matching EXAMPLE_LOG_V2_RECORD shape emit a formatted 8-line block.
+Not checked: None.
+
+### A203: PARSE_AND_CHECK_LOG_V2_SHAPE (WHOLE_PRODUCT_PLAN_v1 Part 5, Chunk A2)
+Function: parse_and_check_log_v2_record(raw_text: str) -> dict
+Does:
+1. Splits raw_text into lines and verifies there are exactly 8 non-empty lines.
+2. Checks that line i starts with <LOG_V2_FIELD_ORDER[i]>:  in exact sequence from ID (line 1) to NEXT (line 8).
+3. Validates the ID value shape (YYYYMMDD-HHMM-<GE|MU|CG|CL|MI>), confirms RESULT is G, R, or Y, and confirms no value is empty.
+4. Returns {"status": "PASS", "fields": parsed_dict} when valid.
+Refuses:
+- Any text with fewer or more than 8 lines, out-of-order labels, blank values, or invalid ID/RESULT tokens by returning {"status": "FAIL", "reason": "OFF_SHAPE_LINE: <detail>"} (never rewrites or guesses missing lines).
+Tests:
+- test_a2_03_parse_and_check_log_v2_record_valid and test_a2_03_parse_and_check_log_v2_record_wrong_order_or_missing.
+Done means: Off-shape 8-line log blocks are rejected with the exact failing line label.
+Not checked: None.
+
+### A204: APPEND_AND_VERIFY_LOG_V2_HASH_CHAIN (Chunk A2, Log v2 Hash Chain)
+Function: append_and_verify_log_v2_chain(chain_path: str, record_text: str) -> dict
+Does:
+1. Validates record_text with parse_and_check_log_v2_record and refuses to proceed unless status is "PASS".
+2. Reads existing JSON-lines rows from chain_path (if the file exists) and verifies every existing row's prev_sha256 and entry_sha256 (hashlib.sha256 over <seq>|<prev_sha256>|<record_text>).
+3. Appends one new JSON line containing seq, id, prev_sha256 ("GENESIS" for seq == 1), record_text, and entry_sha256.
+4. Re-reads chain_path after writing to confirm the new tail hash and row count match.
+Refuses:
+- Off-shape record_text, duplicate correlation ID, or any tampered/corrupted prior line in chain_path with ValueError("CHAIN_INTEGRITY_ERROR: <reason>").
+Tests:
+- test_a2_04_append_and_verify_log_v2_chain_grows_cleanly and test_a2_04_append_and_verify_log_v2_chain_detects_tamper.
+Done means: Each appended Log v2 record is hash-chained and any edit to an earlier line fails verification.
+Not checked: Official Python hashlib docs (https://docs.python.org/3/library/hashlib.html, checked 2026-10-09).
+
+### A205: CHECK_REPORT_V2_REPLY_SHAPE (Chunk A2, Library Card C11)
+Function: check_report_v2_reply_shape(report_text: str, contract: dict) -> dict
+Does:
+1. Verifies contract contains fixed keys required_first_line_prefix, required_headings, allowed_verdicts, and required_last_line_prefix (with EXAMPLE_REPORT_V2_CONTRACT provided in module).
+2. Checks that report_text starts with contract["required_first_line_prefix"] (such as "Status: FOR REVIEW"), contains all required_headings in order, includes an explicit verdict line (PASS, FAIL, GREEN, or RED), and ends with contract["required_last_line_prefix"] (such as "End of ").
+3. Checks that every line starting with "Claim:" or "- Claim:" contains either an https:// link plus a YYYY-MM-DD date or the exact words NOT CHECKED.
+4. Returns {"status": "PASS", "missing": [], "notice": "PASS means the shape is right, not that the content is true."} or a "FAIL" dict listing every missing item without rewriting report_text.
+Refuses:
+- Non-string report_text or off-shape contract dict with ValueError("OFF_SHAPE_REPORT_CONTRACT").
+Tests:
+- test_a2_05_check_report_v2_reply_shape_valid and test_a2_05_check_report_v2_reply_shape_catches_missing_parts.
+Done means: Reports missing headers, dates/NOT CHECKED, verdicts, or closing lines fail closed with exact missing-part names.
+Not checked: None.
+
+End of Batch A2.
+
+## Batch A3 (rules become checks, lessons ledger, W2 stricter-only settings, code map). Target repository: someonee12345678-hue/apccs
+
+Architect: Gemini wrote the wording (log record `20261105-0703-GE`), using CODE_MAP_APCCS_2026-11-04 and CODE_MAP_APCCS_ADDENDUM_2026-11-05. Claude audited it on 2026-11-05 (log Entry 0245). Source: the architect's file `plan/architect/BATCHES_A2_A4_2026-11-05.md`; the queue copies it word for word. Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`; features from `FEATURE_LEDGER_v1_2026-11-05`, approved by the Owner.
+
+**This batch has no instruction number.** BUILDER_RUNBOOK.md step 5 won't select it by itself; the Owner tells the builder to build it by name. The A-batches come before Batches 41–49.
+
+**Rules:** follow apccs `AGENTS.md`:
+- standard library only;
+- `apccs_core.py` and its test file stay frozen;
+- tests only grow;
+- every test file runs on its own;
+- each instruction gets a normal-use test and a bad-input test;
+- made-up data only;
+- tests write only inside temporary folders;
+- no network.
+
+Every refusal that raises uses `ValueError` with the code first, as the wording shows.
+
+**Build only after Batch A2 is merged on apccs `main`.**
+
+### Architect's corrections. Read these first: they override Gemini's wording below.
+1. **A305 only produces the map.**
+   - Running it automatically after each merge is a later step, not part of this batch.
+   - The same files must always give a byte-identical result.
+   - Table columns are read the way the existing code maps were made: each `CREATE TABLE` text runs in an in-memory SQLite database, then `PRAGMA table_info` gives the columns. A statement that can't run is listed as `?<table name>`.
+2. **A301 never imports or runs the file it checks.** It uses `ast` only.
+
+### Gemini's wording (the corrections above override it)
+
+BATCH A3: Rules become checks, lessons ledger, W2 settings only get stricter, and automatic code map. Target repository: someonee12345678-hue/apccs. Canary: Canary check: RULES = STRICT -> keystone.
+Build only after: Batch A2 (code/apccs_logs.py) is merged.
+Files: add to the end of code/apccs_rules.py (new standalone module, standard library only). Tests go in code/test_apccs_rules.py, class ApccsBatchA3RulesTests.
+
+Shared module constants required in code/apccs_rules.py:
+- ALLOWED_RULE_CHECK_KINDS = ("stdlib_imports_only", "forbidden_ast_calls", "required_text_pattern", "max_function_lines")
+- ALLOWED_COVERAGE_CLASSES = ("checkable", "roughly_checkable", "needs_person")
+- EXAMPLE_RULES_JSON, EXAMPLE_LESSON_ENTRY, and EXAMPLE_MASTER_SETTINGS: worked examples using made-up data.
+
+### A301: RUN_JSON_RULES_AS_CHECKS (Chunk A3, Library Card C20)
+Function: run_json_rules_check_pack(py_file_path: str, rules_spec: dict) -> dict
+Does:
+1. Validates rules_spec against the fixed JSON rule pack shape (rules list of dicts with rule_id, kind in ALLOWED_RULE_CHECK_KINDS, and params).
+2. Parses py_file_path with ast.parse and checks stdlib_imports_only against sys.stdlib_module_names plus params.get("allowed_local_modules", []).
+3. Evaluates forbidden_ast_calls (such as bare eval or exec), required_text_pattern, and max_function_lines, recording "PASS" or "FAIL" per rule_id.
+4. Re-verifies that every rule in rules_spec produced a verdict and returns {"status": "PASS" | "FAIL", "results": results_list} without editing any file.
+Refuses:
+- Unreadable files, syntax errors, unknown kind, or any rule check that cannot run by failing closed with {"status": "FAIL", "reason": "RULE_CHECK_BLOCKED: <detail>"}.
+Tests:
+- test_a3_01_run_json_rules_check_pack_passes_clean_stdlib and test_a3_01_run_json_rules_check_pack_blocks_non_stdlib_or_bad_rule.
+Done means: Machine-testable AGENTS.md rules run from JSON via ast and fail closed on non-stdlib imports or unrunnable rules.
+Not checked: Official Python ast and sys.stdlib_module_names docs (https://docs.python.org/3/library/ast.html, checked 2026-10-09).
+
+### A302: BUILD_RULE_COVERAGE_HONESTY_LIST (Chunk A3, Library Card C20)
+Function: build_rule_coverage_honesty_report(rule_catalog: list) -> dict
+Does:
+1. Verifies rule_catalog is a non-empty list where each item has exact keys rule_id, title, coverage_class, and reason.
+2. Checks that every coverage_class is one of ALLOWED_COVERAGE_CLASSES ("checkable", "roughly_checkable", "needs_person").
+3. Groups the rules into the three fixed buckets, computes counts for each bucket, and formats a plain-English Markdown summary table.
+4. Verifies that the sum of bucket counts equals len(rule_catalog) before returning.
+Refuses:
+- Empty catalogs, missing/extra keys, blank strings, or invalid coverage_class values with ValueError("OFF_SHAPE_COVERAGE_ITEM: <detail>").
+Tests:
+- test_a3_02_build_rule_coverage_honesty_report_valid and test_a3_02_build_rule_coverage_honesty_report_rejects_bad_class.
+Done means: Every rule is honestly classified as checkable, roughly checkable, or needing a person.
+Not checked: None.
+
+### A303: APPEND_AND_VERIFY_LESSONS_LEDGER (Chunk A3, Library Card C31)
+Function: append_and_verify_lessons_ledger(ledger_path: str, lesson_item: dict) -> dict
+Does:
+1. Verifies lesson_item has exact keys lesson_id, date_recorded, source_ref, rule_tag, and lesson_text, with a non-empty source_ref (log entry ID or failed check name) and single-line lesson_text.
+2. Reads all existing JSON-lines rows from ledger_path and checks each row's row_sha256 and sequential order so earlier lessons can never be edited or removed.
+3. Appends the new lesson row with seq, prev_sha256, and row_sha256, then re-reads ledger_path to confirm the new row is intact.
+Refuses:
+- Any lesson missing source_ref, duplicate lesson_id, off-shape keys, or modified prior rows with ValueError("LESSONS_LEDGER_REJECTED: <reason>").
+Tests:
+- test_a3_03_append_and_verify_lessons_ledger_valid and test_a3_03_append_and_verify_lessons_ledger_refuses_missing_source_or_edit.
+Done means: Confirmed lessons grow append-only with mandatory source references and tamper detection.
+Not checked: None.
+
+### A304: ENFORCE_W2_MONOTONIC_STRICTER_SETTINGS (Chunk A3, W2, Plan Rule R3)
+Function: verify_w2_monotonic_stricter_settings(master_settings: dict, project_settings: dict) -> dict
+Does:
+1. Verifies both inputs match the fixed settings schema (strict_flags dict of booleans, numeric_ceilings dict of positive ints, allowed_items dict of string lists).
+2. Checks strict_flags: any flag set to True in master_settings (such as network_off, read_only_default, require_person_approval) must remain True in project_settings.
+3. Checks numeric_ceilings: every ceiling in project_settings (such as max_tokens, max_retries) must be less than or equal to master_settings.
+4. Checks allowed_items: every list in project_settings must be a subset of master_settings, then returns {"status": "ALLOWED", "effective_settings": merged}.
+Refuses:
+- Off-shape settings dicts, unknown keys, or any child setting that loosens a master setting by returning {"status": "BLOCKED", "violations": violations_list}.
+Tests:
+- test_a3_04_verify_w2_monotonic_stricter_settings_allows_tighter and test_a3_04_verify_w2_monotonic_stricter_settings_blocks_loosening.
+Done means: Project settings may tighten master settings under W2 and R3, never loosen them.
+Not checked: None.
+
+### A305: GENERATE_AUTOMATIC_CODE_MAP_SNAPSHOT (Chunk A3, Auto Code Map)
+Function: generate_repo_code_map_markdown(code_dir: str) -> dict
+Does:
+1. Scans code_dir for apccs_*.py files in sorted filename order without importing or executing them.
+2. Parses each file with ast.parse to collect top-level constant names, function names, line counts, and file SHA-256 hashes, plus scans string literals for CREATE TABLE names and columns.
+3. Formats the output in the exact CODE_MAP_APCCS Markdown template (== <filename> (<N> lines) followed by Tables:, Constants:, Functions:, and End of code map.).
+4. Verifies every scanned file appears in the output and ends with End of code map. before returning {"markdown": text, "files_mapped": count}.
+Refuses:
+- Missing code_dir, directory paths with no apccs_*.py files, or files with Python syntax errors with ValueError("CODE_MAP_ERROR: <reason>").
+Tests:
+- test_a3_05_generate_repo_code_map_markdown_valid and test_a3_05_generate_repo_code_map_markdown_rejects_empty_or_bad_dir.
+Done means: A deterministic CODE_MAP_APCCS snapshot is generated automatically from code/ after each merge.
+Not checked: None.
+
+End of Batch A3.
+
+## Batch A4 (log views, local-first logic gate, W1 approval modes, W4 trust pins, W8 dry run). Target repository: someonee12345678-hue/apccs
+
+Architect: Gemini wrote the wording (log record `20261105-0703-GE`), using CODE_MAP_APCCS_2026-11-04 and CODE_MAP_APCCS_ADDENDUM_2026-11-05. Claude audited it on 2026-11-05 (log Entry 0245). Source: the architect's file `plan/architect/BATCHES_A2_A4_2026-11-05.md`; the queue copies it word for word. Plan: Drive › Claude 2 › `WHOLE_PRODUCT_PLAN_v1_2026-11-04`; features from `FEATURE_LEDGER_v1_2026-11-05`, approved by the Owner.
+
+**This batch has no instruction number.** BUILDER_RUNBOOK.md step 5 won't select it by itself; the Owner tells the builder to build it by name. The A-batches come before Batches 41–49.
+
+**Rules:** follow apccs `AGENTS.md`:
+- standard library only;
+- `apccs_core.py` and its test file stay frozen;
+- tests only grow;
+- every test file runs on its own;
+- each instruction gets a normal-use test and a bad-input test;
+- made-up data only;
+- tests write only inside temporary folders;
+- no network.
+
+Every refusal that raises uses `ValueError` with the code first, as the wording shows.
+
+**Build only after Batch A3 is merged on apccs `main`.**
+
+### Architect's corrections. Read these first: they override Gemini's wording below.
+1. **A402 matching.**
+   - A rule matches when `rule["match_type"]` equals `task_request["task_type"]`.
+   - Rules are tried in table order: all `LOCAL_SOFTWARE` rules first, then `AI_SUGGESTION` rules. The first match wins.
+   - With no match and no allowed AI route, the result is `"BLOCKED: needs a person"`.
+2. **A404 pin file.**
+   - `.apccs_folder_pin` holds one line of text, and `folder_id_sha256` is the SHA-256 of that text.
+   - Tests create the pin file themselves. This batch has no public function that creates pins.
+3. **A405** may import `evaluate_local_first_logic_gate` from the same module only. It writes nothing anywhere.
+
+### Gemini's wording (the corrections above override it)
+
+BATCH A4: Log views (Summary, Full, Milestones, Chronological), local-first logic gate with local-vs-AI counter, W1 approval modes, W4 trust pins, and W8 dry run. Target repository: someonee12345678-hue/apccs. Canary: Canary check: GATE = LOCAL -> anchor.
+Build only after: Batch A3 (code/apccs_rules.py) is merged.
+Files: add to the end of code/apccs_gate.py (new standalone module, standard library only). Tests go in code/test_apccs_gate.py, class ApccsBatchA4GateTests.
+
+Shared module constants required in code/apccs_gate.py:
+- ALLOWED_LOG_VIEW_MODES = ("Summary", "Full", "Milestones", "Chronological")
+- ALLOWED_W1_APPROVAL_MODES = ("Ask first", "Accept edits", "Plan only")
+- SECRET_MASK_PATTERNS: compiled regex tuple matching token/key/password/bearer patterns, replaced with "[REDACTED_SECRET]".
+- EXAMPLE_GATE_RULE_TABLE, EXAMPLE_TRUST_PIN_MANIFEST, and EXAMPLE_TASK_REQUEST: worked examples using made-up data.
+
+### A401: RENDER_FOUR_LOG_V2_VIEWS (Chunk A4, Log Views)
+Function: render_log_v2_view(records: list, view_mode: str) -> dict
+Does:
+1. Checks view_mode is in ALLOWED_LOG_VIEW_MODES ("Summary", "Full", "Milestones", "Chronological") and verifies every item in records has the 8 required Log v2 keys (ID, ASK, DID, RESULT, CHANGED, SOURCE, OPEN, NEXT).
+2. Sorts records by ID timestamp ascending for "Chronological", filters to records with RESULT == "G" and non-"none" CHANGED for "Milestones", formats 1-line counts plus latest status for "Summary", and preserves all 8 lines per record for "Full".
+3. Verifies the rendered output is non-empty and matches the requested view header before returning {"view_mode": view_mode, "count": len(selected), "rendered": text}.
+Refuses:
+- Unknown view_mode, empty records list, or any off-shape record dict with ValueError("OFF_SHAPE_LOG_VIEW: <reason>").
+Tests:
+- test_a4_01_render_log_v2_view_all_four_modes and test_a4_01_render_log_v2_view_rejects_bad_mode_or_record.
+Done means: Summary, Full, Milestones, and Chronological log views render deterministically from validated Log v2 shapes.
+Not checked: None.
+
+### A402: EVALUATE_LOCAL_FIRST_LOGIC_GATE_AND_COUNTER (Chunk A4, Plan Rule R4)
+Function: evaluate_local_first_logic_gate(task_request: dict, rule_table: list, counter_state: dict) -> dict
+Does:
+1. Verifies task_request (task_id, task_type, allow_ai_fallback, person_approved_remote) and rule_table (rule_id, match_type, route in ("LOCAL_SOFTWARE", "AI_SUGGESTION"), handler_name) match fixed shapes.
+2. Evaluates all "LOCAL_SOFTWARE" rules first; selects "AI_SUGGESTION" only if no local rule matches and allow_ai_fallback and person_approved_remote are both True.
+3. Increments local_count or ai_count in a copy of counter_state, computes local_share_pct, and sets meets_90_pct_target (local_share_pct >= 90.0).
+4. Returns the routing decision and updated counter snapshot after verifying the counter totals.
+Refuses:
+- Off-shape requests/rules, or an AI route lacking person approval, returning {"status": "BLOCKED: needs a person", "route": "NONE"}.
+Tests:
+- test_a4_02_evaluate_local_first_logic_gate_prefers_local_and_counts and test_a4_02_evaluate_local_first_logic_gate_blocks_unapproved_ai.
+Done means: The logic gate always tries local rules first and tracks the 90% software / 10% AI counter.
+Not checked: None.
+
+### A403: ENFORCE_W1_TASK_APPROVAL_MODES (Chunk A4, W1)
+Function: check_w1_task_approval_mode(task_spec: dict, owner_approved: bool) -> dict
+Does:
+1. Validates task_spec has exact keys task_id, approval_mode in ALLOWED_W1_APPROVAL_MODES ("Ask first", "Accept edits", "Plan only"), and action_kind in ("read_or_plan", "workspace_edit", "risky_or_external").
+2. Under "Plan only", allows "read_or_plan" and blocks "workspace_edit" and "risky_or_external".
+3. Under "Accept edits", allows "read_or_plan" and "workspace_edit", and blocks "risky_or_external" unless owner_approved is True.
+4. Under "Ask first", allows "read_or_plan" and blocks both "workspace_edit" and "risky_or_external" unless owner_approved is True, returning {"status": "ALLOWED" | "BLOCKED: needs a person", "mode": mode}.
+Refuses:
+- Missing keys, unknown approval_mode, unknown action_kind, or non-boolean owner_approved with ValueError("OFF_SHAPE_W1_MODE: <reason>").
+Tests:
+- test_a4_03_check_w1_task_approval_mode_enforces_all_three_modes and test_a4_03_check_w1_task_approval_mode_rejects_bad_spec.
+Done means: Every task carries a W1 approval mode and risky or unapproved actions wait for a person.
+Not checked: None.
+
+### A404: VERIFY_W4_TRUST_PINS_AND_STATE_FOLDER (Chunk A4, W4)
+Function: verify_w4_trust_pin_and_folder(command_name: str, script_path: str, state_dir: str, pin_manifest: dict) -> dict
+Does:
+1. Validates pin_manifest has exact keys pinned_commands (dict mapping command names to {path, sha256}) and pinned_state_folder ({canonical_path, folder_id_sha256}).
+2. Checks Path(state_dir).resolve() matches pinned_state_folder["canonical_path"] and verifies the .apccs_folder_pin file inside state_dir matches folder_id_sha256, refusing moved or copied state folders.
+3. Checks command_name is in pinned_commands and verifies hashlib.sha256 of script_path equals the pinned sha256.
+4. Returns {"status": "ALLOWED", "command_name": command_name, "verified_sha256": actual_sha}.
+Refuses:
+- Unpinned commands, script hash mismatches, or moved/copied state folders by returning {"status": "BLOCKED", "reason": "W4_TRUST_PIN_FAILED: <detail>"}.
+Tests:
+- test_a4_04_verify_w4_trust_pin_and_folder_allows_pinned and test_a4_04_verify_w4_trust_pin_and_folder_blocks_moved_folder_or_unpinned_cmd.
+Done means: Only SHA-256 pinned commands inside the original pinned state folder may run under W4.
+Not checked: Official Python pathlib and hashlib docs (https://docs.python.org/3/library/index.html, checked 2026-10-09).
+
+### A405: RUN_W8_DRY_RUN_WITH_SECRET_MASKING (Chunk A4, W8)
+Function: run_w8_logic_gate_dry_run(pretend_trigger: dict, rule_table: list, log_file_path: str) -> dict
+Does:
+1. Records the pre-run existence, byte size, and SHA-256 of log_file_path (if present) so the dry run is verified to write zero real log rows.
+2. Runs evaluate_local_first_logic_gate on a deep copy of pretend_trigger and rule_table without touching log_file_path.
+3. Scrubs all string fields in the preview output against SECRET_MASK_PATTERNS, replacing any secret-looking token, key, password, or bearer string with "[REDACTED_SECRET]".
+4. Verifies log_file_path is byte-for-byte unchanged after the preview and returns {"dry_run": True, "log_untouched": True, "preview": masked_preview}.
+Refuses:
+- Off-shape pretend_trigger or rule_table, or any dry run where log_file_path changes, raising ValueError("W8_DRY_RUN_VIOLATION: <reason>").
+Tests:
+- test_a4_05_run_w8_logic_gate_dry_run_masks_secrets_and_writes_no_logs and test_a4_05_run_w8_logic_gate_dry_run_rejects_bad_trigger.
+Done means: Rules can be dry-run with pretend triggers and masked secrets while writing zero real log rows.
+Not checked: None.
+
+End of Batch A4.
