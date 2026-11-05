@@ -1775,3 +1775,636 @@ def score_ten_batch_stability_gate(db_path, run_records_list, owner_yes_flag):
             "consecutive_passes": consecutive, "required_consecutive_passes": 10,
             "owner_yes": owner_yes, "auto_merge_allowed": allowed}
 
+
+# Batch 34 (INST-0166..INST-0170): standard-library worker adapters, a local
+# Git batch loop, a battery-aware poll schedule, verified build archives, and
+# the automation-loop API/card. No GitHub, cloud, or network operation occurs
+# in the local Git controller; its only HTTP adapter is strict loopback.
+import io as _b34_io
+import urllib.error as _b34_urllib_error
+import urllib.request as _b34_urllib_request
+import zipfile as _b34_zipfile
+
+B34_CANARY_LINE = "Canary check: T = W -> compass"
+_B34_DRIVERS = ("cloud_pr", "termux_cli", "local_openweight_http")
+_B34_LOOPBACK = "127.0.0.1"
+_B34_MAX_PAYLOAD_BYTES = 1_048_576
+_B34_MAX_RESPONSE_BYTES = 2_097_152
+_B34_MAX_WORKER_SECONDS = 300
+_B34_MAX_BACKOFF_SECONDS = 300
+_B34_ARCHIVE_NAMES = ("APPCS_MASTER_BUILD.zip", "APCCS_MASTER_BUILD.zip")
+
+PART3_CONTRACT_SPECS[34] = (
+    {"instruction": "INST-0166", "function": "build_worker_driver_registry",
+     "parameters": ["adapters"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0167", "function": "run_local_git_batch_cycle",
+     "parameters": ["repo_dir", "db_path", "vault_dir", "batch_num", "worker_callable"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0168", "function": "compute_worker_poll_schedule",
+     "parameters": ["queue_depth", "active_pr_open", "idle_cycles"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0169", "function": "sync_master_zip_from_verified_merge",
+     "parameters": ["vault_dir", "repo_dir", "checkpoint_num"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0170", "function": "handle_automation_loop_api",
+     "parameters": ["method", "path", "body", "vault_dir"],
+     "min_assertions": 4, "min_negative_tests": 1},
+)
+
+
+class CloudPRWorkerAdapter:
+    """Adapt an explicitly supplied cloud PR worker callable; never calls a network API itself."""
+
+    def __init__(self, worker_callable):
+        if not callable(worker_callable):
+            raise Part3Error("A cloud PR worker callable is required")
+        self.worker_callable = worker_callable
+
+    def run(self, payload):
+        if not isinstance(payload, dict):
+            raise Part3Error("Worker payload must be an object")
+        return self.worker_callable(dict(payload))
+
+
+class TermuxCLIWorkerAdapter:
+    """Run a configured local CLI with argv, never through a shell."""
+
+    def __init__(self, command, timeout=30):
+        if (not isinstance(command, (list, tuple)) or not command or
+                any(not isinstance(token, str) or not token or "\0" in token for token in command)):
+            raise Part3Error("CLI command must be a nonempty list of text arguments")
+        if type(timeout) not in (int, float) or not 0 < timeout <= _B34_MAX_WORKER_SECONDS:
+            raise Part3Error("CLI timeout must be between 0 and 300 seconds")
+        self.command = tuple(command)
+        self.timeout = float(timeout)
+
+    def run(self, payload):
+        if not isinstance(payload, dict):
+            raise Part3Error("Worker payload must be an object")
+        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        if len(raw) > _B34_MAX_PAYLOAD_BYTES:
+            raise Part3Error("Worker payload exceeds 1 MiB")
+        try:
+            result = subprocess.run(self.command, input=raw.decode("utf-8"), text=True,
+                                    capture_output=True, timeout=self.timeout, shell=False, check=False)
+        except (OSError, subprocess.SubprocessError) as error:
+            raise Part3Error("Configured local CLI could not run: " + type(error).__name__) from error
+        return {"source": "TERMUX_CLI_WORKER", "mock": False,
+                "status": "COMPLETED" if result.returncode == 0 else "FAILED",
+                "returncode": result.returncode, "stdout": result.stdout[:_B34_MAX_RESPONSE_BYTES],
+                "stderr": result.stderr[:_B34_MAX_RESPONSE_BYTES]}
+
+
+class LocalOpenWeightHTTPAdapter:
+    """Call Ollama or llama.cpp on 127.0.0.1 only, using their standard JSON routes."""
+
+    def __init__(self, base_url="http://127.0.0.1:11434", model="llama3", protocol="ollama", timeout=30):
+        parts = urlsplit(base_url) if isinstance(base_url, str) else None
+        if (parts is None or parts.scheme != "http" or parts.hostname != _B34_LOOPBACK or
+                parts.port is None or parts.username is not None or parts.password is not None or
+                parts.query or parts.fragment or parts.path not in ("", "/")):
+            raise Part3Error("Local model URL must be plain HTTP on 127.0.0.1 with no path or credentials")
+        if not isinstance(model, str) or not model.strip() or len(model) > 120:
+            raise Part3Error("Local model name must be nonempty text of at most 120 characters")
+        if protocol not in ("ollama", "llama.cpp"):
+            raise Part3Error("Protocol must be 'ollama' or 'llama.cpp'")
+        if type(timeout) not in (int, float) or not 0 < timeout <= _B34_MAX_WORKER_SECONDS:
+            raise Part3Error("HTTP timeout must be between 0 and 300 seconds")
+        self.base_url = "http://127.0.0.1:%d" % parts.port
+        self.model = model.strip()
+        self.protocol = protocol
+        self.timeout = float(timeout)
+
+    def run(self, payload):
+        if not isinstance(payload, dict):
+            raise Part3Error("Worker payload must be an object")
+        prompt = payload.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise Part3Error("Worker payload needs a nonempty prompt")
+        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        if len(raw) > _B34_MAX_PAYLOAD_BYTES:
+            raise Part3Error("Worker payload exceeds 1 MiB")
+        if self.protocol == "ollama":
+            endpoint = "/api/generate"
+            request_body = {"model": self.model, "prompt": prompt, "stream": False}
+        else:
+            endpoint = "/completion"
+            request_body = {"prompt": prompt, "n_predict": 256}
+        request_data = json.dumps(request_body, ensure_ascii=False).encode("utf-8")
+        request = _b34_urllib_request.Request(self.base_url + endpoint, data=request_data,
+                                              headers={"Content-Type": "application/json"}, method="POST")
+
+        class _NoRedirect(_b34_urllib_request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                raise _b34_urllib_error.HTTPError(newurl, code, "redirects are disabled", headers, fp)
+
+        opener = _b34_urllib_request.build_opener(_NoRedirect)
+        try:
+            with opener.open(request, timeout=self.timeout) as response:
+                response_data = response.read(_B34_MAX_RESPONSE_BYTES + 1)
+        except (_b34_urllib_error.URLError, TimeoutError, OSError) as error:
+            raise Part3Error("Local model request failed: " + type(error).__name__) from error
+        if len(response_data) > _B34_MAX_RESPONSE_BYTES:
+            raise Part3Error("Local model response exceeds 2 MiB")
+        try:
+            parsed = json.loads(response_data.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise Part3Error("Local model returned invalid JSON") from error
+        if not isinstance(parsed, dict):
+            raise Part3Error("Local model response must be an object")
+        answer = parsed.get("response") if self.protocol == "ollama" else parsed.get("content")
+        if not isinstance(answer, str):
+            raise Part3Error("Local model response is missing its answer text")
+        return {"source": "LOCAL_HTTP_WORKER", "mock": False, "status": "COMPLETED",
+                "model": self.model, "protocol": self.protocol, "text": answer,
+                "response": parsed}
+
+
+class WorkerDriverRegistry:
+    """Resolve a worker alias to one adapter so plans and gates stay provider-neutral."""
+
+    def __init__(self, adapters=None):
+        self._adapters = {
+            "cloud_pr": CloudPRWorkerAdapter,
+            "termux_cli": TermuxCLIWorkerAdapter,
+            "local_openweight_http": LocalOpenWeightHTTPAdapter,
+            "CloudPRWorkerAdapter": CloudPRWorkerAdapter,
+            "TermuxCLIWorkerAdapter": TermuxCLIWorkerAdapter,
+            "LocalOpenWeightHTTPAdapter": LocalOpenWeightHTTPAdapter,
+        }
+        if adapters is not None:
+            if not isinstance(adapters, dict):
+                raise Part3Error("Adapters must be an object keyed by driver name")
+            for name, adapter in adapters.items():
+                self.register(name, adapter)
+
+    def register(self, name, adapter):
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name):
+            raise Part3Error("Driver name must be a lowercase identifier")
+        if not callable(adapter) and not callable(getattr(adapter, "run", None)):
+            raise Part3Error("Driver adapter must be a factory or expose run(payload)")
+        self._adapters[name] = adapter
+        return {"registered": name, "drivers": self.names()}
+
+    def names(self):
+        return tuple(sorted(self._adapters))
+
+    def run(self, name, payload, **config):
+        if not isinstance(name, str) or name not in self._adapters:
+            raise Part3Error("Unknown worker driver")
+        driver = self._adapters[name]
+        if isinstance(driver, type) or (callable(driver) and not callable(getattr(driver, "run", None))):
+            try:
+                driver = driver(**config)
+            except TypeError as error:
+                raise Part3Error("Worker driver configuration is invalid") from error
+        elif config:
+            raise Part3Error("Configuration is supplied when registering an adapter factory")
+        return driver.run(payload)
+
+
+def build_worker_driver_registry(adapters=None):
+    """Create a provider-neutral registry with the three documented adapters."""
+    return WorkerDriverRegistry(adapters)
+
+
+def compute_worker_poll_schedule(queue_depth, active_pr_open, idle_cycles):
+    """Return bounded exponential backoff, exiting sleep when the queue is empty or paused."""
+    if type(queue_depth) is not int or queue_depth < 0:
+        raise Part3Error("queue_depth must be a nonnegative integer")
+    if type(active_pr_open) is not bool:
+        raise Part3Error("active_pr_open must be a boolean")
+    if type(idle_cycles) is not int or idle_cycles < 0 or idle_cycles > 1_000_000:
+        raise Part3Error("idle_cycles must be an integer from 0 through 1000000")
+    if queue_depth == 0:
+        return {"interval_seconds": 0, "sleep_exit": True, "reason": "QUEUE_EMPTY", "idle_cycles": idle_cycles}
+    if active_pr_open:
+        return {"interval_seconds": 0, "sleep_exit": True, "reason": "ACTIVE_PR_PAUSE", "idle_cycles": idle_cycles}
+    if idle_cycles == 0:
+        interval = 0
+    else:
+        interval = min(_B34_MAX_BACKOFF_SECONDS, 2 ** min(idle_cycles - 1, 9))
+    return {"interval_seconds": interval, "sleep_exit": False, "reason": "READY_TO_POLL",
+            "queue_depth": queue_depth, "idle_cycles": idle_cycles,
+            "maximum_interval_seconds": _B34_MAX_BACKOFF_SECONDS}
+
+
+def _b34_git(root, *args, env=None):
+    try:
+        result = subprocess.run(["git", "-C", str(root), *args], capture_output=True,
+                                text=True, timeout=30, shell=False, env=env)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Part3Error("Local Git command failed: " + type(error).__name__) from error
+    if result.returncode != 0:
+        raise Part3Error("Local Git command failed: " + " ".join(args[:2]))
+    return result.stdout.strip()
+
+
+def _b34_repo_root(repo_dir):
+    if isinstance(repo_dir, bool) or not isinstance(repo_dir, (str, os.PathLike)) or not str(repo_dir).strip():
+        raise Part3Error("A local Git repository path is required")
+    root = Path(repo_dir).absolute()
+    for part in [root] + list(root.parents):
+        if part.is_symlink():
+            raise Part3Error("Local Git repository path cannot contain symlinks")
+    if not root.is_dir() or not (root / ".git").exists():
+        raise Part3Error("Local Git repository is missing")
+    if _b34_git(root, "rev-parse", "--show-toplevel") != str(root):
+        raise Part3Error("Repository path must be its Git worktree root")
+    return root
+
+
+def _b34_next_fencing_token(db_path):
+    token = 1
+    if Path(db_path).is_file():
+        with _b33_sqlite3.connect(str(db_path)) as db:
+            exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='b2c_tokens'").fetchone()
+            if exists:
+                row = db.execute("SELECT max_token FROM b2c_tokens WHERE channel_id='global-stop'").fetchone()
+                if row:
+                    token = row[0] + 1
+    return token
+
+
+def _b34_verify_stop_and_fence(vault, db_path):
+    """Check the owner stop flag and ratchet the shared fence with the vault-bound core."""
+    state_path = Path(vault) / "CURRENT_STATE.json"
+    if state_path.is_symlink() or not state_path.is_file():
+        return {"allowed": False, "status": "BLOCKED", "reason": "CURRENT_STATE_MISSING"}
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {"allowed": False, "status": "BLOCKED", "reason": "CURRENT_STATE_INVALID"}
+    if not isinstance(state, dict):
+        return {"allowed": False, "status": "BLOCKED", "reason": "CURRENT_STATE_INVALID"}
+    stopped = (state.get("owner_stop") is True or state.get("stop") is True or
+               str(state.get("status", "")).upper() == "STOP" or
+               str(state.get("state", "")).upper() == "STOP" or
+               str(state.get("owner_command", "")).upper() == "STOP")
+    if stopped:
+        return {"allowed": False, "status": "BLOCKED", "reason": "OWNER_STOP_ACTIVE"}
+    core = verify_and_import_cp150_modules(vault)["core_module"]
+    token = _b34_next_fencing_token(db_path)
+    try:
+        core.verify_and_advance_fencing_token(db_path, "global-stop", token)
+    except (ValueError, core.StaleFencingToken) as error:
+        return {"allowed": False, "status": "BLOCKED", "reason": "FENCING_TOKEN_REJECTED",
+                "detail": str(error)}
+    return {"allowed": True, "status": "CLEAR", "reason": "STOP_CLEAR_AND_FENCE_ADVANCED",
+            "fencing_token": token}
+
+
+def _b34_porcelain_paths(root):
+    try:
+        result = subprocess.run(["git", "-C", str(root), "status", "--porcelain=v1", "-z"],
+                                capture_output=True, timeout=30, shell=False)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Part3Error("Could not inspect local Git changes: " + type(error).__name__) from error
+    if result.returncode:
+        raise Part3Error("Could not inspect local Git changes")
+    fields = result.stdout.split(b"\0")
+    paths = []
+    for field in fields:
+        if not field:
+            continue
+        if len(field) < 4:
+            raise Part3Error("Local Git returned an invalid status record")
+        status, raw_path = field[:2].decode("ascii", errors="replace"), field[3:]
+        if "R" in status or "C" in status or "D" in status:
+            raise Part3Error("Worker changes may not rename or delete files")
+        try:
+            name = raw_path.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise Part3Error("Worker changed a non-UTF-8 path") from error
+        normalized = _b31_relative_path(name, "Worker change path")
+        if normalized not in {"code/apccs_q1_part3.py", "code/test_apccs_q1_part3.py",
+                              "START_OUR_OWN_SYSTEM.html"}:
+            raise Part3Error("Worker changed a file outside the Batch 34 allowlist")
+        paths.append(normalized)
+    return sorted(set(paths))
+
+
+def run_local_git_batch_cycle(repo_dir, db_path, vault_dir, batch_num, worker_callable):
+    """Run a local-only contract -> worker -> five-gate -> fast-forward cycle.
+
+    The worker callable receives `(repo_dir, branch, batch_num)` and must make
+    its changes in that temporary/local worktree and return a non-mock result.
+    This function never fetches, pushes, calls GitHub, or merges a pull request.
+    """
+    root = _b34_repo_root(repo_dir)
+    vault = _b31_vault_root(vault_dir)
+    db = _b33_db_path(db_path)
+    if root == vault or vault in root.parents or root in vault.parents:
+        raise Part3Error("Repository and vault must be separate folders")
+    if type(batch_num) is not int or batch_num not in PART3_CONTRACT_SPECS:
+        raise Part3Error("batch_num must have a Part 3 test contract")
+    if not callable(worker_callable):
+        raise Part3Error("worker_callable must be callable")
+    if _b34_git(root, "status", "--porcelain"):
+        raise Part3Error("Local repository must be clean before a batch cycle")
+    base_branch = _b34_git(root, "branch", "--show-current")
+    if not base_branch or base_branch.startswith("batch/"):
+        raise Part3Error("Run the local batch cycle from a named base branch")
+    branch = "batch/B%02d" % batch_num
+    existing = subprocess.run(["git", "-C", str(root), "show-ref", "--verify", "--quiet",
+                               "refs/heads/" + branch], capture_output=True, timeout=30, shell=False)
+    if existing.returncode == 0:
+        raise Part3Error("Batch branch already exists")
+    before_dispatch = _b34_verify_stop_and_fence(vault, db)
+    if not before_dispatch["allowed"]:
+        return {"status": "BLOCKED", "stage": "PRE_DISPATCH", "gate": before_dispatch,
+                "branch": None, "merge_commit_sha": None}
+
+    _b34_git(root, "switch", "-c", branch)
+    contract = compile_batch_test_contract(batch_num, list(PART3_CONTRACT_SPECS[batch_num]), root)
+    git_env = dict(os.environ)
+    git_env.update({"GIT_AUTHOR_NAME": "APCCS Local Worker", "GIT_AUTHOR_EMAIL": "apccs@localhost",
+                    "GIT_COMMITTER_NAME": "APCCS Local Worker", "GIT_COMMITTER_EMAIL": "apccs@localhost"})
+    contract_path = Path(contract["path"]).relative_to(root).as_posix()
+    _b34_git(root, "add", "--", contract_path)
+    _b34_git(root, "commit", "-m", "Batch %02d: commit sealed contract" % batch_num, env=git_env)
+
+    before_dispatch = _b34_verify_stop_and_fence(vault, db)
+    if not before_dispatch["allowed"]:
+        return {"status": "BLOCKED", "stage": "PRE_WORKER", "gate": before_dispatch,
+                "branch": branch, "merge_commit_sha": None}
+    try:
+        worker_result = worker_callable(str(root), branch, batch_num)
+    except Exception as error:
+        return {"status": "BLOCKED", "stage": "WORKER", "branch": branch,
+                "reason": "WORKER_EXCEPTION", "detail": type(error).__name__, "merge_commit_sha": None}
+    try:
+        from apccs_status import check_mock_work_guard as status_work_guard
+    except ImportError as error:
+        raise Part3Error("APCCS status guard is unavailable") from error
+    work_guard = status_work_guard(worker_result)
+    if work_guard["allowed"] is not True:
+        return {"status": "BLOCKED", "stage": "WORKER", "branch": branch,
+                "reason": work_guard["reason"], "worker_guard": work_guard, "merge_commit_sha": None}
+    if isinstance(worker_result, dict) and worker_result.get("status") == "FAILED":
+        return {"status": "BLOCKED", "stage": "WORKER", "branch": branch,
+                "reason": "WORKER_REPORTED_FAILURE", "merge_commit_sha": None}
+    changed = _b34_porcelain_paths(root)
+    if not changed:
+        return {"status": "BLOCKED", "stage": "WORKER", "branch": branch,
+                "reason": "WORKER_MADE_NO_ALLOWED_CHANGES", "merge_commit_sha": None}
+    _b34_git(root, "add", "--", *changed)
+    _b34_git(root, "commit", "-m", "Batch %02d: local worker changes" % batch_num, env=git_env)
+    gate = execute_ci_gate_suite(root, "code/apccs_q1_part3.py", "code/test_apccs_q1_part3.py", contract_path)
+    if gate.get("exit_code") != 0 or gate.get("all_green") is not True:
+        return {"status": "BLOCKED", "stage": "FIVE_GATE_CI", "branch": branch,
+                "gate": gate, "merge_commit_sha": None}
+
+    before_merge = _b34_verify_stop_and_fence(vault, db)
+    if not before_merge["allowed"]:
+        return {"status": "BLOCKED", "stage": "PRE_MERGE", "branch": branch,
+                "gate": before_merge, "merge_commit_sha": None}
+    candidate_sha = _b34_git(root, "rev-parse", branch)
+    if _b34_git(root, "rev-parse", base_branch) != _b34_git(root, "rev-parse", "HEAD~2"):
+        return {"status": "BLOCKED", "stage": "BASE_MOVED", "branch": branch, "merge_commit_sha": None}
+    _b34_git(root, "switch", base_branch)
+    _b34_git(root, "merge", "--ff-only", branch)
+    merge_sha = _b34_git(root, "rev-parse", "HEAD")
+    if merge_sha != candidate_sha:
+        raise Part3Error("Local fast-forward did not land on the verified candidate commit")
+    archive = sync_master_zip_from_verified_merge(vault, root, batch_num * 5)
+    return {"status": "MERGED_LOCALLY", "branch": branch, "base_branch": base_branch,
+            "merge_commit_sha": merge_sha, "gate": gate, "archive": archive,
+            "network_used": False, "pull_request_merged": False}
+
+
+def _b34_repo_files(root):
+    raw = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True,
+                         timeout=30, shell=False)
+    if raw.returncode:
+        raise Part3Error("Could not list verified Git files")
+    names = []
+    for item in raw.stdout.split(b"\0"):
+        if not item:
+            continue
+        try:
+            name = _b31_relative_path(item.decode("utf-8"), "Git file path")
+        except UnicodeDecodeError as error:
+            raise Part3Error("Git file path is not UTF-8") from error
+        path = root.joinpath(*name.split("/"))
+        if path.is_symlink() or not path.is_file():
+            raise Part3Error("Verified Git tree contains a non-regular file: " + name)
+        names.append(name)
+    return names
+
+
+def _b34_zip_bytes(members):
+    output = _b34_io.BytesIO()
+    with _b34_zipfile.ZipFile(output, "w", compression=_b34_zipfile.ZIP_DEFLATED) as archive:
+        for name in sorted(members):
+            info = _b34_zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = _b34_zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, members[name])
+    return output.getvalue()
+
+
+def _b34_verify_archive(path):
+    try:
+        with _b34_zipfile.ZipFile(path, "r") as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+    except (_b34_zipfile.BadZipFile, OSError) as error:
+        raise Part3Error("Rebuilt master archive is unreadable") from error
+    lock_raw = files.get(_B32_LOCK_MEMBER)
+    try:
+        lock = json.loads(lock_raw.decode("utf-8")) if lock_raw else None
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Part3Error("Rebuilt master archive has an invalid CP-150 lock") from error
+    expected = lock.get("files_sha256") if isinstance(lock, dict) else None
+    actual = {name: _b31_sha256_bytes(data) for name, data in files.items() if name != _B32_LOCK_MEMBER}
+    if (not isinstance(expected, dict) or lock.get("checkpoint") != "CP-150" or expected != actual or
+            actual.get("code/apccs_core.py") != CP100_CORE_SHA256 or
+            actual.get("code/apccs_q1_part2.py") != CP150_PART2_SHA256):
+        raise Part3Error("Rebuilt master archive did not pass its lock and CP-150 fingerprint checks")
+    return {"members": len(files), "manifest_sha256": _b31_sha256_bytes(lock_raw)}
+
+
+def sync_master_zip_from_verified_merge(vault_dir, repo_dir, checkpoint_num):
+    """Rebuild both master archives from a clean checkout after its five-gate pass."""
+    vault = _b31_vault_root(vault_dir)
+    root = _b34_repo_root(repo_dir)
+    if type(checkpoint_num) is not int or checkpoint_num < 150 or checkpoint_num > 1000 or checkpoint_num % 5:
+        raise Part3Error("checkpoint_num must be a multiple of five from 150 through 1000")
+    if _b34_git(root, "status", "--porcelain"):
+        raise Part3Error("Master archives require a clean, committed Git tree")
+    merge_sha = _b34_git(root, "rev-parse", "HEAD")
+    if not re.fullmatch(r"[0-9a-f]{40,64}", merge_sha):
+        raise Part3Error("Git did not return a valid verified commit id")
+    with tempfile.TemporaryDirectory(prefix="apccs_b34_contract_") as scratch:
+        contract = compile_batch_test_contract(34, list(PART3_CONTRACT_SPECS[34]), scratch)
+        gate = execute_ci_gate_suite(root, "code/apccs_q1_part3.py", "code/test_apccs_q1_part3.py", contract["path"])
+    if gate.get("exit_code") != 0 or gate.get("all_green") is not True:
+        raise Part3Error("Master archive rebuild refused: Batch 34 five-gate result is not GREEN")
+    members = _b32_read_master_build(vault)
+    for name in _b34_repo_files(root):
+        members[name] = root.joinpath(*name.split("/")).read_bytes()
+    if "audit/CP-150_LOCK.json" not in members:
+        raise Part3Error("Master archive has no CP-150 lock to preserve")
+    manifest = {"schema": "apccs.post_merge_build.v1", "checkpoint": checkpoint_num,
+                "verified_commit": merge_sha, "batch": 34,
+                "files_sha256": {name: _b31_sha256_bytes(data) for name, data in sorted(members.items())
+                                 if name != _B32_LOCK_MEMBER}}
+    members["audit/POST_MERGE_BUILD_MANIFEST.json"] = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    lock = json.loads(members[_B32_LOCK_MEMBER].decode("utf-8"))
+    lock["latest_checkpoint"] = checkpoint_num
+    lock["latest_verified_commit"] = merge_sha
+    lock["files_sha256"] = {name: _b31_sha256_bytes(data) for name, data in sorted(members.items())
+                            if name != _B32_LOCK_MEMBER}
+    members[_B32_LOCK_MEMBER] = (json.dumps(lock, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if len(members) > _B32_MAX_MEMBERS or sum(map(len, members.values())) > _B32_MAX_EXPORT_BYTES:
+        raise Part3Error("Rebuilt master archive exceeds the verified size limits")
+    payload = _b34_zip_bytes(members)
+    vault.mkdir(parents=True, exist_ok=True)
+    digests = {}
+    for name in _B34_ARCHIVE_NAMES:
+        archive_path = vault / name
+        if archive_path.is_symlink():
+            raise Part3Error("Refusing to replace a symlink master archive")
+        digests[name] = _b31_write_atomic(archive_path, payload)
+    verified = {name: _b34_verify_archive(vault / name) for name in _B34_ARCHIVE_NAMES}
+    return {"status": "VERIFIED", "checkpoint": checkpoint_num, "commit": merge_sha,
+            "archives": {name: {"sha256": digests[name], **verified[name]} for name in _B34_ARCHIVE_NAMES},
+            "gate": {"status": gate["status"], "canary": gate["canary"]}}
+
+
+_B34_API_PATHS = {
+    "/api/automation/transport": "Worker transport probes and selection",
+    "/api/automation/circuit_breaker": "Per-batch CI attempt and repair state",
+    "/api/automation/stability": "Ten-batch stability and manual-merge status",
+    "/api/automation/local_cycle": "Owner-started local-only batch cycle",
+}
+
+
+def handle_automation_loop_api(method, path, body, vault_dir):
+    """Dispatch the four automation-loop API paths used by the local control card."""
+    root = _b31_vault_root(vault_dir)
+    route = urlsplit(path).path if isinstance(path, str) else None
+    if route not in _B34_API_PATHS:
+        return {"http_status": 404, "body": {"error": "Unknown automation route"}}
+    if not isinstance(method, str):
+        return {"http_status": 405, "body": {"error": "Method not allowed", "allow": ["GET", "POST"]}}
+    if method.upper() == "GET":
+        return {"http_status": 200, "body": {"route": route, "purpose": _B34_API_PATHS[route],
+                                               "methods": ["GET", "POST"], "requires_person_action": True}}
+    if method.upper() != "POST":
+        return {"http_status": 405, "body": {"error": "Method not allowed", "allow": ["GET", "POST"]}}
+    if not isinstance(body, dict):
+        return {"http_status": 400, "body": {"error": "Request body must be a JSON object"}}
+    db_path = root / "state" / "automation_loop.sqlite3"
+    try:
+        if route == "/api/automation/transport":
+            result = record_and_select_worker_transport(db_path, body.get("probe_results_dict"))
+        elif route == "/api/automation/circuit_breaker":
+            result = evaluate_batch_attempt_circuit_breaker(
+                db_path, body.get("batch_id"), body.get("attempt_num"), body.get("ci_passed"),
+                body.get("failure_summary", ""))
+        elif route == "/api/automation/stability":
+            result = score_ten_batch_stability_gate(
+                db_path, body.get("run_records_list"), body.get("owner_yes_flag"))
+        else:
+            if body.get("confirmed") is not True:
+                return {"http_status": 409, "body": {"error": "Explicit confirmed=true is required",
+                                                        "status": "WAITING_FOR_PERSON"}}
+            repo_dir = body.get("repo_dir")
+            batch_num = body.get("batch_num")
+            driver_name = body.get("worker_driver")
+            config = body.get("worker_config", {})
+            if not isinstance(config, dict) or len(config) > 12:
+                raise Part3Error("worker_config must be a small object")
+            registry = WorkerDriverRegistry()
+
+            def run_worker(worktree, branch, number):
+                payload = {"repo_dir": worktree, "branch": branch, "batch_num": number}
+                return registry.run(driver_name, payload, **config)
+
+            result = run_local_git_batch_cycle(repo_dir, db_path, root, batch_num, run_worker)
+        return {"http_status": 200 if result.get("status") not in ("BLOCKED",) else 409, "body": result}
+    except Part3Error as error:
+        return {"http_status": 400, "body": {"error": str(error)}}
+
+
+_B34_UI_PANEL = r'''<section id="automation-loop-worker-switcher"><h2>Automation Loop &amp; Worker Switcher</h2>
+<p>Choose a route, inspect status, and explicitly confirm any local batch run. The local cycle does not contact GitHub or merge a pull request.</p>
+<label for="automation-request">Request JSON</label><textarea id="automation-request" rows="9">{"probe_results_dict":{"GH_PR_AGENT":"FAIL","TERMUX_CLI_WORKER":"FAIL","LOCAL_HTTP_WORKER":"FAIL"}}</textarea>
+<div><button data-route="/api/automation/transport">Probe transport</button>
+<button data-route="/api/automation/circuit_breaker">Check circuit breaker</button>
+<button data-route="/api/automation/stability">Check stability</button>
+<button data-route="/api/automation/local_cycle">Run local cycle</button></div>
+<pre id="automation-loop-result" aria-live="polite"></pre></section>
+<script>
+document.querySelectorAll('#automation-loop-worker-switcher button[data-route]').forEach(button=>button.onclick=async()=>{const out=document.getElementById('automation-loop-result');try{const payload=JSON.parse(document.getElementById('automation-request').value);const response=await fetch(button.dataset.route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();out.textContent=JSON.stringify(result,null,2);}catch(error){out.textContent='Automation request failed: '+error.message;}});
+</script>'''
+
+
+def generate_automation_loop_control_panel_html(output_path, vault_dir=None):
+    """Regenerate the existing local page and append the four-route automation card."""
+    if isinstance(output_path, bool) or not isinstance(output_path, (str, os.PathLike)) or not str(output_path).strip():
+        raise Part3Error("output_path must be a local path")
+    target = Path(output_path).absolute()
+    if target.is_symlink():
+        raise Part3Error("Refusing to write through a symlink")
+    result = generate_part3_control_panel_html(target, vault_dir)
+    html = target.read_text(encoding="utf-8")
+    if 'id="automation-loop-worker-switcher"' not in html:
+        if html.count("</body>") != 1:
+            raise Part3Error("Control panel page has no single body terminator")
+        html = html.replace("</body>", _B34_UI_PANEL + "</body>")
+        digest = _b31_write_atomic(target, html)
+    else:
+        digest = _b31_sha256_bytes(html.encode("utf-8"))
+    return {"path": str(target), "bytes": target.stat().st_size, "sha256": digest,
+            "base_panel": result, "automation_routes": list(_B34_API_PATHS)}
+
+
+def create_automation_loop_local_server(host="127.0.0.1", port=8501, vault_dir=None, html_path=None):
+    """Extend the existing loopback server with the four automation-loop endpoints."""
+    if host != _B34_LOOPBACK:
+        raise Part3Error("Automation control server must bind to 127.0.0.1")
+    root = _b31_vault_root(vault_dir or os.environ.get("APCCS_VAULT_ROOT", Path(__file__).resolve().parents[1]))
+    page = Path(html_path) if html_path is not None else root / _B32_UI_PAGE
+    if not page.is_file():
+        generate_automation_loop_control_panel_html(page, root)
+    else:
+        generate_automation_loop_control_panel_html(page, root)
+    server = create_part3_local_server(host, port, root, page)
+    base = server.RequestHandlerClass
+
+    class AutomationLoopHandler(base):
+        def _automation_route(self, method):
+            route = urlsplit(self.path).path
+            if route not in _B34_API_PATHS:
+                return False
+            if method == "GET":
+                result = handle_automation_loop_api(method, self.path, {}, root)
+            else:
+                try:
+                    raw_length = self.headers.get("Content-Length", "0")
+                    if not raw_length.isdigit() or int(raw_length) > _B34_MAX_PAYLOAD_BYTES:
+                        self._send(413, "application/json; charset=utf-8", json.dumps({"error": "Request too large"}))
+                        return True
+                    raw = self.rfile.read(int(raw_length))
+                    payload = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+                    self._send(400, "application/json; charset=utf-8", json.dumps({"error": "Invalid JSON body"}))
+                    return True
+                result = handle_automation_loop_api(method, self.path, payload, root)
+            self._send(result["http_status"], "application/json; charset=utf-8", json.dumps(result["body"]))
+            return True
+
+        def do_GET(self):
+            if not self._automation_route("GET"):
+                super().do_GET()
+
+        def do_POST(self):
+            if not self._automation_route("POST"):
+                super().do_POST()
+
+    server.RequestHandlerClass = AutomationLoopHandler
+    return server
+
+

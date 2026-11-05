@@ -719,5 +719,249 @@ class Part3Batch33Tests(unittest.TestCase):
             part3.score_ten_batch_stability_gate(self.db, {}, "YES")
 
 
+class ApccsBatch34Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        print(part3.B34_CANARY_LINE, flush=True)
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="apccs_part3_b34_")
+        self.root = Path(self.temp.name)
+        self.vault = self.root / "vault"
+        self.vault.mkdir()
+        self.db = self.vault / "state" / "automation.sqlite3"
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def _git_repo(self):
+        import subprocess
+        repo = self.root / "repo"
+        repo.mkdir()
+        (repo / "code").mkdir()
+        (repo / "code/apccs_q1_part3.py").write_text("# initial\n", encoding="utf-8")
+        (repo / "code/test_apccs_q1_part3.py").write_text("# tests\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.name", "APCCS test"], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.email", "apccs-test@localhost"], check=True)
+        subprocess.run(["git", "-C", str(repo), "add", "--", "code"], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-m", "fixture"], check=True, capture_output=True)
+        return repo
+
+    def test_166_registry_switches_between_real_adapters(self):
+        import sys
+        from unittest.mock import patch
+        registry = part3.build_worker_driver_registry()
+        seen = []
+        registry.register("test_cloud", part3.CloudPRWorkerAdapter(lambda payload: seen.append(payload) or
+                                                                       {"mock": False, "source": "CLOUD_PR"}))
+        result = registry.run("test_cloud", {"task": "made-up"})
+        self.assertEqual(result["source"], "CLOUD_PR")
+        self.assertEqual(seen, [{"task": "made-up"}])
+        cli = part3.TermuxCLIWorkerAdapter([sys.executable, "-c", "import sys; print(sys.stdin.read())"])
+        cli_result = cli.run({"task": "local"})
+        self.assertEqual(cli_result["status"], "COMPLETED")
+        self.assertIn('"task": "local"', cli_result["stdout"])
+        with patch("apccs_q1_part3._b34_urllib_request.urlopen") as unused:
+            self.assertEqual(registry.names(), tuple(sorted(registry.names())))
+            self.assertFalse(unused.called)
+
+    def test_166_local_http_adapter_uses_loopback_and_rejects_bad_configuration(self):
+        import http.server
+        import threading
+        import socket
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        received = []
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers["Content-Length"])
+                received.append(json.loads(self.rfile.read(length).decode("utf-8")))
+                body = json.dumps({"response": "local answer"}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *args):
+                pass
+        server = http.server.HTTPServer(("127.0.0.1", port), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            adapter = part3.LocalOpenWeightHTTPAdapter("http://127.0.0.1:%d" % port, "test-model", timeout=2)
+            result = adapter.run({"prompt": "made-up question"})
+            self.assertEqual(result["text"], "local answer")
+            self.assertEqual(received[0]["model"], "test-model")
+            self.assertEqual(received[0]["stream"], False)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+        for url in ("https://127.0.0.1:11434", "http://example.invalid:11434", "http://127.0.0.1:11434/path"):
+            with self.assertRaises(part3.Part3Error):
+                part3.LocalOpenWeightHTTPAdapter(url)
+        with self.assertRaises(part3.Part3Error):
+            part3.LocalOpenWeightHTTPAdapter().run({"prompt": ""})
+        with self.assertRaises(part3.Part3Error):
+            part3.TermuxCLIWorkerAdapter(["echo", "ok"], timeout=0)
+
+    def test_167_local_cycle_commits_contract_runs_gates_and_fast_forwards(self):
+        import subprocess
+        from unittest.mock import patch
+        repo = self._git_repo()
+        (self.vault / "CURRENT_STATE.json").write_text(json.dumps({"status": "RUNNING"}), encoding="utf-8")
+        def worker(worktree, branch, batch_num):
+            self.assertEqual(branch, "batch/B34")
+            self.assertEqual(batch_num, 34)
+            Path(worktree, "code/apccs_q1_part3.py").write_text("# Batch 34 code\n", encoding="utf-8")
+            Path(worktree, "code/test_apccs_q1_part3.py").write_text("# Batch 34 tests\n", encoding="utf-8")
+            return {"mock": False, "source": "LOCAL_TEST_WORKER"}
+        green = {"exit_code": 0, "all_green": True, "status": "GREEN", "canary": {"found": True}}
+        with patch.object(part3, "execute_ci_gate_suite", return_value=green), \
+             patch.object(part3, "sync_master_zip_from_verified_merge", return_value={"status": "VERIFIED"}):
+            result = part3.run_local_git_batch_cycle(repo, self.db, self.vault, 34, worker)
+        self.assertEqual(result["status"], "MERGED_LOCALLY", result)
+        self.assertFalse(result["pull_request_merged"])
+        self.assertEqual(subprocess.run(["git", "-C", str(repo), "branch", "--show-current"],
+                                        capture_output=True, text=True, check=True).stdout.strip(), "main")
+        self.assertIn("Batch 34 code", (repo / "code/apccs_q1_part3.py").read_text(encoding="utf-8"))
+        self.assertTrue((repo / "audit/contracts/BATCH_B34_CONTRACT.json").is_file())
+
+    def test_167_local_cycle_fails_closed_for_mock_work_and_bad_repository(self):
+        from unittest.mock import patch
+        repo = self._git_repo()
+        (self.vault / "CURRENT_STATE.json").write_text(json.dumps({"owner_command": "STOP"}), encoding="utf-8")
+        result = part3.run_local_git_batch_cycle(
+            repo, self.db, self.vault, 34, lambda *args: {"mock": False, "source": "unused"})
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["stage"], "PRE_DISPATCH")
+        with self.assertRaises(part3.Part3Error):
+            part3.run_local_git_batch_cycle(self.root / "missing", self.db, self.vault, 34, lambda *args: {})
+        (self.vault / "CURRENT_STATE.json").write_text(json.dumps({"status": "RUNNING"}), encoding="utf-8")
+        def mock_worker(worktree, branch, batch_num):
+            Path(worktree, "code/apccs_q1_part3.py").write_text("# mock\n", encoding="utf-8")
+            return {"mock": True, "source": "MOCK"}
+        with patch.object(part3, "execute_ci_gate_suite") as gate:
+            result = part3.run_local_git_batch_cycle(repo, self.db, self.vault, 34, mock_worker)
+        self.assertEqual(result["reason"], "MOCK_WORK_BLOCKED")
+        self.assertFalse(gate.called)
+
+    def test_168_poll_schedule_exponentially_backs_off_and_exits_when_paused(self):
+        first = part3.compute_worker_poll_schedule(2, False, 1)
+        later = part3.compute_worker_poll_schedule(2, False, 4)
+        capped = part3.compute_worker_poll_schedule(2, False, 100)
+        empty = part3.compute_worker_poll_schedule(0, False, 10)
+        paused = part3.compute_worker_poll_schedule(2, True, 10)
+        self.assertEqual(first["interval_seconds"], 1)
+        self.assertEqual(later["interval_seconds"], 8)
+        self.assertEqual(capped["interval_seconds"], 300)
+        self.assertEqual(empty["reason"], "QUEUE_EMPTY")
+        self.assertTrue(empty["sleep_exit"])
+        self.assertEqual(paused["reason"], "ACTIVE_PR_PAUSE")
+        self.assertTrue(paused["sleep_exit"])
+
+    def test_168_poll_schedule_rejects_invalid_counts(self):
+        for args in ((-1, False, 0), (1, 0, 0), (1, False, -1), (True, False, 1)):
+            with self.assertRaises(part3.Part3Error):
+                part3.compute_worker_poll_schedule(*args)
+
+    def test_169_rebuilds_and_verifies_both_master_archives_after_green_gate(self):
+        import subprocess
+        import zipfile
+        from unittest.mock import patch
+        repo = self._git_repo()
+        (repo / "README.md").write_text("Batch 34 package fixture\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "--", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-m", "fixture files"], check=True, capture_output=True)
+        core = (CODE_DIR / "apccs_core.py").read_bytes()
+        part2 = (CODE_DIR / "apccs_q1_part2.py").read_bytes()
+        base = {"code/apccs_core.py": core, "code/apccs_q1_part2.py": part2}
+        lock = {"checkpoint": "CP-150", "files_sha256": {name: hashlib.sha256(data).hexdigest()
+                                                          for name, data in base.items()}}
+        base["audit/CP-150_LOCK.json"] = (json.dumps(lock, sort_keys=True) + "\n").encode("utf-8")
+        with zipfile.ZipFile(self.vault / "APCCS_MASTER_BUILD.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, data in base.items():
+                archive.writestr(name, data)
+        green = {"exit_code": 0, "all_green": True, "status": "GREEN", "canary": {"found": True}}
+        with patch.object(part3, "execute_ci_gate_suite", return_value=green):
+            result = part3.sync_master_zip_from_verified_merge(self.vault, repo, 170)
+        self.assertEqual(result["status"], "VERIFIED")
+        self.assertEqual(set(result["archives"]), {"APPCS_MASTER_BUILD.zip", "APCCS_MASTER_BUILD.zip"})
+        self.assertEqual((self.vault / "APPCS_MASTER_BUILD.zip").read_bytes(),
+                         (self.vault / "APCCS_MASTER_BUILD.zip").read_bytes())
+        with zipfile.ZipFile(self.vault / "APCCS_MASTER_BUILD.zip") as archive:
+            manifest = json.loads(archive.read("audit/POST_MERGE_BUILD_MANIFEST.json"))
+            self.assertEqual(manifest["checkpoint"], 170)
+            self.assertEqual(manifest["verified_commit"], result["commit"])
+            self.assertEqual(archive.read("README.md"), b"Batch 34 package fixture\n")
+
+    def test_169_archive_rebuild_refuses_bad_checkpoint_or_unverified_gate(self):
+        import subprocess
+        from unittest.mock import patch
+        repo = self._git_repo()
+        with self.assertRaises(part3.Part3Error):
+            part3.sync_master_zip_from_verified_merge(self.vault, repo, 151)
+        red = {"exit_code": 1, "all_green": False, "status": "RED"}
+        with patch.object(part3, "execute_ci_gate_suite", return_value=red):
+            with self.assertRaises(part3.Part3Error):
+                part3.sync_master_zip_from_verified_merge(self.vault, repo, 170)
+
+    def test_170_api_routes_and_control_card_are_connected(self):
+        transport = part3.handle_automation_loop_api("POST", "/api/automation/transport", {
+            "probe_results_dict": {"GH_PR_AGENT": "FAIL", "TERMUX_CLI_WORKER": "PASS",
+                                    "LOCAL_HTTP_WORKER": "FAIL"}}, self.vault)
+        self.assertEqual(transport["http_status"], 200)
+        self.assertEqual(transport["body"]["active_transport"], "TERMUX_CLI_WORKER")
+        preview = part3.handle_automation_loop_api("GET", "/api/automation/local_cycle", {}, self.vault)
+        self.assertEqual(preview["http_status"], 200)
+        self.assertTrue(preview["body"]["requires_person_action"])
+        blocked = part3.handle_automation_loop_api("POST", "/api/automation/local_cycle", {"confirmed": False}, self.vault)
+        self.assertEqual(blocked["http_status"], 409)
+        page = self.root / "START_OUR_OWN_SYSTEM.html"
+        result = part3.generate_automation_loop_control_panel_html(page, self.vault)
+        text = page.read_text(encoding="utf-8")
+        self.assertIn("id=\"automation-loop-worker-switcher\"", text)
+        for route in part3._B34_API_PATHS:
+            self.assertIn(route, text)
+        self.assertEqual(set(result["automation_routes"]), set(part3._B34_API_PATHS))
+
+    def test_170_api_refuses_unknown_routes_methods_and_bad_payloads(self):
+        unknown = part3.handle_automation_loop_api("GET", "/api/automation/unknown", {}, self.vault)
+        method = part3.handle_automation_loop_api("DELETE", "/api/automation/transport", {}, self.vault)
+        bad = part3.handle_automation_loop_api("POST", "/api/automation/transport", [], self.vault)
+        self.assertEqual(unknown["http_status"], 404)
+        self.assertEqual(method["http_status"], 405)
+        self.assertEqual(bad["http_status"], 400)
+
+    def test_170_local_server_exposes_automation_api_on_loopback(self):
+        import http.client
+        import socket
+        import threading
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        page = self.root / "START_OUR_OWN_SYSTEM.html"
+        server = part3.create_automation_loop_local_server("127.0.0.1", port, self.vault, page)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+            connection.request("GET", "/api/automation/transport")
+            response = connection.getresponse()
+            data = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.status, 200)
+            self.assertEqual(data["route"], "/api/automation/transport")
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+        with self.assertRaises(part3.Part3Error):
+            part3.create_automation_loop_local_server("0.0.0.0", port, self.vault, page)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
