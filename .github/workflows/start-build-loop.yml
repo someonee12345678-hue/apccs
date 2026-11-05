@@ -3,6 +3,7 @@
 # Owner-approved on 2026-11-04 at 18:36 America/Vancouver ("yes server"), log Entry 0217.
 # The key lives only in the repository secret BUILD_LOOP_TOKEN, which only the owner sets.
 # This file never prints the key, and it sends nothing but one line of text.
+# If the key is missing, the run fails (red) so the owner can see it. Changed 2026-11-04, log Entry 0232.
 name: Start build loop
 
 on:
@@ -28,8 +29,8 @@ jobs:
           URL: https://api.anthropic.com/v1/claude_code/routines/trig_01WBVCX7NBQNYMU8zFdiKjMk/fire
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "BUILD_LOOP_TOKEN is not set yet, so nothing was started."
-            exit 0
+            echo "BUILD_LOOP_TOKEN is missing, so the build loop was NOT started. Save the key as an Actions secret named BUILD_LOOP_TOKEN."
+            exit 1
           fi
           code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL" \
             -H "Authorization: Bearer $TOKEN" \
