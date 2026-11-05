@@ -1,0 +1,40 @@
+# Starts "UCLRCDE build loop1" the moment a new batch is added to the plan,
+# so builds follow one after another without anyone tapping Run now.
+# Owner-approved on 2026-11-04 at 18:36 America/Vancouver ("yes server"), log Entry 0217.
+# The key lives only in the repository secret BUILD_LOOP_TOKEN, which only the owner sets.
+# This file never prints the key, and it sends nothing but one line of text.
+name: Start build loop
+
+on:
+  push:
+    branches: [main]
+    paths: ["plan/QUEUE.md"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: start-build-loop
+  cancel-in-progress: false
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Start UCLRCDE build loop1
+        env:
+          TOKEN: ${{ secrets.BUILD_LOOP_TOKEN }}
+          URL: https://api.anthropic.com/v1/claude_code/routines/trig_01WBVCX7NBQNYMU8zFdiKjMk/fire
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "BUILD_LOOP_TOKEN is not set yet, so nothing was started."
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "anthropic-version: 2026-10-21" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"Started by the apccs plan update ${GITHUB_SHA}.\"}")
+          echo "Build loop answered with HTTP $code."
+          if [ "$code" != "200" ]; then exit 1; fi
