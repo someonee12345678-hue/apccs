@@ -2844,3 +2844,270 @@ PART3_CONTRACT_SPECS[37] = (
 
 
 
+# Batch 38 (INST-0186..INST-0190): clipboard packet guard, deterministic
+# capability routing, cross-tab sequence fences, safe starter exports and API/UI.
+import sqlite3 as _b38_sqlite3
+import zipfile as _b38_zipfile
+
+B38_CANARY_LINE = "Canary check: T = Z -> anvil"
+_B38_API_PATHS = {
+    "/api/packet/verify": "Check the packet length, canary header and end marker",
+    "/api/brain/route": "Choose one of the three specified capability tiers",
+    "/api/tabs/sync_envelope": "Allocate a monotonic project sequence for tab synchronization",
+    "/api/export/edition": "Create a synthetic personal or clean factory starter ZIP",
+}
+_B38_MAX_REQUEST_BYTES = 1_048_576
+
+
+def verify_handoff_packet_integrity(packet_text, max_chars=1500):
+    """INST-0186: validate a handoff packet before it is dispatched."""
+    if not isinstance(packet_text, str):
+        raise Part3Error("packet_text must be a string")
+    if type(max_chars) is not int or max_chars < 1:
+        raise Part3Error("max_chars must be a positive integer")
+    diagnostics = []
+    char_count = len(packet_text)
+    if char_count > max_chars:
+        diagnostics.append("PACKET_TOO_LONG: %d characters exceeds maximum %d" % (char_count, max_chars))
+    lines = packet_text.splitlines()
+    if not any(line.startswith("Canary check:") for line in lines):
+        diagnostics.append("CANARY_HEADER_MISSING: no line starts with 'Canary check:'")
+    if not lines or lines[-1].strip() != "=== END_OF_PACKET ===":
+        diagnostics.append("END_MARKER_MISSING: final line must be '=== END_OF_PACKET ==='")
+    return {"valid": not diagnostics, "status": "PASS" if not diagnostics else "BLOCKED",
+            "char_count": char_count, "max_chars": max_chars,
+            "diagnostics": diagnostics, "dispatch_allowed": not diagnostics}
+
+
+def route_task_by_brain_tier(task_type, payload_size, local_npu_available, offline_mode):
+    """INST-0187: select a deterministic local or queued route from capabilities."""
+    if not isinstance(task_type, str) or not task_type.strip():
+        raise Part3Error("task_type must be a nonempty string")
+    if type(payload_size) is not int or payload_size < 0:
+        raise Part3Error("payload_size must be a nonnegative integer")
+    if type(local_npu_available) is not bool or type(offline_mode) is not bool:
+        raise Part3Error("local_npu_available and offline_mode must be booleans")
+    if local_npu_available:
+        tier, route, engine = 1, "Browser NPU", "window.LanguageModel"
+        reason = "A local browser NPU is available."
+    elif offline_mode:
+        tier, route, engine = 2, "Deterministic Local Python/SQLite FTS5", "local_python_sqlite_fts5"
+        reason = "Offline mode requires deterministic local processing; battery impact is 0%."
+    else:
+        tier, route, engine = 3, "Batch Worker / PR Queue", "batch_worker_pr_queue"
+        reason = "No local NPU is available and offline mode is off."
+    return {"status": "ROUTED", "tier": tier, "route": route, "engine": engine, "task_type": task_type.strip(),
+            "payload_size": payload_size, "offline_mode": offline_mode,
+            "local_npu_available": local_npu_available,
+            "battery_percent": 0 if tier == 2 else None, "reason": reason}
+
+
+def build_cross_tab_sync_envelope(db_path, project_id, tab_id):
+    """INST-0188: allocate an atomic sequence fence for one project tab update."""
+    path = _b33_db_path(db_path)
+    for value, label in ((project_id, "project_id"), (tab_id, "tab_id")):
+        if not isinstance(value, str) or not value.strip() or len(value) > 128:
+            raise Part3Error(label + " must be a nonempty string of at most 128 characters")
+    try:
+        with _b38_sqlite3.connect(path, timeout=10) as db:
+            db.execute("CREATE TABLE IF NOT EXISTS b38_project_sequences ("
+                       "project_id TEXT PRIMARY KEY, sequence INTEGER NOT NULL CHECK(sequence >= 0))")
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT sequence FROM b38_project_sequences WHERE project_id = ?",
+                             (project_id,)).fetchone()
+            sequence = (row[0] if row else 0) + 1
+            db.execute("INSERT INTO b38_project_sequences(project_id, sequence) VALUES (?, ?) "
+                       "ON CONFLICT(project_id) DO UPDATE SET sequence = excluded.sequence",
+                       (project_id, sequence))
+            db.commit()
+    except _b38_sqlite3.Error as error:
+        raise Part3Error("Could not allocate cross-tab sequence fence") from error
+    payload = {"schema": "apccs.cross_tab_sync.v1", "project_id": project_id,
+               "tab_id": tab_id, "sequence": sequence}
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return {"status": "READY", **payload, "json": encoded, "sha256": _b31_sha256_bytes(encoded.encode("utf-8")),
+            "broadcast_channel": "apccs:" + project_id}
+
+
+def _b38_starter_members(edition):
+    if edition == "PERSONAL":
+        profile = {"edition": "PERSONAL", "pseudonym": "Donald Duck", "synthetic_data": True}
+        readme = "APCCS Personal Edition starter. Fictional sample identity: Donald Duck.\n"
+        recover = "# Recovery\n\nSample project: Donald Duck (fictional).\n"
+    else:
+        profile = {"edition": "FACTORY", "pseudonym": "", "synthetic_data": True}
+        readme = "APCCS Clean Factory Template Edition. Replace bracketed placeholders locally.\n"
+        recover = "# Recovery\n\nProject: [PROJECT NAME]\nStatus: [CURRENT STATE]\n"
+    files = {"README.txt": readme.encode("utf-8"),
+             "starter/profile.json": json.dumps(profile, sort_keys=True, indent=2).encode("utf-8"),
+             "starter/RECOVER.md": recover.encode("utf-8")}
+    manifest = {"schema": "apccs.portable_starter.v1", "edition": edition,
+                "members": sorted(files)}
+    files["manifest.json"] = json.dumps(manifest, sort_keys=True, indent=2).encode("utf-8")
+    return files
+
+
+def export_portable_starter_bundle(vault_dir, edition="PERSONAL"):
+    """INST-0189: write a deterministic starter ZIP without copying vault contents."""
+    vault = _b31_vault_root(vault_dir)
+    if not isinstance(edition, str) or edition.upper() not in {"PERSONAL", "FACTORY"}:
+        raise Part3Error("edition must be PERSONAL or FACTORY")
+    edition = edition.upper()
+    members = _b38_starter_members(edition)
+    archive_bytes = _b34_zip_bytes(members)
+    exports = vault / "exports"
+    exports.mkdir(parents=True, exist_ok=True)
+    if exports.is_symlink():
+        raise Part3Error("Starter export directory cannot be a symlink")
+    target = exports / ("APCCS_STARTER_%s.zip" % edition)
+    _b31_write_atomic(target, archive_bytes)
+    try:
+        with _b38_zipfile.ZipFile(target, "r") as archive:
+            bad_member = archive.testzip()
+            names = sorted(archive.namelist())
+            actual = {name: archive.read(name) for name in names}
+    except (_b38_zipfile.BadZipFile, OSError) as error:
+        raise Part3Error("Starter ZIP failed integrity verification") from error
+    if bad_member or set(actual) != set(members):
+        raise Part3Error("Starter ZIP member verification failed")
+    for name, raw in members.items():
+        if actual.get(name) != raw:
+            raise Part3Error("Starter ZIP content hash mismatch: " + name)
+    core = verify_and_import_cp150_modules(vault)["core_module"]
+    privacy = core.verify_owner_privacy_mask(target)
+    expected_issue = ["PSEUDONYM_MISSING"] if edition == "FACTORY" else []
+    if sorted(privacy.get("issues", [])) != expected_issue:
+        raise Part3Error("Starter ZIP privacy scan found unexpected personal data")
+    verification = {"status": "GREEN", "zip_integrity": "PASS", "member_hashes": "PASS",
+                    "privacy_scan": "PASS", "privacy_scan_issues": expected_issue,
+                    "method": "INST-0085 owner privacy scanner plus INST-0091 ZIP integrity checks"}
+    return {"status": "READY", "edition": edition, "path": str(target),
+            "sha256": _b31_sha256_bytes(archive_bytes), "members": names,
+            "zero_personal_data": True, "verification": verification,
+            "copied_from_vault": False}
+
+
+def handle_batch38_api(method, path, body, vault_dir):
+    """Dispatch the four Batch 38 APIs; POST performs the requested operation."""
+    vault = _b31_vault_root(vault_dir)
+    route = urlsplit(path).path if isinstance(path, str) else None
+    if route not in _B38_API_PATHS:
+        return {"http_status": 404, "body": {"error": "Unknown Batch 38 route"}}
+    if not isinstance(method, str) or method.upper() not in {"GET", "POST"}:
+        return {"http_status": 405, "body": {"error": "Method not allowed", "allow": ["GET", "POST"]}}
+    if method.upper() == "GET":
+        return {"http_status": 200, "body": {"route": route, "purpose": _B38_API_PATHS[route],
+                                                 "methods": ["GET", "POST"]}}
+    if not isinstance(body, dict):
+        return {"http_status": 400, "body": {"error": "Request body must be a JSON object"}}
+    try:
+        if route == "/api/packet/verify":
+            result = verify_handoff_packet_integrity(body.get("packet_text"), body.get("max_chars", 1500))
+        elif route == "/api/brain/route":
+            result = route_task_by_brain_tier(body.get("task_type"), body.get("payload_size"),
+                                              body.get("local_npu_available"), body.get("offline_mode"))
+        elif route == "/api/tabs/sync_envelope":
+            result = build_cross_tab_sync_envelope(body.get("db_path"), body.get("project_id"), body.get("tab_id"))
+        else:
+            result = export_portable_starter_bundle(vault, body.get("edition", "PERSONAL"))
+        return {"http_status": 200, "body": result}
+    except (Part3Error, OSError) as error:
+        return {"http_status": 400, "body": {"error": str(error)}}
+
+
+_B38_UI_PANEL = r'''<section id="packet-brain-sync-export"><h2>Packet Guard, Capability Router &amp; Starter Export</h2>
+<p>Packet verification runs before dispatch. Tier 2 is local and reports 0% battery impact. Starter exports contain generated examples only.</p>
+<label for="b38-packet">Handoff packet</label><textarea id="b38-packet" rows="4">Canary check: T = Z -&gt; anvil
+=== END_OF_PACKET ===</textarea>
+<button data-b38-route="/api/packet/verify">Verify packet</button>
+<label for="b38-task">Task type</label><input id="b38-task" value="synthetic_demo">
+<label><input id="b38-npu" type="checkbox"> Local browser NPU available</label>
+<label><input id="b38-offline" type="checkbox"> Offline mode</label>
+<button data-b38-route="/api/brain/route">Choose route</button>
+<label for="b38-project">Project ID</label><input id="b38-project" value="sample-project">
+<label for="b38-tab">Tab ID</label><input id="b38-tab" value="tab-one">
+<button data-b38-route="/api/tabs/sync_envelope">Create sync envelope</button>
+<label for="b38-edition">Starter edition</label><select id="b38-edition"><option>PERSONAL</option><option>FACTORY</option></select>
+<button data-b38-route="/api/export/edition">Export starter ZIP</button><pre id="b38-result" aria-live="polite"></pre></section>
+<script>
+document.querySelectorAll('#packet-brain-sync-export button[data-b38-route]').forEach(button=>button.onclick=async()=>{const route=button.dataset.b38Route;let payload={};if(route==='/api/packet/verify')payload={packet_text:document.getElementById('b38-packet').value};if(route==='/api/brain/route')payload={task_type:document.getElementById('b38-task').value,payload_size:0,local_npu_available:document.getElementById('b38-npu').checked,offline_mode:document.getElementById('b38-offline').checked};if(route==='/api/tabs/sync_envelope')payload={project_id:document.getElementById('b38-project').value,tab_id:document.getElementById('b38-tab').value};if(route==='/api/export/edition')payload={edition:document.getElementById('b38-edition').value};try{const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});document.getElementById('b38-result').textContent=JSON.stringify(await response.json(),null,2);}catch(error){document.getElementById('b38-result').textContent='Request failed: '+error.message;}});
+</script>'''
+
+
+def generate_batch38_control_panel_html(output_path, vault_dir=None):
+    """Regenerate the APCCS page and append the four-route Batch 38 panel."""
+    result = generate_shadow_sandbox_control_panel_html(output_path, vault_dir)
+    target = Path(result["path"])
+    html = target.read_text(encoding="utf-8")
+    if 'id="packet-brain-sync-export"' not in html:
+        if html.count("</body>") != 1:
+            raise Part3Error("Control panel page has no single body terminator")
+        html = html.replace("</body>", _B38_UI_PANEL + "</body>")
+        digest = _b31_write_atomic(target, html)
+    else:
+        digest = _b31_sha256_bytes(html.encode("utf-8"))
+    return {"path": str(target), "bytes": target.stat().st_size, "sha256": digest,
+            "base_panel": result, "batch38_routes": list(_B38_API_PATHS)}
+
+
+def create_batch38_local_server(host="127.0.0.1", port=8501, vault_dir=None, html_path=None):
+    """Extend the shadow-sandbox loopback server with the Batch 38 endpoints."""
+    if host != "127.0.0.1":
+        raise Part3Error("Batch 38 server must bind to 127.0.0.1")
+    root = _b31_vault_root(vault_dir or os.environ.get("APCCS_VAULT_ROOT", Path(__file__).resolve().parents[1]))
+    page = Path(html_path) if html_path is not None else root / _B32_UI_PAGE
+    generate_batch38_control_panel_html(page, root)
+    server = create_shadow_sandbox_local_server(host, port, root, page)
+    base = server.RequestHandlerClass
+
+    class Batch38Handler(base):
+        def _batch38_route(self, method):
+            route = urlsplit(self.path).path
+            if route not in _B38_API_PATHS:
+                return False
+            if method == "GET":
+                result = handle_batch38_api(method, self.path, {}, root)
+            else:
+                try:
+                    raw_length = self.headers.get("Content-Length", "0")
+                    if not raw_length.isdigit() or int(raw_length) > _B38_MAX_REQUEST_BYTES:
+                        self._send(413, "application/json; charset=utf-8", json.dumps({"error": "Request too large"}))
+                        return True
+                    raw = self.rfile.read(int(raw_length))
+                    payload = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+                    self._send(400, "application/json; charset=utf-8", json.dumps({"error": "Invalid JSON body"}))
+                    return True
+                result = handle_batch38_api(method, self.path, payload, root)
+            self._send(result["http_status"], "application/json; charset=utf-8", json.dumps(result["body"]))
+            return True
+
+        def do_GET(self):
+            if not self._batch38_route("GET"):
+                super().do_GET()
+
+        def do_POST(self):
+            if not self._batch38_route("POST"):
+                super().do_POST()
+
+    server.RequestHandlerClass = Batch38Handler
+    return server
+
+
+PART3_CONTRACT_SPECS[38] = (
+    {"instruction": "INST-0186", "function": "verify_handoff_packet_integrity",
+     "parameters": ["packet_text", "max_chars"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0187", "function": "route_task_by_brain_tier",
+     "parameters": ["task_type", "payload_size", "local_npu_available", "offline_mode"],
+     "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0188", "function": "build_cross_tab_sync_envelope",
+     "parameters": ["db_path", "project_id", "tab_id"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0189", "function": "export_portable_starter_bundle",
+     "parameters": ["vault_dir", "edition"], "min_assertions": 4, "min_negative_tests": 1},
+    {"instruction": "INST-0190", "function": "create_batch38_local_server",
+     "parameters": ["host", "port", "vault_dir", "html_path"],
+     "min_assertions": 4, "min_negative_tests": 1},
+)
+
+
+
