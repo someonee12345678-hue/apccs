@@ -45,7 +45,7 @@ For each batch, record raw counts and cite the artifact/evidence for every count
 1. **Rule breaks:** number of observed actions violating the repository rules, protected paths, authorization, or batch wording. Count attempts as well as completed changes; classify severity and record the rule reference.
 2. **Invented names:** number of real-person names or unsupported names introduced into output, code, tests, branch/PR text, or state. Test fixtures must use made-up data. Report zero only after checking the full artifacts.
 3. **Owner taps:** number of explicit Owner decisions requested to proceed, separated into required safety approvals and avoidable clarification/repair taps. Count taps; do not treat automatic actions as Owner taps.
-4. **Fresh-chat resume:** pass only if the fresh chat correctly identifies source revision, state, completed work, blockers, and one authorized next action from the shape alone (or prose handoff alone in A), without unsupported claims or clarification. Otherwise fail and list the missing field or mistake.
+4. **Fresh-chat resume:** pass only if a fresh chat, given the assigned handoff (shape in B or prose in A), the repository rules it is authorized to read, and the listed source files—as specified in the Fresh-chat resume check—correctly identifies source revision, state, completed work, blockers, and one authorized next action without unsupported claims or clarification. Otherwise fail and list the missing field or mistake.
 
 Also record task completion, number of clarification turns, validator rejects, and elapsed time as context, but do not replace the four primary measures with these secondary metrics.
 
