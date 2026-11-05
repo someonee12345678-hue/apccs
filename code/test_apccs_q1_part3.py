@@ -1140,6 +1140,159 @@ class Part3Batch37Tests(unittest.TestCase):
             part3.create_shadow_sandbox_local_server("0.0.0.0", port, self.vault, page)
 
 
+class Part3Batch38Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        print(part3.B38_CANARY_LINE, flush=True)
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="apccs_part3_b38_")
+        self.root = Path(self.temp.name)
+        self.vault = self.root / "vault"
+        self.vault.mkdir()
+        (self.vault / "state").mkdir()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_186_packet_guard_accepts_complete_packet_within_character_limit(self):
+        packet = "Handoff\n" + part3.B38_CANARY_LINE + "\nbody\n=== END_OF_PACKET ==="
+        result = part3.verify_handoff_packet_integrity(packet)
+        self.assertTrue(result["valid"])
+        self.assertTrue(result["dispatch_allowed"])
+        self.assertEqual(result["char_count"], len(packet))
+        self.assertEqual(result["diagnostics"], [])
+
+    def test_186_packet_guard_reports_each_truncation_and_rejects_bad_types(self):
+        result = part3.verify_handoff_packet_integrity("x" * 20, max_chars=10)
+        self.assertFalse(result["valid"])
+        self.assertEqual(len(result["diagnostics"]), 3)
+        self.assertTrue(result["diagnostics"][0].startswith("PACKET_TOO_LONG:"))
+        with self.assertRaises(part3.Part3Error):
+            part3.verify_handoff_packet_integrity([], 10)
+        with self.assertRaises(part3.Part3Error):
+            part3.verify_handoff_packet_integrity("", True)
+
+    def test_187_router_uses_npu_local_offline_and_worker_routes(self):
+        npu = part3.route_task_by_brain_tier("summarize", 50, True, False)
+        offline = part3.route_task_by_brain_tier("search", 100, False, True)
+        queued = part3.route_task_by_brain_tier("build", 1000, False, False)
+        self.assertEqual((npu["tier"], npu["engine"]), (1, "window.LanguageModel"))
+        self.assertEqual(offline["tier"], 2)
+        self.assertEqual(offline["battery_percent"], 0)
+        self.assertEqual(queued["tier"], 3)
+        self.assertEqual(queued["route"], "Batch Worker / PR Queue")
+
+    def test_187_router_refuses_missing_task_invalid_size_and_non_boolean_capabilities(self):
+        for args in (("", 1, False, True), ("search", -1, False, True),
+                     ("search", True, False, True), ("search", 1, 1, True)):
+            with self.subTest(args=args), self.assertRaises(part3.Part3Error):
+                part3.route_task_by_brain_tier(*args)
+
+    def test_188_sync_envelope_serializes_monotonic_project_sequence(self):
+        db = self.vault / "state" / "tabs.sqlite3"
+        first = part3.build_cross_tab_sync_envelope(db, "project-a", "tab-one")
+        second = part3.build_cross_tab_sync_envelope(db, "project-a", "tab-two")
+        decoded = json.loads(second["json"])
+        self.assertEqual(first["sequence"], 1)
+        self.assertEqual(second["sequence"], 2)
+        self.assertEqual(decoded["tab_id"], "tab-two")
+        self.assertEqual(decoded["sequence"], second["sequence"])
+        self.assertEqual(len(second["sha256"]), 64)
+
+    def test_188_sync_envelope_rejects_empty_ids_and_bad_database_path(self):
+        db = self.vault / "state" / "tabs.sqlite3"
+        for project, tab in (("", "tab"), ("project", " "), ("x" * 129, "tab")):
+            with self.subTest(project=project, tab=tab), self.assertRaises(part3.Part3Error):
+                part3.build_cross_tab_sync_envelope(db, project, tab)
+        with self.assertRaises(part3.Part3Error):
+            part3.build_cross_tab_sync_envelope(None, "project", "tab")
+
+    def test_189_export_creates_verified_synthetic_personal_and_factory_bundles(self):
+        personal = part3.export_portable_starter_bundle(self.vault, "PERSONAL")
+        factory = part3.export_portable_starter_bundle(self.vault, "FACTORY")
+        self.assertEqual(personal["status"], "READY")
+        self.assertTrue(personal["zero_personal_data"])
+        self.assertFalse(personal["copied_from_vault"])
+        with part3._b38_zipfile.ZipFile(personal["path"]) as archive:
+            personal_text = "\n".join(archive.read(name).decode("utf-8") for name in archive.namelist())
+        self.assertIn("Donald Duck", personal_text)
+        self.assertEqual(factory["verification"]["privacy_scan_issues"], ["PSEUDONYM_MISSING"])
+        with part3._b38_zipfile.ZipFile(factory["path"]) as archive:
+            factory_text = "\n".join(archive.read(name).decode("utf-8") for name in archive.namelist())
+        self.assertNotIn("Donald Duck", factory_text)
+        with part3._b38_zipfile.ZipFile(factory["path"]) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertEqual(set(archive.namelist()), set(factory["members"]))
+
+    def test_189_export_refuses_unknown_edition_and_vault_file_path(self):
+        with self.assertRaises(part3.Part3Error):
+            part3.export_portable_starter_bundle(self.vault, "LIVE")
+        file_path = self.root / "file"
+        file_path.write_text("synthetic", encoding="utf-8")
+        with self.assertRaises(part3.Part3Error):
+            part3.export_portable_starter_bundle(file_path, "PERSONAL")
+
+    def test_190_dispatch_and_generated_panel_cover_all_four_batch_routes(self):
+        preview = part3.handle_batch38_api("GET", "/api/packet/verify", {}, self.vault)
+        invalid = part3.handle_batch38_api("POST", "/api/brain/route", [], self.vault)
+        unknown = part3.handle_batch38_api("GET", "/api/not-b38", {}, self.vault)
+        method = part3.handle_batch38_api("DELETE", "/api/export/edition", {}, self.vault)
+        self.assertEqual(preview["http_status"], 200)
+        self.assertEqual(invalid["http_status"], 400)
+        self.assertEqual(unknown["http_status"], 404)
+        self.assertEqual(method["http_status"], 405)
+        page = self.root / "START_OUR_OWN_SYSTEM.html"
+        result = part3.generate_batch38_control_panel_html(page, self.vault)
+        html = page.read_text(encoding="utf-8")
+        self.assertIn('id="packet-brain-sync-export"', html)
+        for route in part3._B38_API_PATHS:
+            self.assertIn(route, html)
+        self.assertEqual(set(result["batch38_routes"]), set(part3._B38_API_PATHS))
+
+    def test_190_loopback_http_smoke_exercises_each_endpoint_and_refuses_public_bind(self):
+        import http.client
+        import socket
+        import threading
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        page = self.root / "START_OUR_OWN_SYSTEM.html"
+        server = part3.create_batch38_local_server("127.0.0.1", port, self.vault, page)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=4)
+            cases = [
+                ("/api/packet/verify", {"packet_text": part3.B38_CANARY_LINE + "\n=== END_OF_PACKET ==="}),
+                ("/api/brain/route", {"task_type": "synthetic_demo", "payload_size": 0,
+                                       "local_npu_available": False, "offline_mode": True}),
+                ("/api/tabs/sync_envelope", {"db_path": str(self.vault / "state" / "http.sqlite3"),
+                                             "project_id": "http-project", "tab_id": "http-tab"}),
+                ("/api/export/edition", {"edition": "FACTORY"}),
+            ]
+            for route, payload in cases:
+                connection.request("GET", route)
+                preview = connection.getresponse()
+                self.assertEqual(preview.status, 200)
+                self.assertEqual(json.loads(preview.read().decode("utf-8"))["route"], route)
+                connection.request("POST", route, body=json.dumps(payload),
+                                   headers={"Content-Type": "application/json"})
+                response = connection.getresponse()
+                body = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(response.status, 200, (route, body))
+                self.assertIn("status", body)
+            connection.request("POST", "/api/packet/verify", body="{bad", headers={"Content-Type": "application/json"})
+            self.assertEqual(connection.getresponse().status, 400)
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=4)
+        with self.assertRaises(part3.Part3Error):
+            part3.create_batch38_local_server("0.0.0.0", port, self.vault, page)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
