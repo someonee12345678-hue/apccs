@@ -2882,3 +2882,57 @@ Done means: Rules can be dry-run with pretend triggers and masked secrets while 
 Not checked: None.
 
 End of Batch A4.
+
+## Batch A5 (Vault and Workspace: gated uploads, allowed paths, finished files only). Target repository: someonee12345678-hue/apccs
+
+Checker: Muse, 2026-11-05. Source: Drive › Claude 2 › AUDITED_WORDING_U5_LSI_AND_A5_2026-11-05 (corrected wording; audit of Gemini wording, log record 20261105-0852-GE). Wording verified against FEATURE_LEDGER_v2_2026-11-05 and the apccs code at main.
+
+Build only after: Batch A4 is merged (Lane A order: A2, A3, A4, then A5).
+
+Files: new code/apccs_vault.py, standard library only. Tests go in code/test_apccs_vault.py, class ApccsBatchA5VaultTests.
+
+Reuse: append_and_verify_log_v2_chain from code/apccs_logs.py (Batch A2) for the change log — no second chain, no new log format.
+
+Constants: ALLOWED_ENCRYPTION_CHOICES = {"device_os_encryption", "external_encrypted_media", "unencrypted_local_acknowledged"}; FILE_CABINET_UNLOCK_PHRASE = "load the file cabinet". No homemade encryption: the module records and enforces the user's choice, as Gemini's push-back note said.
+
+### A501: RECORD_VAULT_CHANGE (FEATURE_LEDGER_v2, chunk A5)
+Function: `record_vault_change(chain_path, action, encryption_choice) -> dict`
+Does: 1. Check encryption_choice against ALLOWED_ENCRYPTION_CHOICES. 2. Build a log-v2 record whose DID line is the action and whose SOURCE line is the encryption choice. 3. Append it with append_and_verify_log_v2_chain. 4. Return {"status": "LOGGED", "seq": <the chain seq>, "encryption_choice": encryption_choice}.
+Refuses: A choice outside the set returns {"status": "BLOCKED", "allowed": False, "reason": "invalid encryption_choice", "allowed_choices": sorted(ALLOWED_ENCRYPTION_CHOICES)} and writes nothing.
+Tests: test_a5_01_records_change_on_the_a2_chain (normal) and test_a5_01_rejects_unknown_encryption_choice (bad input).
+Done means: Every vault change sits on the one A2 hash chain, with its encryption choice recorded.
+Not checked: None.
+
+### A502: CHECK_WORKSPACE_PATH (W5 allowed paths, handoff A5 scope)
+Function: `check_workspace_path(path, allowed_paths) -> dict`
+Does: 1. Normalise path. 2. Match it against allowed_paths, a list of {"root": ..., "area": "vault" or "workspace"} supplied by the caller. 3. Return {"status": "OK", "area": <the matching area>}.
+Refuses: No match returns {"status": "BLOCKED", "allowed": False, "reason": "path not in W5 allowed paths"}.
+Tests: test_a5_02_vault_path_ok (normal) and test_a5_02_outside_path_blocked (bad input).
+Done means: Vault and workspace stay separate, and nothing outside the allowed roots is touched.
+Not checked: The allowed roots are the owner's setting, supplied by the caller.
+
+### A503: CHECK_FINISHED_FILE (W9 finished files only, handoff A5 scope)
+Function: `check_finished_file(filename, finished_files) -> dict`
+Does: 1. Compare filename with finished_files, the owner's list of finished file names supplied by the caller. 2. Return {"status": "OK", "file": filename} when it is listed.
+Refuses: An unlisted file returns {"status": "BLOCKED", "allowed": False, "reason": "not a finished file (W9)"}.
+Tests: test_a5_03_finished_file_ok (normal) and test_a5_03_unfinished_file_blocked (bad input).
+Done means: Only files the owner has marked finished can enter or leave the vault.
+Not checked: What makes a file finished is the owner's call; this reading of W9 is Muse's from the handoff's words and is flagged for Claude to confirm on return.
+
+### A504: UPLOAD_GATE (FEATURE_LEDGER_v2 item 13)
+Function: `maybe_upload_file_vault(filename, user_phrase) -> dict`
+Does: 1. Compare user_phrase with FILE_CABINET_UNLOCK_PHRASE. 2. On an exact match, return {"status": "OK", "vault_file": filename, "access": "read_only"}.
+Refuses: Any other phrase returns {"status": "BLOCKED: choose 'load the file cabinet' first", "allowed": False}.
+Tests: test_a5_04_exact_phrase_opens_gate (normal) and test_a5_04_wrong_phrase_blocked (bad input).
+Done means: Pictures and documents load only after the user chooses "load the file cabinet".
+Not checked: None.
+
+### A505: OUTBOUND_ASK_GATE (handoff A5 scope: ask before anything leaves the phone)
+Function: `check_outbound_ask(question_text, destination, approved_destinations, person_approved, local_save_path) -> dict`
+Does: 1. Check destination is in approved_destinations. 2. Check person_approved is True. 3. Return {"status": "OK", "destination": destination} only when both hold. 4. Otherwise write the question to local_save_path and return the refusal below. This function never sends anything itself.
+Refuses: Anything else returns {"status": "BLOCKED", "saved_locally": True, "reason": "outbound ask needs an approved destination and the person's approval"}.
+Tests: test_a5_05_unapproved_destination_blocked, test_a5_05_no_person_approval_blocked and test_a5_05_approved_pair_ok.
+Done means: Nothing leaves apccs unless the destination is approved and the person said yes.
+Not checked: None.
+
+End of Batch A5.
