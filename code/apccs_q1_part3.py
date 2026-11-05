@@ -1566,6 +1566,14 @@ def _b33_import_core(db_path):
     return verify_and_import_cp150_modules(root)["core_module"]
 
 
+def _b33_bind_core_paths(core, vault_root):
+    """Bind the imported frozen core to this call's vault, even if module-cached."""
+    root = _b31_vault_root(vault_root)
+    core.ROOT = root
+    core.WORKSPACE = root.parent
+    return core
+
+
 def record_and_select_worker_transport(db_path, probe_results_dict):
     """Store validated PASS/FAIL receipts and select the first passing route."""
     path = _b33_db_path(db_path)
@@ -1646,7 +1654,8 @@ def evaluate_batch_attempt_circuit_breaker(db_path, batch_id, attempt_num, ci_pa
         return {"batch_id": batch_id, "attempt_num": attempt_num, "ci_passed": False,
                 "strikes": strikes, "status": "REPAIR_REQUIRED", "repair_prompt": repair_prompt,
                 "andon": None}
-    core = _b33_import_core(path)
+    vault_root = path.parent.parent if path.parent.name == "state" else path.parent
+    core = _b33_bind_core_paths(_b33_import_core(path), vault_root)
     if core.MultiConstraintGovernor().parameters.get("circuit_breaker_strikes") != 2:
         raise Part3Error("Frozen circuit-breaker policy is not two strikes")
     andon = core.trigger_andon_cord("Batch %s failed CI on strike 2" % batch_id)
@@ -1675,7 +1684,7 @@ def verify_global_stop_and_fence_state(vault_dir, db_path, proposed_token):
             str(state.get("owner_command", "")).upper() == "STOP")
     if stop:
         return {"allowed": False, "status": "BLOCKED", "reason": "OWNER_STOP_ACTIVE", "fencing_token": None}
-    core = _b33_import_core(path)
+    core = _b33_bind_core_paths(_b33_import_core(path), root)
     try:
         core.verify_and_advance_fencing_token(path, "global-stop", proposed_token)
     except (ValueError, core.StaleFencingToken) as exc:
@@ -1718,7 +1727,7 @@ def advance_batch_on_verified_merge(db_path, vault_dir, merged_batch_num, merge_
         ledger = {"status": "MOUNTED_DUPLICATE", "duplicate": True, "seq": existing[2], "date": merge_date}
         slot = existing[3]
     else:
-        core = _b33_import_core(path)
+        core = _b33_bind_core_paths(_b33_import_core(path), root)
         merge_date = _b33_datetime.datetime.now(_b33_datetime.timezone.utc).date().isoformat()
         ledger = core.append_chronological_ledger(
             path, "APCCS", merge_date, "BATCH_MERGED",
