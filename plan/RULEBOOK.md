@@ -81,3 +81,9 @@ roles, not companies. When the main agent is out of usage, the backup takes the 
 - An agent at 80% of its usage or more says so on the OPEN line of its record and does
   only its job's essentials until its usage resets.
 - The server gate watches pull requests now, so a separate PR watch job isn't needed.
+
+## Shared place for all work (added 2026-11-06 05:00)
+
+Save every proposal, report and research result where every agent can read it: a plan PR in
+apccs (`plan/architect/`), or Drive › Claude 2. Never leave it only in your own app's library
+or chat. The Owner must not have to carry files between agents (ledger Q023).
