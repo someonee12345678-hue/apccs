@@ -3346,3 +3346,95 @@ Done means: New work is checked immediately and existing files are tracked witho
 Not checked: The first implementation must inventory the actual main-branch files when built.
 
 End of Batch A7.
+
+
+## Batch A8: Shaper Generator
+
+Status: Fully worded promotion authorized by the Owner on 2026-11-06; implementation remains BLOCKED by the source-adapter readiness condition in the source proposal. Batch A7 is merged. This promotion does not assert an AutoPie share destination or a permitted GitHub `words`-issue delivery mechanism exists.
+
+Source: `plan/architect/SHAPER_GENERATOR_2026-11-05.md`, canonical A8 wording appended below its earlier proposal. The named Drive document `WORDING_U10_AND_A8_2026-11-06` was not found through the connected Drive search; the Owner explicitly authorized this repository fallback. Existing proposal and queue text remain unchanged.
+
+Readiness: Before implementation is marked ready, confirm the AutoPie share destination and permitted mechanism delivering a `words`-labelled issue into the inbox. An unavailable adapter stays explicitly blocked; never fabricate receipt. No API polling, phone-share integration, protected-file change or external adapter setup is authorized by this local-library batch. The adapter requirement is carried forward from the source, not waived by this promotion.
+
+Standards: Batch A7 Open Standards applies to the new Python files. Follow Pilot P-SG1 and record the actual arm in the build PR. Build exactly this batch after this plan PR is merged and readiness is satisfied; no U10 build is included.
+
+**Batch A8: Shaper Generator.**
+**Build only after:** Batch A7 is merged and the source-adapter readiness checks below are resolved.
+**Target:** new `code/apccs_shaper.py`; tests in `code/test_apccs_shaper.py`, class `ApccsBatchA8ShaperTests`. Shape-box documents and the catalog live under `plan/shapes/`.
+**Dependencies:** Python standard library only. No network calls. Append-only changes; test writes only to temporary folders. The design implements the checker contract proposed in `plan/architect/RESEARCH_SHAPES_NOT_WORDS_2026-11-05.md`; that document describes a proposal, not an already implemented checker.
+**Canary:** `Canary check: SHAPER = VALIDATED -> packet`.
+
+### A801: PUT_WORDS_IN_ONE_INBOX (source: Owner's inbox requirement)
+
+Function: `enqueue_builder_words(inbox_dir, source_kind, source_ref, labels, original_words) -> dict`
+
+Does:
+1. Accept `source_kind` `local_share` or `github_issue`; require a non-empty source reference and non-empty UTF-8 text.
+2. For `github_issue`, require the supplied labels to include exactly the authorization label `words`; the function does not fetch GitHub data.
+3. Write one uniquely named envelope in the configured inbox, preserving `original_words` unchanged and recording the source metadata.
+4. Return the inbox item identifier and stored path.
+
+Refuses unsupported source kinds, a GitHub item without the `words` label, invalid text, and unsafe inbox paths without writing an item.
+Tests: `test_a801_01_enqueues_share_and_labeled_issue_in_one_inbox` (normal) and `test_a801_02_rejects_unlabeled_issue_and_bad_path` (bad input).
+Done means: Both supported item formats use one inbox contract and preserve the Owner's original words.
+Not checked: Whether AutoPie can target the configured inbox and which authorized event/relay can deliver a labelled GitHub issue; no live source connection is claimed.
+
+### A802: SELECT_SHAPE_FROM_KEYWORDS (source: deterministic keyword-table requirement)
+
+Function: `select_builder_shape(original_words, keyword_table) -> dict`
+
+Does:
+1. Match only explicit, case-insensitive whole keywords or phrases in the catalog's deterministic table for `batch`, `rule`, `research_ask`, `decision_row`, and `handoff`.
+2. Return the one selected shape and the matched keyword when exactly one shape matches.
+3. Return `ASK` with the unmatched or conflicting terms if none or more than one shape matches; do not use AI to choose.
+
+Refuses an invalid keyword table, non-text input, or a table that maps one keyword to multiple shapes.
+Tests: `test_a802_01_selects_each_catalog_shape_deterministically` (normal) and `test_a802_02_asks_on_no_match_or_ambiguous_match` (bad input).
+Done means: Shape selection is deterministic and an unknown or ambiguous request becomes an explicit question.
+Not checked: Whether the initial keyword table covers real Owner wording; tune it only from reviewed examples, not guessed phrases.
+
+### A803: FILL_FIELDS_WITH_SAFE_ASKS (source: field-fill and AI-switch requirements)
+
+Function: `fill_builder_shape_fields(shape_id, original_words, template, ai_mode="OFF", ai_filler=None) -> dict`
+
+Does:
+1. Fill only explicitly sourced values or deterministic metadata; missing or ambiguous fields become literal `ASK`.
+2. Default to `OFF`: make no AI call and return a usable partial packet. Also accept `ASSIST`.
+3. In ASSIST, ask the supplied suggester only for ASK fields; restrict results to those fields, validate types/enums, and mark suggestions `suggested`, pending deterministic validation and Owner review.
+4. Preserve original words and metadata. AI cannot set authorization, permission, approval or source identity.
+
+Refuses unknown modes, protected-field overwrites and malformed suggestions.
+Tests: `test_a803_01_off_fills_known_fields_and_keeps_asks` (normal); `test_a803_02_rejects_bad_mode_or_ai_overwrite` (bad input).
+Done means: OFF works; missing values remain ASK; ASSIST only suggests.
+Not checked: No live AI provider or connection is selected.
+
+### A804: CHECK_PACKET_AND_KEEP_SOURCE (source: RESEARCH_SHAPES_NOT_WORDS checker proposal)
+
+Function: `validate_builder_shape_packet(packet, shape_catalog) -> dict`
+
+Does:
+1. Validate the selected shape against its catalog schema, including required and allowed keys, types, field enums, source metadata, ASK values, and authorization bounds.
+2. Reject extra fields, missing required structure, invalid state transitions, source changes, and AI suggestions presented as approved values.
+3. Require the exact original words to remain attached to the packet and report field-level errors without repairing or guessing.
+
+Refuses any off-shape packet with a structured rejection; it never silently normalizes an invalid packet into acceptance.
+Tests: `test_a804_01_accepts_valid_packet_with_verbatim_source` (normal) and `test_a804_02_rejects_off_shape_or_changed_source` (bad input).
+Done means: Every accepted packet passes the proposed checker and retains the exact source words.
+Not checked: The RESEARCH_SHAPES_NOT_WORDS proposal has not yet been implemented or experimentally validated for APCCS.
+
+### A805: CATALOG_SHAPE_BOXES (source: one-box-per-shape catalog requirement)
+
+Function: `validate_shape_box_catalog(catalog, root_dir) -> dict`
+
+Does:
+1. Require one catalog entry for each initial shape type: `batch`, `rule`, `research_ask`, `decision_row`, and `handoff`.
+2. Require each box to list its `README.md`, `template.json`, one fictional `example.json`, and a matching test reference in `code/test_apccs_shaper.py`.
+3. Check referenced files exist under the approved roots and the worked example passes the same packet checker; examples contain fictional data only.
+4. Return the complete catalog only when every box is present and valid.
+
+Refuses duplicate or missing shape IDs, missing files, paths outside the approved roots, and examples that fail validation.
+Tests: `test_a805_01_catalog_lists_complete_valid_boxes` (normal) and `test_a805_02_rejects_missing_duplicate_or_outside_box` (bad input).
+Done means: Each shape type is a complete, tested box, and one catalog identifies every box component.
+Not checked: The final list of shapes may be extended only through a separately reviewed additive catalog change.
+
+End of Batch A8.
