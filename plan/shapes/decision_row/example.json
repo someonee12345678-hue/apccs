@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "shape_id": "decision_row",
+  "source": {
+    "source_kind": "ASK",
+    "source_ref": "ASK",
+    "labels": [],
+    "received_at": "ASK",
+    "original_words": "decision row\nsituation: Choose sample note format\nchoice: JSON\nreason: Readable with standard tools\ndecided_by: Owner\n"
+  },
+  "source_sha256": "3cddeeda7f003e3a29d866b4d9ee7eb246a74295e7ec481e6eec2d4bea001735",
+  "fields": {
+    "situation": "Choose sample note format",
+    "choice": "JSON",
+    "reason": "Readable with standard tools",
+    "decided_by": "Owner"
+  },
+  "suggestions": {},
+  "ai_mode": "OFF",
+  "authorization": {
+    "owner_approved": false,
+    "may_execute": false
+  },
+  "state": {
+    "version": 1,
+    "status": "prepared",
+    "previous": null
+  }
+}

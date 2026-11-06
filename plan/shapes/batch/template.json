@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "shape_id": "batch",
+  "fields": {
+    "title": {
+      "type": "string"
+    },
+    "target_repo": {
+      "type": "string",
+      "enum": [
+        "someonee12345678-hue/apccs",
+        "someonee12345678-hue/uclrcde"
+      ]
+    },
+    "done_means": {
+      "type": "string"
+    }
+  }
+}

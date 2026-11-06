@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "shape_id": "decision_row",
+  "fields": {
+    "situation": {
+      "type": "string"
+    },
+    "choice": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "decided_by": {
+      "type": "string",
+      "enum": [
+        "Owner",
+        "Architect",
+        "Builder",
+        "Checker"
+      ],
+      "protected": true
+    }
+  }
+}

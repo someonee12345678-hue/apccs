@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "shape_id": "rule",
+  "source": {
+    "source_kind": "ASK",
+    "source_ref": "ASK",
+    "labels": [],
+    "received_at": "ASK",
+    "original_words": "rule\nsituation: Sample data must remain local\nchoice: Use local storage\nreason: Keep examples offline\n"
+  },
+  "source_sha256": "8f335e2d7223f05f72d3b15f33aa88667d3dca01fb4895f3f401e2fcf758349f",
+  "fields": {
+    "situation": "Sample data must remain local",
+    "choice": "Use local storage",
+    "reason": "Keep examples offline"
+  },
+  "suggestions": {},
+  "ai_mode": "OFF",
+  "authorization": {
+    "owner_approved": false,
+    "may_execute": false
+  },
+  "state": {
+    "version": 1,
+    "status": "prepared",
+    "previous": null
+  }
+}

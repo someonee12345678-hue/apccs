@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "shape_id": "handoff",
+  "source": {
+    "source_kind": "ASK",
+    "source_ref": "ASK",
+    "labels": [],
+    "received_at": "ASK",
+    "original_words": "handoff\ncurrent_state: Fictional garden board checks passed\nnext_action: Inspect the receipt\nblocker: None in this fictional example\n"
+  },
+  "source_sha256": "d00046a9868e2db175057dd5aea3a4ca35fe00f07f5cee00dad334a8ef7eeb73",
+  "fields": {
+    "current_state": "Fictional garden board checks passed",
+    "next_action": "Inspect the receipt",
+    "blocker": "None in this fictional example"
+  },
+  "suggestions": {},
+  "ai_mode": "OFF",
+  "authorization": {
+    "owner_approved": false,
+    "may_execute": false
+  },
+  "state": {
+    "version": 1,
+    "status": "prepared",
+    "previous": null
+  }
+}

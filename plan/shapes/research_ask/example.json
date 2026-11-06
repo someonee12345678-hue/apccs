@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "shape_id": "research_ask",
+  "source": {
+    "source_kind": "ASK",
+    "source_ref": "ASK",
+    "labels": [],
+    "received_at": "ASK",
+    "original_words": "research ask\nquestion: How does a fictional garden board store notes?\nscope: Synthetic local files only\ndone_means: Evidence and uncertainty recorded\n"
+  },
+  "source_sha256": "795a2cd6bb91d0e555e93907b1b9293e4414ce99037aade21e0018d7ea0d0d4d",
+  "fields": {
+    "question": "How does a fictional garden board store notes?",
+    "scope": "Synthetic local files only",
+    "done_means": "Evidence and uncertainty recorded"
+  },
+  "suggestions": {},
+  "ai_mode": "OFF",
+  "authorization": {
+    "owner_approved": false,
+    "may_execute": false
+  },
+  "state": {
+    "version": 1,
+    "status": "prepared",
+    "previous": null
+  }
+}

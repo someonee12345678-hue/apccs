@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "shape_id": "rule",
+  "fields": {
+    "situation": {
+      "type": "string"
+    },
+    "choice": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}
