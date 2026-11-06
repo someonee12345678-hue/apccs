@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "shape_id": "research_ask",
+  "fields": {
+    "question": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "done_means": {
+      "type": "string"
+    }
+  }
+}

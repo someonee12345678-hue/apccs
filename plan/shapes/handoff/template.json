@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "shape_id": "handoff",
+  "fields": {
+    "current_state": {
+      "type": "string"
+    },
+    "next_action": {
+      "type": "string"
+    },
+    "blocker": {
+      "type": "string"
+    }
+  }
+}

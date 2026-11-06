@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "keywords": {
+    "batch": "batch",
+    "rule": "rule",
+    "research ask": "research_ask",
+    "decision row": "decision_row",
+    "handoff": "handoff"
+  },
+  "boxes": [
+    {
+      "shape_id": "batch",
+      "readme": "plan/shapes/batch/README.md",
+      "template": "plan/shapes/batch/template.json",
+      "example": "plan/shapes/batch/example.json",
+      "test": "code/test_apccs_shaper.py#test_a805_box_batch"
+    },
+    {
+      "shape_id": "rule",
+      "readme": "plan/shapes/rule/README.md",
+      "template": "plan/shapes/rule/template.json",
+      "example": "plan/shapes/rule/example.json",
+      "test": "code/test_apccs_shaper.py#test_a805_box_rule"
+    },
+    {
+      "shape_id": "research_ask",
+      "readme": "plan/shapes/research_ask/README.md",
+      "template": "plan/shapes/research_ask/template.json",
+      "example": "plan/shapes/research_ask/example.json",
+      "test": "code/test_apccs_shaper.py#test_a805_box_research_ask"
+    },
+    {
+      "shape_id": "decision_row",
+      "readme": "plan/shapes/decision_row/README.md",
+      "template": "plan/shapes/decision_row/template.json",
+      "example": "plan/shapes/decision_row/example.json",
+      "test": "code/test_apccs_shaper.py#test_a805_box_decision_row"
+    },
+    {
+      "shape_id": "handoff",
+      "readme": "plan/shapes/handoff/README.md",
+      "template": "plan/shapes/handoff/template.json",
+      "example": "plan/shapes/handoff/example.json",
+      "test": "code/test_apccs_shaper.py#test_a805_box_handoff"
+    }
+  ]
+}
