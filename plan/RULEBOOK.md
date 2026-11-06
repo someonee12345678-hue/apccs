@@ -61,3 +61,23 @@ Drive › Claude 2: HANDOFF_AGENTS_UNTIL_TUE_2026-11-10 and Addenda 1–6, AGENT
 SESSION_GUARD_RESEARCH_A6_2026-11-05, FEATURE_LEDGER_v2.
 The pull request that added this page also moved Muse's audit to after the merge
 (Addendum 3, rule 2). Merging it was the Owner's approval.
+
+## Backups when an agent runs out of usage (added 2026-11-05 18:01)
+
+Owner: "we need to keep the charade going even if one bot can't do it." Jobs belong to
+roles, not companies. When the main agent is out of usage, the backup takes the job.
+
+| Job | Main | Backup | If nobody is free |
+|---|---|---|---|
+| Merge | Server auto-merge gate (no AI) | none needed | never stops |
+| Tests | GitHub server (no AI) | none needed | never stops |
+| Build the next batch | ChatGPT/Codex task | Jules (NOT CHECKED); Claude only with the Owner's OK | the queue waits |
+| Post-merge audit | Muse | Gemini, or ChatGPT for PRs it didn't build | write `AUDIT PENDING` on the PR; the next free auditor catches up, oldest first |
+| Daily BUILD_HISTORY | Muse | ChatGPT (Drive connector) | written the next day, marked "written late" |
+| Batch wording | Gemini | ChatGPT | the queue waits |
+| Code map refresh | Muse | ChatGPT/Codex (the ast script) | use the newest map and check names against main |
+
+- No agent audits its own build.
+- An agent at 80% of its usage or more says so on the OPEN line of its record and does
+  only its job's essentials until its usage resets.
+- The server gate watches pull requests now, so a separate PR watch job isn't needed.
