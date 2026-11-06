@@ -3438,3 +3438,10 @@ Done means: Each shape type is a complete, tested box, and one catalog identifie
 Not checked: The final list of shapes may be extended only through a separately reviewed additive catalog change.
 
 End of Batch A8.
+
+
+## Batch A8 readiness correction — local implementation (2026-11-06)
+
+This correction supersedes only the adapter-readiness blocker introduced in the A8 promotion. The Owner requested the local Shaper build using the repository proposal as an allowed fallback. Build A8's local functions, checker, catalog and temporary-folder tests after Batch A7 and this correction are merged. Live AutoPie and GitHub delivery are separate, unverified adapters, not prerequisites for testing supplied local envelopes. Keep each live route BLOCKED / NOT CHECKED until its own receipt exists. Do not install, configure, poll or claim either live route in A8.
+
+The local inbox contract remains unchanged: accept the two supplied source kinds, require the exact words label for issue items, preserve original text, and refuse unsafe paths. Batch A7 Open Standards and Pilot P-SG1 still apply. This correction authorizes no network connection, protected-file change, paid call, AI-app browser automation or automatic packet approval. All five A801–A805 instructions above remain in force.
