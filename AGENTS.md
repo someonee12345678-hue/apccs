@@ -30,3 +30,7 @@ python3 tools/run_all_tests.py
 ```
 
 The Part 2 test file should finish in about 5 seconds; if it grows past that, report the real time honestly. Never report a result you did not see.
+
+## Read first (added 2026-11-05 with the Owner's tap)
+
+Before any work, read `plan/RULEBOOK.md` and `plan/QUESTION_LEDGER.csv` in the apccs repository (someonee12345678-hue/apccs). If a ledger row answers your question, use it instead of asking the Owner.

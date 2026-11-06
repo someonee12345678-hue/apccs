@@ -4,12 +4,13 @@
 # The key lives only in the repository secret BUILD_LOOP_TOKEN, which only the owner sets.
 # This file never prints the key, and it sends nothing but one line of text.
 # If the key is missing, the run fails (red) so the owner can see it. Changed 2026-11-04, log Entry 0232.
+# Changed 2026-11-05 (log Entry 0270): manual start only. The ChatGPT build task now
+# builds after each merge, and Claude is on paid credits, so plan changes no longer
+# start this routine (that was the red "startup loop" run on every plan change).
+# To use it again: add the push trigger back and save BUILD_LOOP_TOKEN.
 name: Start build loop
 
 on:
-  push:
-    branches: [main]
-    paths: ["plan/QUEUE.md"]
   workflow_dispatch:
 
 permissions: {}
