@@ -3445,3 +3445,13 @@ End of Batch A8.
 This correction supersedes only the adapter-readiness blocker introduced in the A8 promotion. The Owner requested the local Shaper build using the repository proposal as an allowed fallback. Build A8's local functions, checker, catalog and temporary-folder tests after Batch A7 and this correction are merged. Live AutoPie and GitHub delivery are separate, unverified adapters, not prerequisites for testing supplied local envelopes. Keep each live route BLOCKED / NOT CHECKED until its own receipt exists. Do not install, configure, poll or claim either live route in A8.
 
 The local inbox contract remains unchanged: accept the two supplied source kinds, require the exact words label for issue items, preserve original text, and refuse unsafe paths. Batch A7 Open Standards and Pilot P-SG1 still apply. This correction authorizes no network connection, protected-file change, paid call, AI-app browser automation or automatic packet approval. All five A801–A805 instructions above remain in force.
+
+
+## Batches MCP-A1 and MCP-U1 — MCP tool server Phase 1 (Owner-approved 2026-11-08)
+
+Source: `AUDITED_MCP_PHASE1_RESEARCH_AND_WORDING_2026-11-07` in Drive › Claude 2, Drive file id `1ywBuKS8sUawj6-pzr5z-V6IFv86palDx` (Gemini Step 1 wording; Muse Step 2 audit, PASS WITH CORRECTIONS, C1–C7 applied). The full batch wording of both batches is copied word for word in `plan/architect/BATCH_MCP_PHASE1_2026-11-07.md`.
+
+Approval: the Owner's Step 3 packet of 2026-11-08 01:08 America/Vancouver: build MCP-A1 (apccs) first, then MCP-U1 (uclrcde), one batch per pull request, under Q002/Q022. Hosting is not part of either batch; the Owner approves a host separately.
+
+- **Batch MCP-A1** — target repository: apccs. New files `code/apccs_mcp.py` and `code/test_apccs_mcp.py`, class `ApccsBatchMCPA1Tests`. Instructions MCP-A101 to MCP-A107. Canary: `Canary check: MCP_APCCS = RECEIPT -> gatekeeper`. Status: Ready to build.
+- **Batch MCP-U1** — target repository: uclrcde. New files `code/uclrcde_mcp.py` and `code/test_uclrcde_mcp.py`, class `UclrcdeBatchMCPU1Tests`. Instructions MCP-U101 to MCP-U105. Canary: `Canary check: MCP_UCLRCDE = VERIFIED_QUOTE -> gavel`. Status: Ready to build after MCP-A1.
