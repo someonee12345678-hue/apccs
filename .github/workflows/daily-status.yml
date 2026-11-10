@@ -1,0 +1,136 @@
+# Daily status: one plain-software check each morning, with no AI and no keys.
+# Owner-approved on 2026-11-10 at 09:58 America/Vancouver (log Entry 0321, ledger Q030).
+#
+# It posts one comment on the issue "Daily status" (made the first time, and
+# assigned to the owner so the comment reaches the phone) covering:
+# open pull requests and their checks, the last merge, failed runs in the past
+# 24 hours, a STOP issue if one is open, and a warning when builders look idle.
+# It reads; it never merges, pushes or changes files.
+name: Daily status
+
+on:
+  schedule:
+    - cron: "43 15 * * *"   # about 07:43 in Vancouver in winter, 08:43 in summer
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+  checks: read
+
+concurrency:
+  group: daily-status
+  cancel-in-progress: false
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check the repository and post the status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          python3 -I - <<'PY'
+          """Daily status: read pull requests, runs and issues; post one comment.
+
+          Inputs: GH_TOKEN (built-in, read-only except issues), OWNER, GITHUB_REPOSITORY.
+          Output: one comment on the "Daily status" issue and the same text in the
+          run summary. Errors: a GitHub error stops the run (red) with the message.
+          """
+          import datetime as dt
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+          REPO = os.environ["GITHUB_REPOSITORY"]
+          NOW = dt.datetime.now(dt.timezone.utc)
+          TITLE = "Daily status"
+
+
+          def gh(path, payload=None, method=None):
+              """Call the GitHub REST API with the built-in token; return parsed JSON."""
+              req = urllib.request.Request(
+                  f"{API}{path}",
+                  data=None if payload is None else json.dumps(payload).encode("utf-8"),
+                  headers={
+                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "Content-Type": "application/json",
+                  },
+                  method=method or ("GET" if payload is None else "POST"),
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  return json.loads(resp.read().decode("utf-8") or "null")
+
+
+          def hours_since(stamp):
+              """Hours between an ISO time from GitHub and now."""
+              then = dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+              return (NOW - then).total_seconds() / 3600
+
+
+          lines = [f"**{REPO}**, {NOW:%Y-%m-%d %H:%M} UTC", ""]
+
+          # Open pull requests and their checks.
+          pulls = gh(f"/repos/{REPO}/pulls?state=open&per_page=30")
+          if pulls:
+              lines.append(f"Open pull requests: {len(pulls)}")
+              for pr in pulls:
+                  runs = gh(f"/repos/{REPO}/commits/{pr['head']['sha']}/check-runs?per_page=50").get("check_runs", [])
+                  bad = sorted({r["name"] for r in runs if r.get("conclusion") in ("failure", "timed_out", "cancelled")})
+                  waiting = sum(1 for r in runs if r.get("status") != "completed")
+                  state = "red: " + ", ".join(bad) if bad else ("running" if waiting else "green")
+                  lines.append(f"- #{pr['number']} {pr['title']} ({hours_since(pr['created_at']):.0f} h old, checks {state})")
+          else:
+              lines.append("Open pull requests: none")
+
+          # Last merge.
+          closed = gh(f"/repos/{REPO}/pulls?state=closed&sort=updated&direction=desc&per_page=30")
+          merged = sorted((p for p in closed if p.get("merged_at")), key=lambda p: p["merged_at"])
+          last_merge_h = None
+          if merged:
+              last = merged[-1]
+              last_merge_h = hours_since(last["merged_at"])
+              lines.append(f"Last merge: #{last['number']} {last['title']}, {last_merge_h:.0f} h ago")
+
+          # Failed runs in the past 24 hours.
+          since = (NOW - dt.timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+          q = urllib.parse.quote(f">={since}")
+          failed = gh(f"/repos/{REPO}/actions/runs?status=failure&created={q}&per_page=30").get("workflow_runs", [])
+          if failed:
+              names = sorted({r["name"] for r in failed})
+              lines.append(f"Failed runs in 24 h: {len(failed)} ({', '.join(names)})")
+          else:
+              lines.append("Failed runs in 24 h: none")
+
+          # STOP issue.
+          issues = gh(f"/repos/{REPO}/issues?state=open&per_page=100")
+          if any(i["title"].strip().upper() == "STOP" and "pull_request" not in i for i in issues):
+              lines.append("**STOP is open: merging and building are stopped.**")
+
+          # Idle warning.
+          newest_pr_h = min((hours_since(p["created_at"]) for p in pulls), default=None)
+          if (last_merge_h is None or last_merge_h > 24) and (newest_pr_h is None or newest_pr_h > 24):
+              lines.append("**Builders look idle:** no pull request opened or merged in 24 h.")
+
+          text = "\n".join(lines)
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", os.devnull), "a", encoding="utf-8") as fh:
+              fh.write(text + "\n")
+
+          home = next((i for i in issues if i["title"] == TITLE and "pull_request" not in i), None)
+          if home is None:
+              home = gh(f"/repos/{REPO}/issues", {
+                  "title": TITLE,
+                  "body": "One comment each morning from the Daily status workflow. No AI, no keys. Close this issue to stop the comments being collected here; a new one is made next time.",
+                  "assignees": [os.environ["OWNER"]],
+              })
+          gh(f"/repos/{REPO}/issues/{home['number']}/comments", {"body": text})
+          print(text)
+          PY
