@@ -5,6 +5,11 @@
 # on 2026-07-30 and the Gemini API is not free for the Owner, so the light label now
 # runs a small open model with Ollama on GitHub's own runner. No key, no outside AI
 # service. The light-gemini and light-kimi routes are parked (see ledger Q032).
+# Changed 2026-11-10 at 13:58 (log Entry 0331, ledger Q033): first live test passed with
+# qwen3.5:2b in 54 s, but one of its five points was made up. Default is now qwen3.5:4b
+# (more accurate, about twice as slow, still well inside 10 minutes); fallback is
+# qwen3.5:2b, which is proven on this runner. The instructions now ask it to stay close
+# to the file's own words.
 #
 # How to use (works from the GitHub phone app):
 #   1. Open an issue and write the task in plain words.
@@ -13,8 +18,8 @@
 #   The answer arrives as a comment on the issue, usually within 3 to 6 minutes.
 #
 # Settings (repository variables, all optional; only the Owner sets them):
-#   OLLAMA_MODEL    the Ollama model tag to use (default qwen3.5:2b; the fallback is
-#                   llama3.2:3b if that one can't be downloaded)
+#   OLLAMA_MODEL    the Ollama model tag to use (default qwen3.5:4b; the fallback is
+#                   qwen3.5:2b if that one can't be downloaded)
 #   OLLAMA_VERSION  pin an Ollama version, for example 0.30.0 (default: the newest)
 #
 # Safety:
@@ -48,8 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      MODEL: ${{ vars.OLLAMA_MODEL || 'qwen3.5:2b' }}
-      FALLBACK_MODEL: llama3.2:3b
+      MODEL: ${{ vars.OLLAMA_MODEL || 'qwen3.5:4b' }}
+      FALLBACK_MODEL: qwen3.5:2b
       OLLAMA_VERSION: ${{ vars.OLLAMA_VERSION }}
     steps:
       - name: Note the start time (the answer step keeps inside the 10-minute limit)
@@ -139,7 +144,10 @@ jobs:
           SYSTEM = (
               "You help with the APCCS and UCLRCDE software projects. Do the task in the "
               "issue using only the text given. Say plainly when something is missing or "
-              "uncertain; never invent facts, sources or test results. Use plain words and "
+              "uncertain; never invent facts, sources or test results. When the task is about "
+              "a file, keep each point close to the file's own words and add nothing the file "
+              "does not say; if asked for fewer points than the file has, say which ones you "
+              "left out. Use plain words and "
               "short sentences. Keep the answer under 800 words unless the task asks for more. "
               "Never repeat anything that looks like a key, password or personal detail."
           )
