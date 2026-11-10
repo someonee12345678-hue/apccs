@@ -1,17 +1,29 @@
 # Daily status: one plain-software check each morning, with no AI and no keys.
 # Owner-approved on 2026-11-10 at 09:58 America/Vancouver (log Entry 0321, ledger Q030).
-#
-# It posts one comment on the issue "Daily status" (made the first time, and
-# assigned to the owner so the comment reaches the phone) covering:
-# open pull requests and their checks, the last merge, failed runs in the past
-# 24 hours, a STOP issue if one is open, and a warning when builders look idle.
-# It reads; it never merges, pushes or changes files.
+# Changed 2026-11-10 at 12:52 (log Entry 0327, ledger Q031): the full status now lives in
+# the description of the issue "Daily status", rewritten each morning (no email), so a new
+# AI chat reads one issue instead of gathering the state step by step. It adds a comment
+# that mentions the owner, which emails him, only when:
+#   - a red item is new: tests failed on main, STOP is open, the light-task robot is down,
+#     a directed batch has no pull request after 24 h, or a pull request has waited on
+#     the owner for more than 24 h;
+#   - red items are still open 3 days after the last email (a reminder);
+#   - someone runs it by hand with a note (ideas, or a test that the email arrives).
+# It also lists rule-based items to address: failing pull requests, idle builders,
+# days since the last feature build, failed runs, and directed batches ready to close.
+# It reads; it never merges, pushes or changes files. Its only writes are that issue
+# and its comments.
 name: Daily status
 
 on:
   schedule:
-    - cron: "43 15 * * *"   # about 07:43 in Vancouver in winter, 08:43 in summer
+    - cron: "43 15 * * *"   # 08:43 in Vancouver (UTC-7)
   workflow_dispatch:
+    inputs:
+      note:
+        description: "Optional note to post as a comment that emails the owner (ideas, or a test)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -27,34 +39,46 @@ concurrency:
 jobs:
   status:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
-      - name: Check the repository and post the status
+      - name: Check the repository and update the status issue
         env:
           GH_TOKEN: ${{ github.token }}
           OWNER: ${{ github.repository_owner }}
+          NOTE: ${{ inputs.note }}
         run: |
           python3 -I - <<'PY'
-          """Daily status: read pull requests, runs and issues; post one comment.
+          """Daily status: rewrite the "Daily status" issue; email the Owner only when needed.
 
-          Inputs: GH_TOKEN (built-in, read-only except issues), OWNER, GITHUB_REPOSITORY.
-          Output: one comment on the "Daily status" issue and the same text in the
-          run summary. Errors: a GitHub error stops the run (red) with the message.
+          Inputs: GH_TOKEN (built-in), OWNER, GITHUB_REPOSITORY, NOTE (optional text from a
+          manual run), DRY_RUN (set to 1 to print without writing).
+          Output: the issue description is replaced with today's status, which sends no email.
+          A comment that mentions the Owner (and so emails him) is added only when a red item
+          is new, every 3 days while red items stay open, or when a manual run carries a note.
+          Errors: a GitHub error stops the run (red) with the message.
           """
           import datetime as dt
           import json
           import os
+          import re
+          import urllib.error
           import urllib.parse
           import urllib.request
 
           API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
           REPO = os.environ["GITHUB_REPOSITORY"]
+          OWNER = os.environ["OWNER"]
+          NOTE = os.environ.get("NOTE", "").strip()
+          DRY = os.environ.get("DRY_RUN") == "1"
           NOW = dt.datetime.now(dt.timezone.utc)
           TITLE = "Daily status"
+          REMIND_HOURS = 72
+          HOLD = {"hold", "do-not-merge", "do not merge"}
+          STATE_RE = re.compile(r"<!-- daily-status-state (\{.*?\}) -->")
 
 
-          def gh(path, payload=None, method=None):
-              """Call the GitHub REST API with the built-in token; return parsed JSON."""
+          def gh(path, payload=None, method=None, missing_ok=False):
+              """Call the GitHub REST API with the built-in token; return parsed JSON (None if missing_ok and 404)."""
               req = urllib.request.Request(
                   f"{API}{path}",
                   data=None if payload is None else json.dumps(payload).encode("utf-8"),
@@ -66,71 +90,224 @@ jobs:
                   },
                   method=method or ("GET" if payload is None else "POST"),
               )
-              with urllib.request.urlopen(req, timeout=30) as resp:
-                  return json.loads(resp.read().decode("utf-8") or "null")
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      return json.loads(resp.read().decode("utf-8") or "null")
+              except urllib.error.HTTPError as err:
+                  if missing_ok and err.code == 404:
+                      return None
+                  raise
 
 
           def hours_since(stamp):
-              """Hours between an ISO time from GitHub and now."""
+              """Hours between an ISO time and now."""
               then = dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+              if then.tzinfo is None:
+                  raise ValueError(f"time without a zone: {stamp}")
               return (NOW - then).total_seconds() / 3600
 
 
-          lines = [f"**{REPO}**, {NOW:%Y-%m-%d %H:%M} UTC", ""]
+          def age(hours):
+              """Short age: hours under two days, days after that."""
+              return f"{hours:.0f} h" if hours < 48 else f"{hours / 24:.1f} days"
+
+
+          def mentions(text, batch):
+              """True when text names the batch ID (MC-A1 matches mc-a1-feed, not MC-A10)."""
+              return re.search(rf"(?<![a-z0-9]){re.escape(batch.lower())}(?![0-9])", text.lower()) is not None
+
+
+          red, todo, state = {}, [], []
+
+          # Tests on main: the newest finished run of this repository's test workflow.
+          runs = gh(f"/repos/{REPO}/actions/runs?branch=main&status=completed&per_page=60").get("workflow_runs", [])
+          tests = [r for r in runs if "test" in r["name"].lower() and r.get("conclusion") in ("success", "failure", "timed_out")]
+          if tests:
+              t = tests[0]
+              word = "green" if t["conclusion"] == "success" else "RED"
+              state.append(f"Tests on main: {word} ({t['name']}, commit {t['head_sha'][:7]}, {age(hours_since(t['updated_at']))} ago)")
+              if word == "RED":
+                  red["tests-main"] = f"Tests on main failed ({t['name']}, commit {t['head_sha'][:7]}): {t['html_url']}"
+          else:
+              state.append("Tests on main: no finished test run in the last 60 runs on main")
 
           # Open pull requests and their checks.
           pulls = gh(f"/repos/{REPO}/pulls?state=open&per_page=30")
-          if pulls:
-              lines.append(f"Open pull requests: {len(pulls)}")
-              for pr in pulls:
-                  runs = gh(f"/repos/{REPO}/commits/{pr['head']['sha']}/check-runs?per_page=50").get("check_runs", [])
-                  bad = sorted({r["name"] for r in runs if r.get("conclusion") in ("failure", "timed_out", "cancelled")})
-                  waiting = sum(1 for r in runs if r.get("status") != "completed")
-                  state = "red: " + ", ".join(bad) if bad else ("running" if waiting else "green")
-                  lines.append(f"- #{pr['number']} {pr['title']} ({hours_since(pr['created_at']):.0f} h old, checks {state})")
-          else:
-              lines.append("Open pull requests: none")
+          state.append(f"Open pull requests: {len(pulls) or 'none'}")
+          for pr in pulls:
+              checks = gh(f"/repos/{REPO}/commits/{pr['head']['sha']}/check-runs?per_page=50").get("check_runs", [])
+              bad = sorted({c["name"] for c in checks if c.get("conclusion") in ("failure", "timed_out", "cancelled")})
+              running = sum(1 for c in checks if c.get("status") != "completed")
+              guard_only = bool(bad) and all("protected" in n.lower() or "guard" in n.lower() for n in bad)
+              hours = hours_since(pr["created_at"])
+              labels = {label["name"].lower() for label in pr.get("labels", [])}
+              shown = "red: " + ", ".join(bad) if bad else ("running" if running else "green")
+              extra = " (draft)" if pr.get("draft") else (" (hold)" if labels & HOLD else "")
+              state.append(f"- #{pr['number']} {pr['title']} [{pr['head']['ref']}], {age(hours)} old, checks {shown}{extra}")
+              if pr.get("draft") or labels & HOLD or running:
+                  continue
+              if hours >= 24 and (not bad or guard_only):
+                  why = "it changes protected files, so only your tap can merge it" if guard_only else "checks are green but it was not merged automatically"
+                  red[f"pr-{pr['number']}"] = f"Pull request #{pr['number']} has waited {age(hours)} for you: {why}. {pr['html_url']}"
+              elif bad and not guard_only and hours >= 12:
+                  todo.append(f"Pull request #{pr['number']} has failing checks ({', '.join(bad)}) after {age(hours)}: its builder should fix it.")
 
-          # Last merge.
+          # Merges, and days since the last feature build (a merge that changed code/).
           closed = gh(f"/repos/{REPO}/pulls?state=closed&sort=updated&direction=desc&per_page=30")
-          merged = sorted((p for p in closed if p.get("merged_at")), key=lambda p: p["merged_at"])
-          last_merge_h = None
-          if merged:
-              last = merged[-1]
-              last_merge_h = hours_since(last["merged_at"])
-              lines.append(f"Last merge: #{last['number']} {last['title']}, {last_merge_h:.0f} h ago")
+          merged = sorted((p for p in closed if p.get("merged_at")), key=lambda p: p["merged_at"], reverse=True)
+          for p in merged[:3]:
+              state.append(f"Merged: #{p['number']} {p['title']}, {age(hours_since(p['merged_at']))} ago")
+          feature = None
+          for p in merged[:15]:
+              files = gh(f"/repos/{REPO}/pulls/{p['number']}/files?per_page=100")
+              if any(f["filename"].startswith("code/") for f in files):
+                  feature = p
+                  break
+          if feature:
+              idle = hours_since(feature["merged_at"])
+              state.append(f"Last feature build (changed code/): #{feature['number']} {feature['title']}, {age(idle)} ago")
+              if idle >= 48:
+                  todo.append(f"No feature build merged for {age(idle)}: direct the next ready batch to a free builder.")
+          else:
+              state.append("Last feature build (changed code/): none in the last 15 merges")
+              todo.append("No feature build in the last 15 merges: direct the next ready batch to a free builder.")
+          newest_pr = min((hours_since(p["created_at"]) for p in pulls), default=None)
+          last_merge = hours_since(merged[0]["merged_at"]) if merged else None
+          if (last_merge is None or last_merge > 24) and (newest_pr is None or newest_pr > 24):
+              todo.append("Builders look idle: no pull request opened or merged in 24 h.")
 
           # Failed runs in the past 24 hours.
-          since = (NOW - dt.timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
-          q = urllib.parse.quote(f">={since}")
-          failed = gh(f"/repos/{REPO}/actions/runs?status=failure&created={q}&per_page=30").get("workflow_runs", [])
+          since = urllib.parse.quote(f">={(NOW - dt.timedelta(hours=24)):%Y-%m-%dT%H:%M:%SZ}")
+          failed = gh(f"/repos/{REPO}/actions/runs?status=failure&created={since}&per_page=30").get("workflow_runs", [])
           if failed:
               names = sorted({r["name"] for r in failed})
-              lines.append(f"Failed runs in 24 h: {len(failed)} ({', '.join(names)})")
+              state.append(f"Failed runs in 24 h: {len(failed)} ({', '.join(names)})")
+              # Light-task failures are a red item below; guard failures show on their pull request.
+              other = [n for n in names if n != "Light task" and "guard" not in n.lower()]
+              if other:
+                  todo.append(f"Failed runs in 24 h: {', '.join(other)}. See https://github.com/{REPO}/actions")
           else:
-              lines.append("Failed runs in 24 h: none")
+              state.append("Failed runs in 24 h: none")
 
-          # STOP issue.
-          issues = gh(f"/repos/{REPO}/issues?state=open&per_page=100")
-          if any(i["title"].strip().upper() == "STOP" and "pull_request" not in i for i in issues):
-              lines.append("**STOP is open: merging and building are stopped.**")
+          # Light-task robot health: the newest light-task run that actually ran.
+          light = gh(f"/repos/{REPO}/actions/workflows/light-task.yml/runs?per_page=20", missing_ok=True)
+          if light is None:
+              state.append("Light-task robot: not in this repository")
+          else:
+              done = [r for r in light.get("workflow_runs", []) if r.get("conclusion") in ("success", "failure", "timed_out")]
+              if not done:
+                  state.append("Light-task robot: no finished task yet")
+              elif done[0]["conclusion"] == "success":
+                  state.append(f"Light-task robot: working (last task {age(hours_since(done[0]['updated_at']))} ago)")
+              else:
+                  state.append(f"Light-task robot: DOWN (last task failed {age(hours_since(done[0]['updated_at']))} ago)")
+                  red["light-robot"] = f"The light-task robot is down: its last task failed. {done[0]['html_url']}"
 
-          # Idle warning.
-          newest_pr_h = min((hours_since(p["created_at"]) for p in pulls), default=None)
-          if (last_merge_h is None or last_merge_h > 24) and (newest_pr_h is None or newest_pr_h > 24):
-              lines.append("**Builders look idle:** no pull request opened or merged in 24 h.")
+          # Issues: STOP, and batches directed to a builder (label "directed").
+          issues = [i for i in gh(f"/repos/{REPO}/issues?state=open&per_page=100") if "pull_request" not in i]
+          if any(i["title"].strip().upper() == "STOP" for i in issues):
+              red["stop"] = "STOP is open: merging and building are stopped."
+              state.append("STOP: open")
+          else:
+              state.append("STOP: not open")
+          branches = [b["name"] for b in gh(f"/repos/{REPO}/branches?per_page=100")]
+          directed = [i for i in issues if "directed" in {label["name"].lower() for label in i.get("labels", [])}]
+          state.append(f"Directed batches open: {len(directed) or 'none'}")
+          for issue in directed:
+              found = re.search(r"(?i)directed:\s*([a-z0-9][a-z0-9._-]*)", issue["title"])
+              if not found:
+                  todo.append(f"Issue #{issue['number']} has the directed label but no 'Directed: <batch>' title.")
+                  continue
+              batch = found.group(1)
+              stamp = re.search(r"(?im)^directed at:\s*(\S+)", issue.get("body") or "")
+              try:
+                  hours = hours_since(stamp.group(1)) if stamp else hours_since(issue["created_at"])
+              except ValueError:
+                  hours = hours_since(issue["created_at"])
+                  todo.append(f"Issue #{issue['number']}: the 'Directed at:' time needs a date, time and zone, like 2026-11-09T07:21-07:00.")
+              prs = [p for p in pulls + closed if mentions(f"{p['title']} {p['head']['ref']}", batch)]
+              done_pr = next((p for p in prs if p.get("merged_at")), None)
+              open_pr = next((p for p in prs if p["state"] == "open"), None)
+              has_branch = any(mentions(b, batch) for b in branches)
+              if done_pr:
+                  state.append(f"- {issue['title']}: merged in #{done_pr['number']}")
+                  todo.append(f"{batch} is merged (#{done_pr['number']}): close issue #{issue['number']}.")
+              elif open_pr:
+                  state.append(f"- {issue['title']}: pull request #{open_pr['number']} open, {age(hours)} after directing")
+              else:
+                  where = "a branch but no pull request" if has_branch else "no pull request and no branch"
+                  state.append(f"- {issue['title']}: {where}, {age(hours)} after directing")
+                  if hours >= 24:
+                      red[f"directed-{batch.lower()}"] = f"{issue['title']}: {where} after {age(hours)}. Ask the builder, or give the batch to another builder. {issue['html_url']}"
 
-          text = "\n".join(lines)
+          # Compare with the last run so the Owner is emailed once per new problem.
+          home = next((i for i in issues if i["title"] == TITLE), None)
+          old = STATE_RE.search((home or {}).get("body") or "")
+          previous = json.loads(old.group(1)) if old else {}
+          new_keys = sorted(set(red) - set(previous.get("red", [])))
+          reminded = previous.get("reminded_at")
+          remind = bool(red) and not new_keys and bool(reminded) and hours_since(reminded) >= REMIND_HOURS
+          send = bool(new_keys) or remind or bool(NOTE)
+          saved = {"red": sorted(red), "reminded_at": NOW.strftime("%Y-%m-%dT%H:%M:%SZ") if (new_keys or remind) else reminded}
+
+          try:
+              from zoneinfo import ZoneInfo
+              local = NOW.astimezone(ZoneInfo("America/Vancouver"))
+          except Exception:  # no time-zone data on the runner: show UTC only
+              local = None
+          when = f"{local:%Y-%m-%d %H:%M} Vancouver ({local:%z}), " if local else ""
+          body = "\n".join(
+              [
+                  f"**{TITLE}: {REPO}**, updated {when}{NOW:%Y-%m-%d %H:%M} UTC. Plain software: no AI, no keys.",
+                  "",
+                  "This description is rewritten each morning and sends no email. A comment that mentions the Owner "
+                  "(so it emails him) is added only when a red item is new, every 3 days while red items stay open, "
+                  "or when someone runs this workflow by hand with a note.",
+                  "",
+                  "### 🔴 Needs the Owner",
+                  *([f"- {red[k]}" for k in sorted(red)] or ["- Nothing."]),
+                  "",
+                  "### 🟡 To address and suggestions",
+                  *([f"- {t}" for t in todo] or ["- Nothing."]),
+                  "",
+                  "### State",
+                  *[line if line.startswith("- ") else f"- {line}" for line in state],
+                  "",
+                  "### How to use",
+                  "- **Directed batch:** open an issue titled `Directed: <batch> to <builder>` with the label `directed`. "
+                  "Add a line `Directed at: 2026-11-09T07:21-07:00` if it was directed earlier. Close it once the batch is merged.",
+                  "- **Ideas or a note:** Actions › Daily status › Run workflow, with a note. It is posted below and emails the Owner.",
+                  "",
+                  f"<!-- daily-status-state {json.dumps(saved, sort_keys=True)} -->",
+              ]
+          )
+
+          comment = None
+          if send:
+              parts = [f"@{OWNER}"]
+              if new_keys:
+                  parts += ["", "**🔴 New:**", *[f"- {red[k]}" for k in new_keys]]
+                  rest = sorted(set(red) - set(new_keys))
+                  if rest:
+                      parts += ["", "**🔴 Still open:**", *[f"- {red[k]}" for k in rest]]
+              elif remind:
+                  parts += ["", "**🔴 Reminder, still open:**", *[f"- {red[k]}" for k in sorted(red)]]
+              if NOTE:
+                  parts += ["", "**Note:**", NOTE]
+              parts += ["", "Full status is in the issue description above."]
+              comment = "\n".join(parts)
+
           with open(os.environ.get("GITHUB_STEP_SUMMARY", os.devnull), "a", encoding="utf-8") as fh:
-              fh.write(text + "\n")
-
-          home = next((i for i in issues if i["title"] == TITLE and "pull_request" not in i), None)
+              fh.write(body + "\n")
+          print(body)
+          if comment:
+              print("\n--- comment ---\n" + comment)
+          if DRY:
+              raise SystemExit(0)
           if home is None:
-              home = gh(f"/repos/{REPO}/issues", {
-                  "title": TITLE,
-                  "body": "One comment each morning from the Daily status workflow. No AI, no keys. Close this issue to stop the comments being collected here; a new one is made next time.",
-                  "assignees": [os.environ["OWNER"]],
-              })
-          gh(f"/repos/{REPO}/issues/{home['number']}/comments", {"body": text})
-          print(text)
+              home = gh(f"/repos/{REPO}/issues", {"title": TITLE, "body": body, "assignees": [OWNER]})
+          else:
+              gh(f"/repos/{REPO}/issues/{home['number']}", {"body": body}, method="PATCH")
+          if comment:
+              gh(f"/repos/{REPO}/issues/{home['number']}/comments", {"body": comment})
           PY
