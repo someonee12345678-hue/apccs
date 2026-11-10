@@ -1,21 +1,23 @@
-# Light task: answers a GitHub issue with DeepSeek (or Kimi), so Claude's
-# limited usage is kept for architecture, security decisions and audits.
-# Owner-approved on 2026-11-10 at 09:15 America/Vancouver, log Entry 0318, ledger Q028.
+# Light task: answers a GitHub issue with a free model from GitHub Models, so
+# Claude's limited usage is kept for architecture, security decisions and audits.
+# Owner-approved on 2026-11-10 at 09:15 America/Vancouver (log Entry 0318, ledger Q028).
+# Changed 2026-11-10 at 09:32 (log Entry 0319, ledger Q029): $0 only. No paid API keys;
+# it uses GitHub Models' free tier through the built-in GITHUB_TOKEN.
 #
 # How to use (works from the GitHub phone app):
 #   1. Open an issue and write the task in plain words.
 #   2. To give it repository files to read, add lines like:  file: plan/QUEUE.md
-#   3. Add the label "light" (DeepSeek) or "light-kimi" (Kimi).
+#   3. Add the label "light" (DeepSeek) or "light-kimi" (Kimi, if GitHub Models has it).
 #   The answer arrives as a comment on the issue, usually within a minute.
+#
+# Limits of the free tier: about 8,000 tokens in and 4,000 out per request, and a
+# daily request limit per model. Long files are cut to fit, and the comment says so.
 #
 # Safety:
 # - Runs only when someone with triage rights adds the label (strangers can't).
-# - The keys live only in the repository secrets DEEPSEEK_API_KEY and KIMI_API_KEY,
-#   which only the owner sets. This file never prints them.
-# - The job can read the repository and comment on issues. It cannot push, merge or
-#   change files.
+# - No API keys or secrets. The built-in token can read the repository, comment on
+#   issues and call GitHub Models. It cannot push, merge or change files.
 # - Never put real case files, keys or personal details in a light task.
-# - Spend is limited by the prepaid balance the owner puts on each account.
 name: Light task
 
 on:
@@ -25,6 +27,7 @@ on:
 permissions:
   contents: read
   issues: write
+  models: read
 
 concurrency:
   group: light-task-${{ github.event.issue.number }}
@@ -41,48 +44,44 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Ask the light model and post the answer
+      - name: Ask the free model and post the answer
         env:
           GH_TOKEN: ${{ github.token }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          LIGHT_MODEL: ${{ vars.LIGHT_MODEL }}
           KIMI_MODEL: ${{ vars.KIMI_MODEL }}
         run: |
           python3 -I - <<'PY'
-          """Light task runner: one issue in, one model answer out as a comment.
+          """Light task runner: one issue in, one free-model answer out as a comment.
 
           Inputs: the issue event (GITHUB_EVENT_PATH), repository files named on
-          "file:" lines, the API key for the chosen route, and GH_TOKEN.
+          "file:" lines, GH_TOKEN (the built-in token with models: read), and the
+          optional repository variables LIGHT_MODEL and KIMI_MODEL to pin a model.
           Output: one issue comment with the answer, the model and token counts.
-          Errors: a missing key or a failed call is posted as a short comment and
-          the run turns red. The key is never printed.
+          Errors: no model found, a limit reached or a failed call is posted as a
+          short comment and the run turns red.
           """
           import json
           import os
           import pathlib
+          import re
           import sys
           import urllib.error
           import urllib.request
 
+          MODELS_URL = os.environ.get("MODELS_URL", "https://models.github.ai")
           ROUTES = {
               "light": {
                   "name": "DeepSeek",
-                  "key_env": "DEEPSEEK_API_KEY",
-                  "model_env": "DEEPSEEK_MODEL",
-                  "default_model": "deepseek-chat",
-                  "url": os.environ.get("DEEPSEEK_URL", "https://api.deepseek.com/chat/completions"),
+                  "pin_env": "LIGHT_MODEL",
+                  "prefer": ["deepseek-v4", "deepseek-v3", "deepseek-r1", "deepseek", "gpt-4.1-mini", "gpt-4o-mini"],
               },
               "light-kimi": {
                   "name": "Kimi",
-                  "key_env": "KIMI_API_KEY",
-                  "model_env": "KIMI_MODEL",
-                  "default_model": "",
-                  "url": os.environ.get("KIMI_URL", "https://api.moonshot.ai/v1/chat/completions"),
+                  "pin_env": "KIMI_MODEL",
+                  "prefer": ["kimi"],
               },
           }
-          MAX_FILE_BYTES = 100_000
-          MAX_TOTAL_BYTES = 300_000
+          MAX_INPUT_CHARS = 24_000
           MAX_ANSWER_TOKENS = 4000
           SYSTEM = (
               "You help with the APCCS and UCLRCDE software projects. Do the task in the "
@@ -94,27 +93,32 @@ jobs:
 
           API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
           REPO = os.environ["GITHUB_REPOSITORY"]
+          TOKEN = os.environ["GH_TOKEN"]
           WORKSPACE = pathlib.Path(os.environ.get("GITHUB_WORKSPACE", ".")).resolve()
           event = json.loads(pathlib.Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
           issue = event["issue"]
-          label = event["label"]["name"]
-          route = ROUTES[label]
+          route = ROUTES[event["label"]["name"]]
 
 
-          def comment(text):
-              """Post one comment on the issue; return the HTTP status."""
+          def call(url, payload=None, timeout=60):
+              """Send one request with the built-in token; return the parsed JSON."""
               req = urllib.request.Request(
-                  f"{API}/repos/{REPO}/issues/{issue['number']}/comments",
-                  data=json.dumps({"body": text}).encode("utf-8"),
+                  url,
+                  data=None if payload is None else json.dumps(payload).encode("utf-8"),
                   headers={
-                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                      "Authorization": f"Bearer {TOKEN}",
                       "Accept": "application/vnd.github+json",
                       "Content-Type": "application/json",
                   },
-                  method="POST",
+                  method="GET" if payload is None else "POST",
               )
-              with urllib.request.urlopen(req, timeout=30) as resp:
-                  return resp.status
+              with urllib.request.urlopen(req, timeout=timeout) as resp:
+                  return json.loads(resp.read().decode("utf-8") or "{}")
+
+
+          def comment(text):
+              """Post one comment on the issue."""
+              call(f"{API}/repos/{REPO}/issues/{issue['number']}/comments", {"body": text}, timeout=30)
 
 
           def stop(text):
@@ -124,15 +128,28 @@ jobs:
               sys.exit(1)
 
 
-          key = os.environ.get(route["key_env"], "")
-          if not key:
-              stop(f"The repository secret {route['key_env']} is not set, so {route['name']} was not asked.")
-          model = os.environ.get(route["model_env"]) or route["default_model"]
-          if not model:
-              stop(f"Set the repository variable {route['model_env']} to the {route['name']} model name first.")
+          def pick_model():
+              """Return the pinned model, or the best free match from the catalog."""
+              pinned = os.environ.get(route["pin_env"], "").strip()
+              if pinned:
+                  return pinned
+              try:
+                  catalog = call(f"{MODELS_URL}/catalog/models")
+              except (urllib.error.URLError, TimeoutError, ValueError) as err:
+                  stop(f"Could not read the GitHub Models list: {err}")
+              ids = [m.get("id", "") for m in catalog if isinstance(m, dict)]
+              for want in route["prefer"]:
+                  found = sorted(i for i in ids if want in i.lower())
+                  if found:
+                      return found[-1]
+              stop(f"GitHub Models has no {route['name']} model right now. Use the label light instead.")
+
+
+          model = pick_model()
 
           body = issue.get("body") or ""
-          files, total, notes = [], 0, []
+          parts, notes, room = [f"TASK: {issue['title']}\n\n{body}"], [], MAX_INPUT_CHARS
+          room -= len(parts[0])
           for line in body.splitlines():
               if not line.strip().lower().startswith("file:"):
                   continue
@@ -141,50 +158,46 @@ jobs:
               if WORKSPACE not in path.parents or not path.is_file():
                   notes.append(f"skipped `{rel}`: not a file in this repository")
                   continue
-              size = path.stat().st_size
-              if size > MAX_FILE_BYTES or total + size > MAX_TOTAL_BYTES:
-                  notes.append(f"skipped `{rel}`: too large ({size:,} bytes)")
+              text = path.read_text(encoding="utf-8", errors="replace")
+              if room <= 500:
+                  notes.append(f"skipped `{rel}`: no room left under the free limit")
                   continue
-              total += size
-              files.append(f"--- FILE {rel} ---\n{path.read_text(encoding='utf-8', errors='replace')}")
-
-          task = f"TASK: {issue['title']}\n\n{body}"
-          if files:
-              task += "\n\n" + "\n\n".join(files)
+              if len(text) > room:
+                  notes.append(f"cut `{rel}` to its first {room:,} of {len(text):,} characters")
+                  text = text[:room]
+              room -= len(text)
+              parts.append(f"--- FILE {rel} ---\n{text}")
+          task = "\n\n".join(parts)[: MAX_INPUT_CHARS + 200]
 
           payload = {
               "model": model,
               "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
               "max_tokens": MAX_ANSWER_TOKENS,
           }
-          req = urllib.request.Request(
-              route["url"],
-              data=json.dumps(payload).encode("utf-8"),
-              headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-              method="POST",
-          )
           try:
-              with urllib.request.urlopen(req, timeout=300) as resp:
-                  data = json.loads(resp.read().decode("utf-8"))
+              data = call(f"{MODELS_URL}/inference/chat/completions", payload, timeout=300)
           except urllib.error.HTTPError as err:
-              detail = err.read().decode("utf-8", errors="replace")[:300].replace(key, "[key]")
-              stop(f"{route['name']} answered HTTP {err.code}: {detail}")
+              if err.code == 429:
+                  stop(f"The free daily limit for `{model}` is used up. Try again later.")
+              detail = err.read().decode("utf-8", errors="replace")[:300]
+              stop(f"GitHub Models answered HTTP {err.code} for `{model}`: {detail}")
           except (urllib.error.URLError, TimeoutError) as err:
-              stop(f"Could not reach {route['name']}: {err}")
+              stop(f"Could not reach GitHub Models: {err}")
 
           try:
-              answer = data["choices"][0]["message"]["content"].strip()
-          except (KeyError, IndexError, TypeError, AttributeError):
-              stop(f"{route['name']} sent an answer in an unexpected shape.")
+              answer = data["choices"][0]["message"]["content"] or ""
+          except (KeyError, IndexError, TypeError):
+              stop("GitHub Models sent an answer in an unexpected shape.")
+          answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.S).strip()
           usage = data.get("usage") or {}
           footer = (
-              f"\n\n---\nAnswered by {route['name']} (`{model}`) as a light task. "
+              f"\n\n---\nAnswered free by `{model}` on GitHub Models as a light task. "
               f"Tokens in/out: {usage.get('prompt_tokens', '?')}/{usage.get('completion_tokens', '?')}. "
-              f"Files read: {len(files)}."
+              f"Files read: {len(parts) - 1}."
           )
           if notes:
               footer += " " + "; ".join(notes) + "."
           footer += " Check it before relying on it."
           comment((answer or "(empty answer)") + footer)
-          print(f"Posted {route['name']} answer: {usage.get('completion_tokens', '?')} tokens.")
+          print(f"Posted answer from {model}: {usage.get('completion_tokens', '?')} tokens.")
           PY
