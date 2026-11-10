@@ -1,23 +1,26 @@
-# Light task: answers a GitHub issue with a free model from GitHub Models, so
-# Claude's limited usage is kept for architecture, security decisions and audits.
+# Light task: answers a GitHub issue with a free model, so Claude's limited
+# usage is kept for architecture, security decisions and audits.
 # Owner-approved on 2026-11-10 at 09:15 America/Vancouver (log Entry 0318, ledger Q028).
-# Changed 2026-11-10 at 09:32 (log Entry 0319, ledger Q029): $0 only. No paid API keys;
-# it uses GitHub Models' free tier through the built-in GITHUB_TOKEN.
+# Changed 2026-11-10 at 09:32 (log Entry 0319, ledger Q029): $0 only, GitHub Models.
+# Changed 2026-11-10 at 09:58 (log Entry 0321, ledger Q030): adds the free Gemini route.
 #
 # How to use (works from the GitHub phone app):
 #   1. Open an issue and write the task in plain words.
 #   2. To give it repository files to read, add lines like:  file: plan/QUEUE.md
-#   3. Add the label "light" (DeepSeek) or "light-kimi" (Kimi, if GitHub Models has it).
+#   3. Add one label:
+#        light         DeepSeek on GitHub Models (free; short inputs, about 24,000 characters)
+#        light-gemini  Gemini with a free AI Studio key (free; long inputs, about 300,000 characters)
+#        light-kimi    Kimi, only if GitHub Models lists a Kimi model
 #   The answer arrives as a comment on the issue, usually within a minute.
-#
-# Limits of the free tier: about 8,000 tokens in and 4,000 out per request, and a
-# daily request limit per model. Long files are cut to fit, and the comment says so.
 #
 # Safety:
 # - Runs only when someone with triage rights adds the label (strangers can't).
-# - No API keys or secrets. The built-in token can read the repository, comment on
-#   issues and call GitHub Models. It cannot push, merge or change files.
-# - Never put real case files, keys or personal details in a light task.
+# - GitHub Models needs no key. The Gemini route uses the free key in the repository
+#   secret GEMINI_API_KEY, which only the owner sets; this file never prints it.
+# - The job can read the repository and comment on issues. It cannot push, merge or
+#   change files.
+# - Never put real case files, keys or personal details in a light task. Google may use
+#   free-tier Gemini data to improve its products.
 name: Light task
 
 on:
@@ -35,7 +38,10 @@ concurrency:
 
 jobs:
   answer:
-    if: github.event.label.name == 'light' || github.event.label.name == 'light-kimi'
+    if: >-
+      github.event.label.name == 'light' ||
+      github.event.label.name == 'light-gemini' ||
+      github.event.label.name == 'light-kimi'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -47,18 +53,21 @@ jobs:
       - name: Ask the free model and post the answer
         env:
           GH_TOKEN: ${{ github.token }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           LIGHT_MODEL: ${{ vars.LIGHT_MODEL }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           KIMI_MODEL: ${{ vars.KIMI_MODEL }}
         run: |
           python3 -I - <<'PY'
           """Light task runner: one issue in, one free-model answer out as a comment.
 
           Inputs: the issue event (GITHUB_EVENT_PATH), repository files named on
-          "file:" lines, GH_TOKEN (the built-in token with models: read), and the
-          optional repository variables LIGHT_MODEL and KIMI_MODEL to pin a model.
+          "file:" lines, GH_TOKEN (built-in token with models: read), GEMINI_API_KEY
+          for the Gemini route, and the optional variables LIGHT_MODEL, GEMINI_MODEL
+          and KIMI_MODEL to pin a model.
           Output: one issue comment with the answer, the model and token counts.
-          Errors: no model found, a limit reached or a failed call is posted as a
-          short comment and the run turns red.
+          Errors: a missing key, no model found, a used-up limit or a failed call is
+          posted as a short comment and the run turns red. Keys are never printed.
           """
           import json
           import os
@@ -68,20 +77,45 @@ jobs:
           import urllib.error
           import urllib.request
 
-          MODELS_URL = os.environ.get("MODELS_URL", "https://models.github.ai")
+          GITHUB_MODELS = os.environ.get("MODELS_URL", "https://models.github.ai")
+          GEMINI = os.environ.get("GEMINI_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
+          SKIP_WORDS = ("image", "tts", "audio", "live", "embed", "vision", "robotics", "computer-use")
           ROUTES = {
               "light": {
-                  "name": "DeepSeek",
+                  "name": "DeepSeek on GitHub Models",
                   "pin_env": "LIGHT_MODEL",
                   "prefer": ["deepseek-v4", "deepseek-v3", "deepseek-r1", "deepseek", "gpt-4.1-mini", "gpt-4o-mini"],
+                  "base": GITHUB_MODELS,
+                  "catalog": "/catalog/models",
+                  "chat": "/inference/chat/completions",
+                  "key_env": "GH_TOKEN",
+                  "max_chars": 24_000,
+                  "fallback": ["deepseek/DeepSeek-V3-0324", "deepseek/DeepSeek-R1-0528",
+                               "deepseek/DeepSeek-R1", "openai/gpt-4.1-mini"],
+              },
+              "light-gemini": {
+                  "name": "Gemini (free AI Studio key)",
+                  "pin_env": "GEMINI_MODEL",
+                  "prefer": ["flash"],
+                  "base": GEMINI,
+                  "catalog": "/models",
+                  "chat": "/chat/completions",
+                  "key_env": "GEMINI_API_KEY",
+                  "max_chars": 300_000,
+                  "fallback": ["gemini-flash-latest", "gemini-2.5-flash"],
               },
               "light-kimi": {
-                  "name": "Kimi",
+                  "name": "Kimi on GitHub Models",
                   "pin_env": "KIMI_MODEL",
                   "prefer": ["kimi"],
+                  "base": GITHUB_MODELS,
+                  "catalog": "/catalog/models",
+                  "chat": "/inference/chat/completions",
+                  "key_env": "GH_TOKEN",
+                  "max_chars": 24_000,
+                  "fallback": [],
               },
           }
-          MAX_INPUT_CHARS = 24_000
           MAX_ANSWER_TOKENS = 4000
           SYSTEM = (
               "You help with the APCCS and UCLRCDE software projects. Do the task in the "
@@ -93,63 +127,90 @@ jobs:
 
           API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
           REPO = os.environ["GITHUB_REPOSITORY"]
-          TOKEN = os.environ["GH_TOKEN"]
           WORKSPACE = pathlib.Path(os.environ.get("GITHUB_WORKSPACE", ".")).resolve()
           event = json.loads(pathlib.Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
           issue = event["issue"]
           route = ROUTES[event["label"]["name"]]
+          key = os.environ.get(route["key_env"], "")
 
 
-          def call(url, payload=None, timeout=60):
-              """Send one request with the built-in token; return the parsed JSON."""
+          def call(url, token, payload=None, timeout=60):
+              """Send one request with a bearer token; return the parsed JSON."""
+              headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+              if "github" in url:
+                  headers["Accept"] = "application/vnd.github+json"
+                  headers["X-GitHub-Api-Version"] = "2022-11-28"
+              else:
+                  headers["Accept"] = "application/json"
               req = urllib.request.Request(
                   url,
                   data=None if payload is None else json.dumps(payload).encode("utf-8"),
-                  headers={
-                      "Authorization": f"Bearer {TOKEN}",
-                      "Accept": "application/vnd.github+json",
-                      "Content-Type": "application/json",
-                  },
+                  headers=headers,
                   method="GET" if payload is None else "POST",
               )
               with urllib.request.urlopen(req, timeout=timeout) as resp:
-                  return json.loads(resp.read().decode("utf-8") or "{}")
+                  raw = resp.read().decode("utf-8", errors="replace")
+              try:
+                  return json.loads(raw or "{}")
+              except ValueError:
+                  print(f"Not JSON from {url.split('?')[0]}: {raw[:200]!r}")
+                  raise
 
 
           def comment(text):
-              """Post one comment on the issue."""
-              call(f"{API}/repos/{REPO}/issues/{issue['number']}/comments", {"body": text}, timeout=30)
+              """Post one comment on the issue with the built-in token."""
+              call(f"{API}/repos/{REPO}/issues/{issue['number']}/comments",
+                   os.environ["GH_TOKEN"], {"body": text}, timeout=30)
 
 
           def stop(text):
               """Report a problem on the issue and turn the run red."""
+              if key:
+                  text = text.replace(key, "[key]")
               comment(f"**Light task not run.** {text}")
               print(text)
               sys.exit(1)
 
 
-          def pick_model():
-              """Return the pinned model, or the best free match from the catalog."""
+          def version_key(model_id):
+              """Sort key: higher version numbers last; plain beats lite and preview."""
+              nums = [int(n) for n in re.findall(r"\d+", model_id)]
+              plain = 0 if ("lite" in model_id or "preview" in model_id or "exp" in model_id) else 1
+              return (plain, nums)
+
+
+          def candidate_models():
+              """Return models to try, best first: the pinned one, else the live list plus fallbacks."""
               pinned = os.environ.get(route["pin_env"], "").strip()
               if pinned:
-                  return pinned
+                  return [pinned]
+              picked = []
               try:
-                  catalog = call(f"{MODELS_URL}/catalog/models")
-              except (urllib.error.URLError, TimeoutError, ValueError) as err:
-                  stop(f"Could not read the GitHub Models list: {err}")
-              ids = [m.get("id", "") for m in catalog if isinstance(m, dict)]
-              for want in route["prefer"]:
-                  found = sorted(i for i in ids if want in i.lower())
-                  if found:
-                      return found[-1]
-              stop(f"GitHub Models has no {route['name']} model right now. Use the label light instead.")
+                  listing = call(route["base"] + route["catalog"], key)
+                  items = listing.get("data", []) if isinstance(listing, dict) else listing
+                  ids = [str(m.get("id", "")) for m in items if isinstance(m, dict)]
+                  ids = [i.removeprefix("models/") for i in ids if not any(w in i.lower() for w in SKIP_WORDS)]
+                  for want in route["prefer"]:
+                      found = sorted((i for i in ids if want in i.lower()), key=version_key)
+                      if found:
+                          picked = found[::-1][:2]
+                          break
+              except (urllib.error.URLError, TimeoutError, ValueError, AttributeError) as err:
+                  print(f"Model list not read ({err}); using the fallback list.")
+              out = picked + [m for m in route["fallback"] if m not in picked]
+              if not out:
+                  stop(f"{route['name']} lists no suitable model right now. Try the label light instead.")
+              return out
 
 
-          model = pick_model()
+          if not key:
+              stop(f"The repository secret {route['key_env']} is not set, so {route['name']} was not asked.")
+          models = candidate_models()
 
           body = issue.get("body") or ""
-          parts, notes, room = [f"TASK: {issue['title']}\n\n{body}"], [], MAX_INPUT_CHARS
-          room -= len(parts[0])
+          limit = route["max_chars"]
+          parts, notes = [f"TASK: {issue['title']}\n\n{body}"], []
+          room = limit - len(parts[0])
           for line in body.splitlines():
               if not line.strip().lower().startswith("file:"):
                   continue
@@ -167,31 +228,40 @@ jobs:
                   text = text[:room]
               room -= len(text)
               parts.append(f"--- FILE {rel} ---\n{text}")
-          task = "\n\n".join(parts)[: MAX_INPUT_CHARS + 200]
+          task = "\n\n".join(parts)[: limit + 200]
 
-          payload = {
-              "model": model,
-              "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
-              "max_tokens": MAX_ANSWER_TOKENS,
-          }
-          try:
-              data = call(f"{MODELS_URL}/inference/chat/completions", payload, timeout=300)
-          except urllib.error.HTTPError as err:
-              if err.code == 429:
-                  stop(f"The free daily limit for `{model}` is used up. Try again later.")
-              detail = err.read().decode("utf-8", errors="replace")[:300]
-              stop(f"GitHub Models answered HTTP {err.code} for `{model}`: {detail}")
-          except (urllib.error.URLError, TimeoutError) as err:
-              stop(f"Could not reach GitHub Models: {err}")
+          data, model, tried = None, "", []
+          for model in models[:4]:
+              payload = {
+                  "model": model,
+                  "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
+                  "max_tokens": MAX_ANSWER_TOKENS,
+              }
+              try:
+                  data = call(route["base"] + route["chat"], key, payload, timeout=300)
+                  break
+              except urllib.error.HTTPError as err:
+                  detail = err.read().decode("utf-8", errors="replace")[:300]
+                  if err.code == 429:
+                      stop(f"The free limit for `{model}` is used up for now. Try again later, or use another light label.")
+                  tried.append(f"`{model}` (HTTP {err.code})")
+                  print(f"{model}: HTTP {err.code}: {detail}")
+                  if err.code in (400, 404, 422):
+                      continue
+                  stop(f"{route['name']} answered HTTP {err.code} for `{model}`: {detail}")
+              except (urllib.error.URLError, TimeoutError, ValueError) as err:
+                  stop(f"Could not reach {route['name']}: {err}")
+          if data is None:
+              stop(f"No model answered. Tried: {', '.join(tried)}. Set the variable {route['pin_env']} to a model name that works.")
 
           try:
               answer = data["choices"][0]["message"]["content"] or ""
           except (KeyError, IndexError, TypeError):
-              stop("GitHub Models sent an answer in an unexpected shape.")
+              stop(f"{route['name']} sent an answer in an unexpected shape.")
           answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.S).strip()
           usage = data.get("usage") or {}
           footer = (
-              f"\n\n---\nAnswered free by `{model}` on GitHub Models as a light task. "
+              f"\n\n---\nAnswered free by `{model}` ({route['name']}) as a light task. "
               f"Tokens in/out: {usage.get('prompt_tokens', '?')}/{usage.get('completion_tokens', '?')}. "
               f"Files read: {len(parts) - 1}."
           )
