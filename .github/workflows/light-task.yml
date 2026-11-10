@@ -1,26 +1,33 @@
-# Light task: answers a GitHub issue with a free model, so Claude's limited
+# Light task: answers a GitHub issue with a small open model, so Claude's limited
 # usage is kept for architecture, security decisions and audits.
 # Owner-approved on 2026-11-10 at 09:15 America/Vancouver (log Entry 0318, ledger Q028).
-# Changed 2026-11-10 at 09:32 (log Entry 0319, ledger Q029): $0 only, GitHub Models.
-# Changed 2026-11-10 at 09:58 (log Entry 0321, ledger Q030): adds the free Gemini route.
+# Changed 2026-11-10 at 13:26 (log Entry 0330, ledger Q032): GitHub Models was retired
+# on 2026-07-30 and the Gemini API is not free for the Owner, so the light label now
+# runs a small open model with Ollama on GitHub's own runner. No key, no outside AI
+# service. The light-gemini and light-kimi routes are parked (see ledger Q032).
 #
 # How to use (works from the GitHub phone app):
 #   1. Open an issue and write the task in plain words.
 #   2. To give it repository files to read, add lines like:  file: plan/QUEUE.md
-#   3. Add one label:
-#        light         DeepSeek on GitHub Models (free; short inputs, about 24,000 characters)
-#        light-gemini  Gemini with a free AI Studio key (free; long inputs, about 300,000 characters)
-#        light-kimi    Kimi, only if GitHub Models lists a Kimi model
-#   The answer arrives as a comment on the issue, usually within a minute.
+#   3. Add the label  light.
+#   The answer arrives as a comment on the issue, usually within 3 to 6 minutes.
+#
+# Settings (repository variables, all optional; only the Owner sets them):
+#   OLLAMA_MODEL    the Ollama model tag to use (default qwen3.5:2b; the fallback is
+#                   llama3.2:3b if that one can't be downloaded)
+#   OLLAMA_VERSION  pin an Ollama version, for example 0.30.0 (default: the newest)
 #
 # Safety:
 # - Runs only when someone with triage rights adds the label (strangers can't).
-# - GitHub Models needs no key. The Gemini route uses the free key in the repository
-#   secret GEMINI_API_KEY, which only the owner sets; this file never prints it.
+# - The model runs on the GitHub runner itself. The task text goes only to that
+#   runner, which already holds the repository, so nothing reaches an outside AI.
+# - The server talks the OpenAI-compatible protocol at http://127.0.0.1:11434/v1, so the
+#   model or the server can be swapped without rewriting the runner below.
 # - The job can read the repository and comment on issues. It cannot push, merge or
 #   change files.
-# - Never put real case files, keys or personal details in a light task. Google may use
-#   free-tier Gemini data to improve its products.
+# - Never put real case files, keys or personal details in a light task: the runner is
+#   GitHub's computer, not the Owner's device.
+# - Each task uses about 3 to 6 of the private repository's free monthly Actions minutes.
 name: Light task
 
 on:
@@ -30,7 +37,6 @@ on:
 permissions:
   contents: read
   issues: write
-  models: read
 
 concurrency:
   group: light-task-${{ github.event.issue.number }}
@@ -38,85 +44,98 @@ concurrency:
 
 jobs:
   answer:
-    if: >-
-      github.event.label.name == 'light' ||
-      github.event.label.name == 'light-gemini' ||
-      github.event.label.name == 'light-kimi'
+    if: github.event.label.name == 'light'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      MODEL: ${{ vars.OLLAMA_MODEL || 'qwen3.5:2b' }}
+      FALLBACK_MODEL: llama3.2:3b
+      OLLAMA_VERSION: ${{ vars.OLLAMA_VERSION }}
     steps:
+      - name: Note the start time (the answer step keeps inside the 10-minute limit)
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Get the code (read-only)
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Ask the free model and post the answer
+      - name: Restore the cached model
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-models-${{ env.MODEL }}
+          restore-keys: ollama-models-
+
+      - name: Install and start Ollama
+        run: |
+          url="https://ollama.com/download/ollama-linux-amd64.tar.zst${OLLAMA_VERSION:+?version=$OLLAMA_VERSION}"
+          curl -fsSL --retry 3 "$url" | sudo tar --zstd -xf - -C /usr
+          ollama --version || true
+          mkdir -p "$HOME/.ollama/models"
+          # One request at a time; room for about 16,000 characters in plus the answer.
+          OLLAMA_MODELS="$HOME/.ollama/models" OLLAMA_CONTEXT_LENGTH=8192 OLLAMA_NUM_PARALLEL=1 \
+            OLLAMA_KEEP_ALIVE=30m nohup ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:11434/api/version && exit 0
+            sleep 1
+          done
+          echo "Ollama did not start:"; tail -n 40 "$RUNNER_TEMP/ollama.log"; exit 1
+
+      - name: Get the model (cached copy first, else download)
+        run: |
+          chosen=""
+          for m in "$MODEL" "$FALLBACK_MODEL"; do
+            if ollama show "$m" > /dev/null 2>&1; then
+              echo "Using the cached copy of $m"; chosen="$m"; break
+            fi
+            if timeout 240 ollama pull "$m" > "$RUNNER_TEMP/pull.log" 2>&1; then
+              echo "Downloaded $m"; chosen="$m"; break
+            fi
+            echo "::warning::Could not download $m: $(tail -c 300 "$RUNNER_TEMP/pull.log" | tr '\r\n' '  ')"
+          done
+          echo "CHOSEN_MODEL=$chosen" >> "$GITHUB_ENV"
+
+      - name: Save the model for next time
+        if: steps.restore.outputs.cache-hit != 'true' && env.CHOSEN_MODEL != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-models-${{ env.CHOSEN_MODEL }}
+
+      - name: Ask the model and post the answer
         env:
           GH_TOKEN: ${{ github.token }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          LIGHT_MODEL: ${{ vars.LIGHT_MODEL }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
-          KIMI_MODEL: ${{ vars.KIMI_MODEL }}
         run: |
           python3 -I - <<'PY'
-          """Light task runner: one issue in, one free-model answer out as a comment.
+          """Light task runner: one issue in, one answer from a small open model out.
 
           Inputs: the issue event (GITHUB_EVENT_PATH), repository files named on
-          "file:" lines, GH_TOKEN (built-in token with models: read), GEMINI_API_KEY
-          for the Gemini route, and the optional variables LIGHT_MODEL, GEMINI_MODEL
-          and KIMI_MODEL to pin a model.
-          Output: one issue comment with the answer, the model and token counts.
-          Errors: a missing key, no model found, a used-up limit or a failed call is
-          posted as a short comment and the run turns red. Keys are never printed.
+          "file:" lines, GH_TOKEN (built-in token, used only to post the comment),
+          CHOSEN_MODEL (the Ollama tag the previous step made ready), JOB_START (job
+          start in Unix seconds) and OLLAMA_URL (default http://127.0.0.1:11434/v1;
+          any OpenAI-compatible server works).
+          Output: one issue comment with the answer, the model, token counts and time.
+          Errors: no model, a failed call, a call that would pass the 10-minute limit,
+          or an answer in an unexpected shape is posted as a short comment and the run
+          turns red.
           """
           import json
           import os
           import pathlib
           import re
           import sys
+          import time
           import urllib.error
           import urllib.request
 
-          GITHUB_MODELS = os.environ.get("MODELS_URL", "https://models.github.ai")
-          GEMINI = os.environ.get("GEMINI_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
-          SKIP_WORDS = ("image", "tts", "audio", "live", "embed", "vision", "robotics", "computer-use")
-          ROUTES = {
-              "light": {
-                  "name": "DeepSeek on GitHub Models",
-                  "pin_env": "LIGHT_MODEL",
-                  "prefer": ["deepseek-v4", "deepseek-v3", "deepseek-r1", "deepseek", "gpt-4.1-mini", "gpt-4o-mini"],
-                  "base": GITHUB_MODELS,
-                  "catalog": "/catalog/models",
-                  "chat": "/inference/chat/completions",
-                  "key_env": "GH_TOKEN",
-                  "max_chars": 24_000,
-                  "fallback": ["deepseek/DeepSeek-V3-0324", "deepseek/DeepSeek-R1-0528",
-                               "deepseek/DeepSeek-R1", "openai/gpt-4.1-mini"],
-              },
-              "light-gemini": {
-                  "name": "Gemini (free AI Studio key)",
-                  "pin_env": "GEMINI_MODEL",
-                  "prefer": ["flash"],
-                  "base": GEMINI,
-                  "catalog": "/models",
-                  "chat": "/chat/completions",
-                  "key_env": "GEMINI_API_KEY",
-                  "max_chars": 300_000,
-                  "fallback": ["gemini-flash-latest", "gemini-2.5-flash"],
-              },
-              "light-kimi": {
-                  "name": "Kimi on GitHub Models",
-                  "pin_env": "KIMI_MODEL",
-                  "prefer": ["kimi"],
-                  "base": GITHUB_MODELS,
-                  "catalog": "/catalog/models",
-                  "chat": "/inference/chat/completions",
-                  "key_env": "GH_TOKEN",
-                  "max_chars": 24_000,
-                  "fallback": [],
-              },
-          }
-          MAX_ANSWER_TOKENS = 4000
+          BASE = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/v1").rstrip("/")
+          ROUTE = "Ollama on GitHub's runner"
+          MAX_CHARS = 16_000          # fits the 8,192-token window set when Ollama starts
+          MAX_ANSWER_TOKENS = 1_500
+          JOB_LIMIT_S = 600           # matches timeout-minutes: 10 above
+          RESERVE_S = 45              # kept back so a failure can still be reported
           SYSTEM = (
               "You help with the APCCS and UCLRCDE software projects. Do the task in the "
               "issue using only the text given. Say plainly when something is missing or "
@@ -130,8 +149,7 @@ jobs:
           WORKSPACE = pathlib.Path(os.environ.get("GITHUB_WORKSPACE", ".")).resolve()
           event = json.loads(pathlib.Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
           issue = event["issue"]
-          route = ROUTES[event["label"]["name"]]
-          key = os.environ.get(route["key_env"], "")
+          model = os.environ.get("CHOSEN_MODEL", "").strip()
 
 
           def call(url, token, payload=None, timeout=60):
@@ -165,52 +183,24 @@ jobs:
 
           def stop(text):
               """Report a problem on the issue and turn the run red."""
-              if key:
-                  text = text.replace(key, "[key]")
               comment(f"**Light task not run.** {text}")
               print(text)
               sys.exit(1)
 
 
-          def version_key(model_id):
-              """Sort key: higher version numbers last; plain beats lite and preview."""
-              nums = [int(n) for n in re.findall(r"\d+", model_id)]
-              plain = 0 if ("lite" in model_id or "preview" in model_id or "exp" in model_id) else 1
-              return (plain, nums)
+          def timed_out(err):
+              """True when a request failed because it ran out of time."""
+              return isinstance(err, TimeoutError) or isinstance(getattr(err, "reason", None), TimeoutError)
 
 
-          def candidate_models():
-              """Return models to try, best first: the pinned one, else the live list plus fallbacks."""
-              pinned = os.environ.get(route["pin_env"], "").strip()
-              if pinned:
-                  return [pinned]
-              picked = []
-              try:
-                  listing = call(route["base"] + route["catalog"], key)
-                  items = listing.get("data", []) if isinstance(listing, dict) else listing
-                  ids = [str(m.get("id", "")) for m in items if isinstance(m, dict)]
-                  ids = [i.removeprefix("models/") for i in ids if not any(w in i.lower() for w in SKIP_WORDS)]
-                  for want in route["prefer"]:
-                      found = sorted((i for i in ids if want in i.lower()), key=version_key)
-                      if found:
-                          picked = found[::-1][:2]
-                          break
-              except (urllib.error.URLError, TimeoutError, ValueError, AttributeError) as err:
-                  print(f"Model list not read ({err}); using the fallback list.")
-              out = picked + [m for m in route["fallback"] if m not in picked]
-              if not out:
-                  stop(f"{route['name']} lists no suitable model right now. Try the label light instead.")
-              return out
-
-
-          if not key:
-              stop(f"The repository secret {route['key_env']} is not set, so {route['name']} was not asked.")
-          models = candidate_models()
+          if not model:
+              stop(f"Ollama could not get the model `{os.environ.get('MODEL', '?')}` or the fallback "
+                   f"`{os.environ.get('FALLBACK_MODEL', '?')}`. The run log says why. To use another "
+                   "model, the Owner sets the repository variable OLLAMA_MODEL to an Ollama tag.")
 
           body = issue.get("body") or ""
-          limit = route["max_chars"]
           parts, notes = [f"TASK: {issue['title']}\n\n{body}"], []
-          room = limit - len(parts[0])
+          room = MAX_CHARS - len(parts[0])
           for line in body.splitlines():
               if not line.strip().lower().startswith("file:"):
                   continue
@@ -221,53 +211,67 @@ jobs:
                   continue
               text = path.read_text(encoding="utf-8", errors="replace")
               if room <= 500:
-                  notes.append(f"skipped `{rel}`: no room left under the free limit")
+                  notes.append(f"skipped `{rel}`: no room left under the {MAX_CHARS:,}-character limit")
                   continue
               if len(text) > room:
                   notes.append(f"cut `{rel}` to its first {room:,} of {len(text):,} characters")
                   text = text[:room]
               room -= len(text)
               parts.append(f"--- FILE {rel} ---\n{text}")
-          task = "\n\n".join(parts)[: limit + 200]
+          task = "\n\n".join(parts)[: MAX_CHARS + 200]
 
-          data, model, tried = None, "", []
-          for model in models[:4]:
-              payload = {
-                  "model": model,
-                  "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
-                  "max_tokens": MAX_ANSWER_TOKENS,
-              }
+          payload = {
+              "model": model,
+              "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
+              "max_tokens": MAX_ANSWER_TOKENS,
+              # Answer directly: step-by-step "thinking" is too slow on a runner without a GPU.
+              "reasoning_effort": "none",
+          }
+          started = float(os.environ.get("JOB_START") or time.time())
+          too_slow = (f"`{model}` did not finish inside the 10-minute limit. Shorten the task or "
+                      "name fewer files, or the Owner sets OLLAMA_MODEL to a smaller model.")
+          t0 = time.time()
+          data = None
+          while data is None:
+              budget = JOB_LIMIT_S - RESERVE_S - (time.time() - started)
+              if budget < 30:
+                  stop(too_slow if time.time() - t0 > 5 else
+                       "Setting up Ollama used up the 10-minute limit. Try again: the model is "
+                       "cached after its first download, so the next run starts faster.")
               try:
-                  data = call(route["base"] + route["chat"], key, payload, timeout=300)
-                  break
+                  data = call(BASE + "/chat/completions", "ollama", payload, timeout=budget)
               except urllib.error.HTTPError as err:
                   detail = err.read().decode("utf-8", errors="replace")[:300]
-                  if err.code == 429:
-                      stop(f"The free limit for `{model}` is used up for now. Try again later, or use another light label.")
-                  tried.append(f"`{model}` (HTTP {err.code})")
                   print(f"{model}: HTTP {err.code}: {detail}")
-                  if err.code in (400, 404, 422):
+                  if err.code == 400 and "reasoning_effort" in payload:
+                      payload.pop("reasoning_effort")  # an older server, or a model without the setting
                       continue
-                  stop(f"{route['name']} answered HTTP {err.code} for `{model}`: {detail}")
-              except (urllib.error.URLError, TimeoutError, ValueError) as err:
-                  stop(f"Could not reach {route['name']}: {err}")
-          if data is None:
-              stop(f"No model answered. Tried: {', '.join(tried)}. Set the variable {route['pin_env']} to a model name that works.")
+                  stop(f"{ROUTE} answered HTTP {err.code} for `{model}`: {detail}")
+              except ValueError:
+                  stop(f"{ROUTE} sent an answer that is not JSON.")
+              except (urllib.error.URLError, TimeoutError) as err:
+                  if timed_out(err):
+                      stop(too_slow + f" (Waited {time.time() - t0:.0f} s.)")
+                  stop(f"Could not reach {ROUTE}: {err}")
+          seconds = time.time() - t0
 
           try:
-              answer = data["choices"][0]["message"]["content"] or ""
+              choice = data["choices"][0]
+              answer = choice["message"]["content"] or ""
           except (KeyError, IndexError, TypeError):
-              stop(f"{route['name']} sent an answer in an unexpected shape.")
+              stop(f"{ROUTE} sent an answer in an unexpected shape.")
           answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.S).strip()
+          if choice.get("finish_reason") == "length":
+              notes.append(f"the answer stopped at the {MAX_ANSWER_TOKENS:,}-token limit")
           usage = data.get("usage") or {}
           footer = (
-              f"\n\n---\nAnswered free by `{model}` ({route['name']}) as a light task. "
-              f"Tokens in/out: {usage.get('prompt_tokens', '?')}/{usage.get('completion_tokens', '?')}. "
-              f"Files read: {len(parts) - 1}."
+              f"\n\n---\nAnswered free by `{model}` ({ROUTE}; nothing sent to an outside AI) "
+              f"as a light task. Tokens in/out: {usage.get('prompt_tokens', '?')}/"
+              f"{usage.get('completion_tokens', '?')}. Time: {seconds:.0f} s. Files read: {len(parts) - 1}."
           )
           if notes:
               footer += " " + "; ".join(notes) + "."
           footer += " Check it before relying on it."
           comment((answer or "(empty answer)") + footer)
-          print(f"Posted answer from {model}: {usage.get('completion_tokens', '?')} tokens.")
+          print(f"Posted answer from {model}: {usage.get('completion_tokens', '?')} tokens in {seconds:.0f} s.")
           PY
