@@ -10,7 +10,7 @@
 # (more accurate, about twice as slow, still well inside 10 minutes); fallback is
 # qwen3.5:2b, which is proven on this runner. The instructions now ask it to stay close
 # to the file's own words.
-# Changed 2026-11-10 at 17:56 (log Entry 0338, ledger Q034): the 4B re-test got 4 of 5
+# Changed 2026-11-10 at 17:56 (log Entry 0341, ledger Q034): the 4B re-test got 4 of 5
 # right but turned "Made-up data only" into "Made-up data is forbidden". Every answer
 # that read a file now ends with a quote check: plain software (code/apccs_quote_check.py,
 # no AI) flags points whose rule words (only, never, not, forbidden...) aren't in the

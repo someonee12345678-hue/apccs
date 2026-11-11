@@ -1,4 +1,4 @@
-"""Tests for apccs_quote_check (light-task quote check, ledger Q034, log Entry 0338).
+"""Tests for apccs_quote_check (light-task quote check, ledger Q034, log Entry 0341).
 
 Run on its own from the code/ folder:  python3 test_apccs_quote_check.py
 

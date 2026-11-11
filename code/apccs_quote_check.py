@@ -1,6 +1,6 @@
 """Quote check: plain software (no AI) that compares a light-task answer with its files.
 
-Owner-approved 2026-11-10 17:56 America/Vancouver ("yes quote check", log Entry 0338,
+Owner-approved 2026-11-10 17:56 America/Vancouver ("yes quote check", log Entry 0341,
 ledger Q034). Reason: the qwen3.5:4b re-test on apccs #65 turned "Made-up data only"
 into "Made-up data is forbidden". A model can't be trusted to check itself, so this
 module checks every point of the answer against the source text with fixed rules.
