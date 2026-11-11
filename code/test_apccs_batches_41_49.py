@@ -7,8 +7,10 @@ Errors: any failed check exits non-zero.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 
@@ -599,6 +601,238 @@ class Batch43Tests(unittest.TestCase):
         for bad in ("/nonexistent/none.sqlite3", "", None):
             with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
                 batch.audit_static_website_against_xss_vectors(bad)
+
+
+class Batch44Tests(unittest.TestCase):
+    """Inputs: Batch 44 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH44_CANARY_LINE, flush=True)
+
+    def make(self) -> Path:
+        """Inputs: none. Outputs: a database with a rich made-up project p1. Errors: GenesisError."""
+        db = new_db(self)
+        batch.manage_genesis_requirement(db, "p1", "add", None, "Users can sign in", "INFERRED")
+        batch.manage_genesis_task(db, "p1", "add", None, "Write tests", "IN_PROGRESS")
+        batch.manage_genesis_criteria_and_decisions(db, "p1", "ACCEPTANCE_CRITERIA", "add", None, "Loads fast")
+        batch.manage_genesis_criteria_and_decisions(db, "p1", "DECISIONS", "add", None, "Use SQLite")
+        batch.manage_genesis_defects_and_record_history(db, "p1", "add", None, "Typo on page")
+        batch.checkpoint_and_restore_genesis_project(db, "p1", "create", None, "First save")
+        return db
+
+    def query(self, db: Path, sql: str, args: tuple = ()) -> list:
+        """Inputs: database, SQL and values. Outputs: rows as tuples. Errors: sqlite3.Error."""
+        connection = genesis._connect(db)
+        try:
+            return [tuple(row) for row in connection.execute(sql, args).fetchall()]
+        finally:
+            connection.close()
+
+    def text_of(self, db: Path, project_id: str = "p1") -> str:
+        """Inputs: database and project. Outputs: the envelope as file text. Errors: GenesisError."""
+        return json.dumps(batch.build_genesis_project_checksum_json(db, project_id), sort_keys=True,
+                          separators=(",", ":"))
+
+    def resign(self, text: str, change: object) -> str:
+        """Inputs: envelope text and a function that edits the project. Outputs: text with a fresh checksum. Errors: ValueError."""
+        data = json.loads(text)
+        change(data["project"])
+        data["sha256"] = batch._batch44_checksum(data["project"])
+        return json.dumps(data)
+
+    # INST-0216
+    def test_216_envelope_has_genesis_keys_checksum_and_full_record(self) -> None:
+        """Inputs: a made-up project. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        envelope = batch.build_genesis_project_checksum_json(db, "p1")
+        self.assertEqual(set(envelope), {"format", "sha256", "project"})
+        self.assertEqual(envelope["format"], "genesis-project")
+        project = envelope["project"]
+        self.assertEqual(project["schemaVersion"], 2)
+        self.assertEqual(project["category"], "OTHER")
+        self.assertEqual(project["requirements"], [{"text": "Users can sign in", "label": "INFERRED"}])
+        self.assertEqual(project["tasks"], [{"title": "Write tests", "status": "IN_PROGRESS"}])
+        self.assertEqual(project["acceptance_criteria"], ["Loads fast"])
+        self.assertEqual(project["decisions"], ["Use SQLite"])
+        self.assertEqual(project["known_defects"], ["Typo on page"])
+        self.assertEqual(project["checkpoints"][0]["label"], "First save")
+        self.assertIn("Checkpoint saved: First save", [item["text"] for item in project["history"]])
+        expected = hashlib.sha256(json.dumps(project, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+        self.assertEqual(envelope["sha256"], expected.hexdigest())
+
+    def test_216_history_is_bounded_and_bad_projects_are_rejected(self) -> None:
+        """Inputs: a long history and bad ids. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        for number in range(210):
+            batch.manage_genesis_defects_and_record_history(db, "p1", "add", None, "Defect %d" % number)
+        self.assertEqual(len(batch.build_genesis_project_checksum_json(db, "p1")["project"]["history"]), 200)
+        for bad in ("nope", "", None, 5):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.build_genesis_project_checksum_json(db, bad)
+        with self.assertRaises(genesis.GenesisError):
+            batch.build_genesis_project_checksum_json(db.parent / "missing.sqlite3", "p1")
+
+    # INST-0217
+    def test_217_good_file_is_parsed_and_old_schema_is_accepted(self) -> None:
+        """Inputs: an exported file. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        text = self.text_of(db)
+        parsed = batch.validate_and_parse_genesis_import_json(text)
+        self.assertEqual(parsed["format"], "genesis-project")
+        self.assertEqual(parsed["schema_version"], 2)
+        self.assertEqual(parsed["project"]["name"], "Made-up Project")
+        old = self.resign(text, lambda project: project.update(schemaVersion=1))
+        self.assertEqual(batch.validate_and_parse_genesis_import_json(old)["schema_version"], 1)
+
+    def test_217_tampering_wrong_format_and_bad_values_use_genesis_messages(self) -> None:
+        """Inputs: damaged files. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        text = self.text_of(db)
+        cases = [
+            (batch._batch44_flip_checksum(text), "Checksum mismatch: the file was changed or damaged."),
+            (text.replace('"Made-up Project"', '"Edited Project"'), "Checksum mismatch: the file was changed or damaged."),
+            ("not json", "Not a Genesis project export."),
+            ("[]", "Not a Genesis project export."),
+            (json.dumps({"format": "other", "sha256": "x", "project": {}}), "Not a Genesis project export."),
+            (self.resign(text, lambda project: project.update(schemaVersion=3)), "Unsupported schema version 3."),
+            (self.resign(text, lambda project: project.update(schemaVersion=True)), "Unsupported schema version True."),
+            (self.resign(text, lambda project: project.update(category="MOBILE_APP")), "Unknown product category"),
+            (self.resign(text, lambda project: project.update(name="x" * 61)), "length is outside"),
+            (self.resign(text, lambda project: project.update(name="   ")), "length is outside"),
+            (self.resign(text, lambda project: project.update(description="d" * 2001)), "length is outside"),
+            (self.resign(text, lambda project: project.update(dependencies="d" * 1001)), "length is outside"),
+            (self.resign(text, lambda project: project["requirements"][0].update(label="DOCUMENTED")), "Invalid evidence label"),
+            (self.resign(text, lambda project: project["tasks"][0].update(status="TO_DO")), "Invalid task status"),
+            (self.resign(text, lambda project: project.pop("tasks")), "Missing key: tasks"),
+            (self.resign(text, lambda project: project["decisions"].append("y" * 301)), "length is outside"),
+        ]
+        for bad, message in cases:
+            with self.subTest(message=message, bad=bad[:40]):
+                with self.assertRaises(genesis.GenesisError) as caught:
+                    batch.validate_and_parse_genesis_import_json(bad)
+                self.assertIn(message, str(caught.exception))
+        with self.assertRaises(genesis.GenesisError):
+            batch.validate_and_parse_genesis_import_json(None)
+
+    # INST-0218
+    def test_218_delete_backs_up_first_and_logs_the_action(self) -> None:
+        """Inputs: a project to delete. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        sha = batch.build_genesis_project_checksum_json(db, "p1")["sha256"]
+        done = batch.execute_audited_genesis_state_action(db, "DELETE_PROJECT", {"project_id": "p1"})
+        self.assertEqual((done["action_type"], done["project_id"], done["sha256"], done["outcome"]),
+                         ("DELETE_PROJECT", "p1", sha, "DELETED_WITH_BACKUP"))
+        self.assertEqual(done["project_name"], "Made-up Project")
+        self.assertEqual(self.query(db, "SELECT COUNT(*) FROM projects WHERE project_id='p1'"), [(0,)])
+        self.assertEqual(self.query(db, "SELECT COUNT(*) FROM requirements WHERE project_id='p1'"), [(0,)])
+        backup = self.query(db, "SELECT envelope_json FROM genesis_project_backups WHERE project_id='p1'")
+        self.assertEqual(json.loads(backup[0][0])["sha256"], sha)
+        self.assertEqual(self.query(db, "SELECT action_type, project_name, outcome FROM genesis_settings_audit_log"),
+                         [("DELETE_PROJECT", "Made-up Project", "DELETED_WITH_BACKUP")])
+        again = batch.execute_audited_genesis_state_action(db, "IMPORT_PROJECT", {"json_text": backup[0][0]})
+        self.assertEqual(again["outcome"], "IMPORTED")
+        self.assertEqual(batch.build_genesis_project_checksum_json(db, "p1")["sha256"], sha)
+
+    def test_218_import_overwrite_is_backed_up_and_new_id_is_allowed(self) -> None:
+        """Inputs: an import over a project and under a new id. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        text = self.text_of(db)
+        batch.manage_genesis_task(db, "p1", "add", None, "Later task")
+        changed = batch.build_genesis_project_checksum_json(db, "p1")["sha256"]
+        over = batch.execute_audited_genesis_state_action(db, "IMPORT_PROJECT", {"json_text": text})
+        self.assertEqual(over["outcome"], "IMPORTED_OVER_BACKUP")
+        self.assertEqual(len(batch.build_genesis_project_checksum_json(db, "p1")["project"]["tasks"]), 1)
+        backup = self.query(db, "SELECT envelope_json FROM genesis_project_backups")
+        self.assertEqual(json.loads(backup[0][0])["sha256"], changed)
+        copy = batch.execute_audited_genesis_state_action(
+            db, "IMPORT_PROJECT", {"json_text": text, "project_id": "p3"})
+        self.assertEqual((copy["project_id"], copy["outcome"]), ("p3", "IMPORTED"))
+        self.assertEqual(batch.build_genesis_project_checksum_json(db, "p3")["project"]["name"], "Made-up Project")
+        self.assertEqual(len(self.query(db, "SELECT * FROM genesis_settings_audit_log")), 2)
+
+    def test_218_restore_checkpoint_is_audited(self) -> None:
+        """Inputs: a checkpoint restore. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        batch.manage_genesis_task(db, "p1", "add", None, "Added after save")
+        done = batch.execute_audited_genesis_state_action(
+            db, "RESTORE_CHECKPOINT", {"project_id": "p1", "checkpoint_id": 1})
+        self.assertEqual(done["outcome"], "RESTORED")
+        self.assertEqual(len(batch.build_genesis_project_checksum_json(db, "p1")["project"]["tasks"]), 1)
+        rows = self.query(db, "SELECT action_type, project_id, outcome FROM genesis_settings_audit_log")
+        self.assertEqual(rows, [("RESTORE_CHECKPOINT", "p1", "RESTORED")])
+
+    def test_218_refused_actions_change_nothing(self) -> None:
+        """Inputs: bad actions and payloads. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        text = self.text_of(db)
+        before = batch._batch44_dump(db)
+        bad_cases = [("WIPE", {}), ("DELETE_PROJECT", []), ("DELETE_PROJECT", {"project_id": "nope"}),
+                     ("DELETE_PROJECT", {}), ("RESTORE_CHECKPOINT", {"project_id": "p1", "checkpoint_id": 99}),
+                     ("RESTORE_CHECKPOINT", {"project_id": "p2", "checkpoint_id": 1}),
+                     ("IMPORT_PROJECT", {"json_text": batch._batch44_flip_checksum(text)}),
+                     ("IMPORT_PROJECT", {"json_text": text, "project_id": " "}),
+                     ("IMPORT_PROJECT", {}), (None, {})]
+        for action, payload in bad_cases:
+            with self.subTest(action=action, payload=str(payload)[:30]), self.assertRaises(genesis.GenesisError):
+                batch.execute_audited_genesis_state_action(db, action, payload)
+        self.assertEqual(batch._batch44_dump(db), before)
+
+    def test_218_audit_log_keeps_500_and_cannot_be_edited(self) -> None:
+        """Inputs: many audited actions. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        text = self.text_of(db)
+        for _ in range(503):
+            batch.execute_audited_genesis_state_action(db, "IMPORT_PROJECT", {"json_text": text})
+        self.assertEqual(self.query(db, "SELECT COUNT(*) FROM genesis_settings_audit_log"), [(500,)])
+        connection = genesis._connect(db)
+        try:
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute("UPDATE genesis_settings_audit_log SET outcome='X'")
+        finally:
+            connection.close()
+
+    # INST-0219
+    def test_219_four_modes_and_fail_closed_gate(self) -> None:
+        """Inputs: every mode and approval combination. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for mode in ("LOCAL", "MANUAL"):
+            result = batch.evaluate_genesis_execution_mode(mode)
+            self.assertEqual((result["status"], result["allowed"]), ("IMPLEMENTED", True))
+        for mode in ("REMOTE", "HYBRID"):
+            for runner, approved, allowed in ((False, False, False), (True, False, False), (False, "YES", False),
+                                              (True, "yes", False), (True, 1, False), (True, "YES", True),
+                                              (True, True, True)):
+                with self.subTest(mode=mode, runner=runner, approved=approved):
+                    result = batch.evaluate_genesis_execution_mode(mode, runner, approved)
+                    self.assertEqual(result["status"], "NEEDS_EXTERNAL_INTEGRATION")
+                    self.assertEqual(result["allowed"], allowed)
+        self.assertEqual(batch.evaluate_genesis_execution_mode("REMOTE", 1, "YES")["allowed"], False)
+
+    def test_219_unknown_modes_are_rejected(self) -> None:
+        """Inputs: bad modes. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for bad in ("local", "CLOUD", "", None, 3):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.evaluate_genesis_execution_mode(bad)
+
+    # INST-0220
+    def test_220_roundtrip_is_exact_and_tampering_is_refused(self) -> None:
+        """Inputs: a made-up project. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        self.text_of(db)
+        before = batch._batch44_dump(db)
+        report = batch.verify_genesis_json_roundtrip_integrity(db, "p1")
+        self.assertTrue(report["passed"] and report["audit_recorded"] and report["database_unchanged"])
+        self.assertTrue(report["tamper_rejected"] and report["enum_injection_rejected"])
+        self.assertEqual(report["checksum"], batch.build_genesis_project_checksum_json(db, "p1")["sha256"])
+        self.assertGreaterEqual(report["fields_compared"], 12)
+        self.assertEqual(batch._batch44_dump(db), before)
+
+    def test_220_unknown_project_and_bad_database_are_rejected(self) -> None:
+        """Inputs: bad project and database. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        for bad in ("nope", "", None):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.verify_genesis_json_roundtrip_integrity(db, bad)
+        with self.assertRaises(genesis.GenesisError):
+            batch.verify_genesis_json_roundtrip_integrity(db.parent / "missing.sqlite3", "p1")
 
 
 if __name__ == "__main__":
