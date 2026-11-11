@@ -835,5 +835,167 @@ class Batch44Tests(unittest.TestCase):
             batch.verify_genesis_json_roundtrip_integrity(db.parent / "missing.sqlite3", "p1")
 
 
+JUNIT_OK = (
+    '<testsuite name="s"><testcase classname="rule_based_planner" name="test_one"/>'
+    '<testcase classname="static_website_builder" name="test_two"/></testsuite>'
+)
+JUNIT_MIXED = (
+    '<testsuites><testsuite name="s"><testcase classname="rule_based_planner" name="test_one"/>'
+    '<testcase classname="static_website_builder" name="test_two"><failure message="x"/></testcase>'
+    '<testcase classname="other" name="test_three"><skipped/></testcase>'
+    '<testcase classname="other" name="test_four"><error message="y"/></testcase></testsuite></testsuites>'
+)
+
+
+class Batch45Tests(unittest.TestCase):
+    """Inputs: Batch 45 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH45_CANARY_LINE, flush=True)
+
+    def test_221_registry_lists_five_tiers_and_zero_cost(self) -> None:
+        """Inputs: the registry. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        registry = batch.get_genesis_capability_registry()
+        self.assertEqual(len(registry), 5)
+        self.assertEqual([item["module_id"] for item in registry], sorted(item["module_id"] for item in registry))
+        for item in registry:
+            self.assertIn(item["status_label"], batch.CAPABILITY_STATUS_LABELS)
+            self.assertEqual(item["cost_usd"], 0)
+            self.assertTrue(item["explanation"])
+            self.assertIsInstance(item["permissions_required"], list)
+        by_id = {item["module_id"]: item for item in registry}
+        self.assertTrue(by_id["rule_based_planner"]["is_available"])
+        self.assertFalse(by_id["ai_provider"]["is_available"])
+        self.assertEqual(by_id["on_device_apk_compiler"]["status_label"], "PLANNED")
+
+    def test_221_unknown_status_tier_is_rejected(self) -> None:
+        """Inputs: bad status tiers and a good one. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        entry = batch.register_genesis_capability(db, "extra_tool", "Extra tool", "PlannerInterface", "UNVERIFIED",
+                                                  "Made-up module", ["storage"])
+        self.assertEqual(entry["status_label"], "UNVERIFIED")
+        self.assertIn("extra_tool", [item["module_id"] for item in batch.get_genesis_capability_registry(db)])
+        for bad in ("GREAT", "", None, "verified_working", 5):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.register_genesis_capability(db, "bad_one", "Bad", "PlannerInterface", bad, "x")
+        with self.assertRaises(genesis.GenesisError):
+            batch.register_genesis_capability(db, "ai_provider", "Clash", "PlannerInterface", "PLANNED", "x")
+        with self.assertRaises(genesis.GenesisError):
+            batch.get_genesis_capability_registry(db.parent / "missing.sqlite3")
+
+    def test_222_module_info_validates_metadata(self) -> None:
+        """Inputs: good and bad metadata. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        good = batch.ModuleInfo("my_module", "My module", "BuilderInterface", "PLANNED", 0, ("storage",), False)
+        self.assertEqual(good.as_dict()["permissions_required"], ["storage"])
+        bad_cases = [
+            ("Bad Id", "x", "BuilderInterface", "PLANNED", 0, (), False),
+            ("m1", "", "BuilderInterface", "PLANNED", 0, (), False),
+            ("m1", "x", "OtherInterface", "PLANNED", 0, (), False),
+            ("m1", "x", "BuilderInterface", "GREAT", 0, (), False),
+            ("m1", "x", "BuilderInterface", "PLANNED", 1.5, (), False),
+            ("m1", "x", "BuilderInterface", "PLANNED", 0, ["list"], False),
+            ("m1", "x", "BuilderInterface", "PLANNED", 0, (), "yes"),
+            ("m1", "x", "BuilderInterface", "PLANNED", 0, (), True),
+        ]
+        for args in bad_cases:
+            with self.subTest(args=args), self.assertRaises(genesis.GenesisError):
+                batch.ModuleInfo(*args)
+
+    def test_222_planner_and_builder_are_wired_to_their_interfaces(self) -> None:
+        """Inputs: a made-up project. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        planner, builder = batch.RuleBasedPlanner(), batch.StaticWebsiteBuilder()
+        self.assertIsInstance(planner, batch.PlannerInterface)
+        self.assertIsInstance(builder, batch.BuilderInterface)
+        self.assertEqual(planner.info().interface_type, "PlannerInterface")
+        self.assertEqual(planner.plan(db, "p1"), batch.run_rule_based_planner_preview(db, "p1"))
+        self.assertEqual(builder.build(db, "p1"), batch.build_static_project_website_html(db, "p1"))
+        self.assertEqual(len(batch.ENGINE_INTERFACE_TYPES), 5)
+        with self.assertRaises(TypeError):
+            batch.PlannerInterface()
+        with self.assertRaises(genesis.GenesisError):
+            planner.plan(db, "nope")
+
+    def test_223_unavailable_stubs_never_fake_output(self) -> None:
+        """Inputs: every stub. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        calls = ((batch.AiProviderStub(), lambda stub: stub.complete("hi")),
+                 (batch.RemoteBuildAdapterStub(), lambda stub: stub.build_package("p1")),
+                 (batch.OnDeviceApkCompilerStub(), lambda stub: stub.build_package("p1")))
+        for stub, call in calls:
+            with self.subTest(stub=type(stub).__name__):
+                info = stub.info()
+                self.assertFalse(info.is_available)
+                self.assertIn(info.status_label, ("NEEDS_EXTERNAL_INTEGRATION", "PLANNED"))
+                with self.assertRaises(batch.CapabilityUnavailableError) as raised:
+                    call(stub)
+                self.assertTrue(str(raised.exception))
+                with self.assertRaises(batch.CapabilityUnavailableError):
+                    stub()
+        self.assertIsInstance(batch.AiProviderStub(), batch.AiProviderInterface)
+        self.assertIsInstance(batch.CapabilityUnavailableError("x"), ValueError)
+
+    def test_224_junit_report_becomes_verification_json(self) -> None:
+        """Inputs: JUnit XML text. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        ok = batch.convert_junit_xml_to_verification_json(JUNIT_OK)
+        self.assertEqual((ok["tests_total"], ok["failures"], ok["errors"], ok["skipped"]), (2, 0, 0, 0))
+        self.assertTrue(ok["all_passed"])
+        self.assertEqual(ok, batch.convert_junit_xml_to_verification_json(JUNIT_OK))
+        body = {key: value for key, value in ok.items() if key != "sha256"}
+        self.assertEqual(ok["sha256"], hashlib.sha256(json.dumps(body, sort_keys=True,
+                                                                  separators=(",", ":")).encode()).hexdigest())
+        mixed = batch.convert_junit_xml_to_verification_json(JUNIT_MIXED)
+        self.assertEqual((mixed["tests_total"], mixed["failures"], mixed["errors"], mixed["skipped"]), (4, 1, 1, 1))
+        self.assertFalse(mixed["all_passed"])
+
+    def test_224_report_is_kept_in_database(self) -> None:
+        """Inputs: a database. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        report = batch.convert_junit_xml_to_verification_json(JUNIT_OK, db)
+        rows = genesis._connect(db)
+        try:
+            stored = rows.execute("SELECT report_json FROM genesis_verification_reports WHERE sha256=?",
+                                  (report["sha256"],)).fetchall()
+        finally:
+            rows.close()
+        self.assertEqual(json.loads(stored[0][0]), report)
+
+    def test_224_bad_xml_and_entity_payloads_are_rejected(self) -> None:
+        """Inputs: bad XML. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        bomb = '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "aaaa">]><testsuite><testcase name="t"/></testsuite>'
+        for bad in ("<testsuite><testcase", bomb, "<!doctype html><testsuite/>", "<testsuite/>", "", None, 7,
+                    "/nonexistent/report.xml", '<testsuite><testcase classname="c"/></testsuite>'):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.convert_junit_xml_to_verification_json(bad)
+
+    def test_225_auditor_downgrades_modules_without_passing_tests(self) -> None:
+        """Inputs: a registry and reports. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        registry = batch.get_genesis_capability_registry()
+        good = batch.audit_capabilities_against_verification_report(
+            registry, batch.convert_junit_xml_to_verification_json(JUNIT_OK))
+        self.assertTrue(good["all_ok"])
+        self.assertEqual(good["downgraded"], [])
+        bad = batch.audit_capabilities_against_verification_report(
+            registry, batch.convert_junit_xml_to_verification_json(JUNIT_MIXED))
+        status = {item["module_id"]: item["status_label"] for item in bad["modules"]}
+        self.assertEqual(status["static_website_builder"], "FAILED")
+        self.assertEqual(status["rule_based_planner"], "VERIFIED_WORKING")
+        self.assertEqual(status["ai_provider"], "NEEDS_EXTERNAL_INTEGRATION")
+        self.assertEqual(bad["downgraded"], ["static_website_builder"])
+        self.assertFalse(bad["all_ok"])
+        none_found = batch.audit_capabilities_against_verification_report(registry, {"test_cases": []})
+        self.assertEqual(sorted(none_found["downgraded"]), ["rule_based_planner", "static_website_builder"])
+        self.assertEqual({item["status_label"] for item in none_found["modules"]
+                          if item["module_id"] in none_found["downgraded"]}, {"UNVERIFIED"})
+        self.assertEqual(registry[0]["status_label"], batch.get_genesis_capability_registry()[0]["status_label"])
+
+    def test_225_bad_inputs_are_rejected(self) -> None:
+        """Inputs: bad registry and report. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        registry = batch.get_genesis_capability_registry()
+        for bad_registry, bad_report in ((None, {"test_cases": []}), ([1], {"test_cases": []}),
+                                         (registry, None), (registry, {}), (registry, {"test_cases": [{"status": "odd"}]}),
+                                         ([{"module_id": "m1", "status_label": "GREAT"}], {"test_cases": []})):
+            with self.subTest(registry=bad_registry, report=bad_report), self.assertRaises(genesis.GenesisError):
+                batch.audit_capabilities_against_verification_report(bad_registry, bad_report)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
