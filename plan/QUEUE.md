@@ -3850,3 +3850,20 @@ End of the Batch 43 export ruling.
 This was tested before it was written down: with this change, the Batch 41–49 tests pass (36 tests), both new files pass all three readability checks, and `tools/run_all_tests.py` reports SAFE TO MERGE.
 
 End of the Batch 43 second ruling.
+
+## Batches 44–49 and the readability gate (Architect's ruling, 2026-11-11)
+
+**Why.** Batch 43 was held twice by check A703 in `code/apccs_readability_gate.py` (see the two Batch 43 rulings above). The same check will stop Batches 44–49 unless their wording is adjusted first. The check refuses (1) any call to a function whose name starts with `export`, `write_`, `save`, `persist`, `serialize` or `to_`, or is `dump`, and (2) any file written to a path that is not spelled out in the code with an approved ending. Every path under `vault_dir`, a temporary folder or `/tmp` is chosen while the program runs, so writing there always fails. The gate may not be changed. Batches 41–43 passed by keeping their results in the Genesis SQLite database. This ruling applies that pattern to Batches 44–49 before they are built.
+
+**Ruling.** This overrides the wording of Batches 44–49 wherever they differ. Everything not named here stays as worded.
+
+1. **Function names.** A function these batches build that starts with one of the refused words is built under a `build_` name with the same arguments and return value. For example, INST-0216 `export_genesis_project_checksum_json` becomes `build_genesis_project_checksum_json`, and every later instruction that names it (INST-0217 to 0220, 0229, 0234) uses the new name. API route strings such as `/api/genesis/export_json` and labels shown to people stay as worded.
+2. **No new file writes at run time.** Where an instruction says to write, emit, seal or save a file (for example `START_OUR_OWN_SYSTEM.html` panels, `verification.json`, `audit/pass_tests_genesis.json`, `audit/OWNER_SCORECARD_CP245.txt`, `audit/CP-245_LOCK.json`, `RECOVER.md` or the build zips), the function builds the same content and returns it as text or a dict, and stores it in the Genesis database (one table per batch, created with `CREATE TABLE IF NOT EXISTS`, keyed by name). For the zips, it returns and stores the list of member names with each member's SHA-256 instead of writing an archive. It writes no file.
+3. **Changes to `START_OUR_OWN_SYSTEM.html` itself.** Where Batches 47–48 say to wire panels into `START_OUR_OWN_SYSTEM.html`, the `render_…_html()` functions return the HTML text. Editing the repository's own `START_OUR_OWN_SYSTEM.html` in the pull request is allowed only if `AGENTS.md` allows it; otherwise report it in the pull request and leave the file unchanged.
+4. **Tests.** Tests build their inputs in memory (dicts, strings, an in-memory or Genesis-helper database) and never write files themselves. Where an instruction says to test "with zero files on disk" or "in `/tmp`", test the same behaviour with in-memory inputs and a missing-path argument.
+5. **Servers.** Batches 46–48 may start the standard-library loopback server on an ephemeral port in tests, as worded; serving is not a file write.
+6. **Still blocked?** If an instruction cannot be met any other way, build the rest of the batch, mark that instruction "held by the readability gate" in the pull request, save the work on a `held/` branch and note it once on apccs #71. Never work around the gate.
+
+Writing real files (an `.html` page, the audit files, the zips) waits for a later Owner-tap change to the gate.
+
+End of the Batches 44–49 gate ruling.
