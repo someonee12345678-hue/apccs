@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission control</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+<h1>Mission control</h1>
+<p id="status">Loading the latest snapshot.</p>
+<label for="view">Timeline view</label>
+<select id="view">
+<option value="summary">summary</option>
+<option value="full">full</option>
+<option value="milestones">milestones</option>
+<option value="chronological">chronological</option>
+</select>
+</header>
+<main>
+<section id="map">
+<h2>Who is doing what</h2>
+<ul id="legend">
+<li><span class="swatch state-working"></span> working</li>
+<li><span class="swatch state-blocked"></span> blocked</li>
+<li><span class="swatch state-done"></span> done</li>
+<li><span class="swatch state-idle"></span> idle</li>
+</ul>
+<svg id="map-svg" viewBox="0 0 340 260" role="img" aria-label="Agents and the handoffs between them"></svg>
+</section>
+<section id="timeline">
+<h2>Timeline</h2>
+<ol id="timeline-list"></ol>
+</section>
+<section id="jobs">
+<h2>Jobs</h2>
+<ul id="jobs-list"></ul>
+</section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
