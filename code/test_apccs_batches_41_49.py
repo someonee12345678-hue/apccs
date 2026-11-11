@@ -1285,5 +1285,146 @@ class Batch46Tests(unittest.TestCase):
                 batch.create_genesis_enabled_control_server(vault_arg, db_arg, host, port)
 
 
+class Batch47Tests(unittest.TestCase):
+    """Inputs: Batch 47 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH47_CANARY_LINE, flush=True)
+
+    # INST-0231
+    def test_231_home_panel_has_search_filter_banners_and_form(self) -> None:
+        """Inputs: the home panel. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        text = batch.render_genesis_home_and_project_modal_html()
+        self.assertEqual(text, batch.render_genesis_home_and_project_modal_html())
+        for part in ('id="genesis-search"', 'id="genesis-category-filter"', "No projects yet",
+                     "No matching projects", 'maxlength="60"', 'maxlength="2000"', 'maxlength="1000"',
+                     'minlength="1"', 'name="dependencies"'):
+            self.assertIn(part, text)
+        filter_menu = text.split('id="genesis-category-filter">')[1].split("</select>")[0]
+        self.assertEqual(filter_menu.count("<option"), 11)
+        for key, label in batch.GENESIS_CATEGORIES:
+            self.assertIn('<option value="%s">%s</option>' % (key, label), filter_menu)
+
+    def test_231_home_panel_is_inert_text(self) -> None:
+        """Inputs: the home panel. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        text = batch.render_genesis_home_and_project_modal_html()
+        self.assertNotIn("<script", text.lower())
+        self.assertNotIn("http://", text)
+        self.assertEqual(batch.verify_static_website_csp_and_safety(
+            batch.STATIC_SITE_CSP_META + "<body>" + text + "</body>")["verified"], True)
+
+    # INST-0232
+    def test_232_records_panel_lists_labels_states_and_sections(self) -> None:
+        """Inputs: the records panel. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        text = batch.render_genesis_project_records_panel_html()
+        for key, label, colour in batch.EVIDENCE_LABELS:
+            self.assertIn('data-label="%s" style="color:%s">%s' % (key, colour, label), text)
+        for label in ("To do", "In progress", "Done", "Blocked"):
+            self.assertIn(">%s<" % label, text)
+        for part in ("Requirements", "Tasks", "Acceptance Criteria", "Decisions", "Known Defects",
+                     "History (newest 200)", 'data-max="200"', "Checkpoints", "restore saves the current state"):
+            self.assertIn(part, text)
+        self.assertIn('data-cycle="labels"', text)
+        self.assertIn('data-cycle="states"', text)
+        self.assertEqual(json.loads(text.split("data-labels='")[1].split("'")[0])[5]["key"], "FAILED")
+
+    def test_232_old_label_names_are_absent(self) -> None:
+        """Inputs: the records panel. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        text = batch.render_genesis_project_records_panel_html()
+        for old in ("DOCUMENTED", "REPORTED", "TO_DO", "FOLLOW_SYSTEM"):
+            self.assertNotIn(old, text)
+
+    # INST-0233
+    def test_233_planner_checklist_and_sandboxed_frame(self) -> None:
+        """Inputs: the planner panel. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        text = batch.render_genesis_planner_and_site_builder_html()
+        for part in ("Plan from Description", "INFERRED requirements", "PROPOSED requirements", "Starter tasks",
+                     "Static Website Builder", "Build site bundle", "No AI is used"):
+            self.assertIn(part, text)
+        self.assertEqual(text.count("<iframe"), 1)
+        self.assertIn('sandbox=""', text)
+        self.assertNotIn("allow-", text)
+        self.assertNotIn("allow-scripts", text)
+
+    def test_233_sandbox_matches_the_preview_descriptor(self) -> None:
+        """Inputs: a made-up project. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        preview = batch.create_sandboxed_preview_descriptor(db, "p1")
+        self.assertEqual(preview["iframe_sandbox"], "")
+        self.assertIn('sandbox="%s"' % preview["iframe_sandbox"], batch.render_genesis_planner_and_site_builder_html())
+        self.assertFalse(preview["allow_scripts"] or preview["allow_network"])
+
+    # INST-0234
+    def test_234_capability_table_settings_and_json_controls(self) -> None:
+        """Inputs: the settings panel. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        text = batch.render_genesis_capabilities_and_settings_html()
+        for status in batch.CAPABILITY_STATUS_LABELS:
+            self.assertIn('data-tier="%s"' % status, text)
+        self.assertEqual(text.count("<tr data-tier="), 5)
+        for part in ("verification.json", "Export project JSON", "Import project JSON", "Audit log",
+                     'id="genesis-theme"', "Follow system (default)", ">Light<", ">Dark<"):
+            self.assertIn(part, text)
+
+    def test_234_autonomy_c_and_d_are_disabled(self) -> None:
+        """Inputs: the settings panel. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        text = batch.render_genesis_capabilities_and_settings_html()
+        self.assertIn('value="A">', text)
+        self.assertIn('value="B" checked>', text)
+        self.assertIn('value="C" disabled>', text)
+        self.assertIn('value="D" disabled>', text)
+        self.assertEqual(text.count(" disabled>"), 2)
+        self.assertEqual(text.count("(disabled by policy)"), 2)
+
+    # INST-0235
+    def run_smoke(self) -> dict:
+        """Inputs: none. Outputs: the smoke-test report for a fresh temporary vault. Errors: GenesisError."""
+        temp = tempfile.TemporaryDirectory(prefix="apccs_genesis_b47_")
+        self.addCleanup(temp.cleanup)
+        self.vault = Path(temp.name)
+        return batch.run_genesis_full_vertical_smoke_test(self.vault)
+
+    def test_235_full_workflow_passes_and_touches_nothing(self) -> None:
+        """Inputs: a temporary vault. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        report = self.run_smoke()
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["steps"], ["page_and_panels", "seed_sample", "create_project", "rule_planner",
+                                           "cycle_evidence_label", "static_website", "json_round_trip"])
+        self.assertEqual(len(report["panels"]), 6)
+        self.assertEqual(len(report["checksum"]), 64)
+        for route in ("/api/genesis/projects", "/api/genesis/plan_preview", "/api/genesis/static_site_export",
+                      "/api/genesis/import_json"):
+            self.assertIn(route, report["routes"])
+        self.assertEqual(list(self.vault.iterdir()), [])
+
+    def test_235_page_is_served_and_unknown_pages_are_not(self) -> None:
+        """Inputs: a live server. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        server = batch.create_genesis_ui_control_server(db.parent.parent, db, "127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        def stop() -> None:
+            """Inputs: none. Outputs: none; the server stops. Errors: none."""
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+
+        self.addCleanup(stop)
+        base = "http://127.0.0.1:%d" % server.server_address[1]
+        with urllib.request.urlopen(base + "/START_OUR_OWN_SYSTEM.html", timeout=10) as response:
+            self.assertEqual(response.headers["Content-Type"], "text/html; charset=utf-8")
+            self.assertEqual(response.read().decode("utf-8"), batch.build_genesis_ui_page_html())
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(base + "/elsewhere.html", timeout=10)
+        self.assertEqual(caught.exception.code, 404)
+        with urllib.request.urlopen(base + "/api/genesis/capabilities", timeout=10) as response:
+            self.assertEqual(json.loads(response.read().decode("utf-8"))["ok"], True)
+
+    def test_235_bad_vault_is_refused(self) -> None:
+        """Inputs: bad vault arguments. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for bad in (None, 5, True, "", "/does/not/exist/anywhere"):
+            with self.subTest(vault=bad), self.assertRaises(genesis.GenesisError):
+                batch.run_genesis_full_vertical_smoke_test(bad)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

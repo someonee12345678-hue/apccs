@@ -2091,3 +2091,364 @@ def create_genesis_enabled_control_server(vault_dir: object, db_path: object, ho
     server.vault_dir = vault
     server.genesis_db_path = database
     return server
+
+
+# ---------------------------------------------------------------------------
+# Batch 47 (INST-0231..0235): the Genesis screen panels and the end-to-end smoke test.
+# Gate ruling (2026-11-11): each render function returns HTML text and writes no file; the
+# repository's own START_OUR_OWN_SYSTEM.html is left unchanged (reported in the pull request).
+# ---------------------------------------------------------------------------
+import threading
+import urllib.error
+import urllib.request
+
+from apccs_genesis import seed_sample_personal_task_manager_once
+
+BATCH47_CANARY_LINE = "Canary check: T = Y -> lighthouse"
+UI_PAGE_NAME = "START_OUR_OWN_SYSTEM.html"
+EMPTY_NO_PROJECTS_TEXT = "No projects yet"
+EMPTY_NO_MATCHES_TEXT = "No matching projects"
+CAPABILITY_TIER_TEXT = (
+    ("VERIFIED_WORKING", "Verified working"), ("NEEDS_EXTERNAL_INTEGRATION", "Needs external integration"),
+    ("PLANNED", "Planned"), ("FAILED", "Failed"), ("UNVERIFIED", "Unverified"),
+)
+# The project form sends an APCCS stored type; the screen shows Genesis's 10 names.
+_FORM_STORED_CATEGORY = {"WEBSITE": "STATIC_WEBSITE", "WEB_APP": "WEB_APP", "PWA": "WEB_APP",
+                         "ANDROID_APP": "MOBILE_APP", "API": "OTHER", "DASHBOARD": "OTHER",
+                         "AUTOMATION": "AUTOMATION_SCRIPT", "AI_APP": "OTHER", "GAME": "GAME_PROTOTYPE",
+                         "OTHER": "OTHER"}
+
+
+def _batch47_options(pairs: object) -> str:
+    """Inputs: (value, text) pairs. Outputs: HTML option tags with escaped text. Errors: none."""
+    return "".join('<option value="%s">%s</option>' % (_site_escape(value), _site_escape(text))
+                   for value, text in pairs)
+
+
+def render_genesis_home_and_project_modal_html() -> str:
+    """INST-0231: the Genesis Project Home panel and its Create/Edit Project form.
+
+    Inputs: none. Outputs: HTML text with a search box (name and description), a filter menu of the
+    10 Genesis categories, the two empty-state banners and a form (name 1-60, category, description
+    1-2000, dependencies up to 1000 characters). Errors: none; nothing is written to disk.
+    """
+    categories = _batch47_options((("ALL", "All categories"),) + GENESIS_CATEGORIES)
+    form_categories = _batch47_options(GENESIS_CATEGORIES)
+    return (
+        '<section id="genesis-home" aria-label="Genesis Project Home">\n'
+        "<h2>Genesis Project Home</h2>\n"
+        '<label for="genesis-search">Search by name or description</label>\n'
+        '<input id="genesis-search" type="search" maxlength="200" autocomplete="off">\n'
+        '<label for="genesis-category-filter">Category</label>\n'
+        '<select id="genesis-category-filter">' + categories + "</select>\n"
+        '<p id="genesis-empty-none" class="banner" hidden>' + EMPTY_NO_PROJECTS_TEXT + "</p>\n"
+        '<p id="genesis-empty-matches" class="banner" hidden>' + EMPTY_NO_MATCHES_TEXT + "</p>\n"
+        '<ul id="genesis-project-list"></ul>\n'
+        '<button id="genesis-new-project" type="button">New project</button>\n'
+        '<form id="genesis-project-form" aria-label="Create or edit project">\n'
+        '<input id="genesis-project-id" type="hidden">\n'
+        '<label for="genesis-name">Name (1-60 characters)</label>\n'
+        '<input id="genesis-name" name="name" required minlength="1" maxlength="60">\n'
+        '<label for="genesis-category">Category</label>\n'
+        '<select id="genesis-category" name="category">' + form_categories + "</select>\n"
+        '<label for="genesis-description">Description (1-2000 characters)</label>\n'
+        '<textarea id="genesis-description" name="description" required minlength="1" maxlength="2000">'
+        "</textarea>\n"
+        '<label for="genesis-dependencies">Dependencies (up to 1000 characters)</label>\n'
+        '<textarea id="genesis-dependencies" name="dependencies" maxlength="1000"></textarea>\n'
+        '<button type="submit">Save project</button>\n'
+        '<p id="genesis-form-error" role="alert"></p>\n'
+        "</form>\n</section>\n")
+
+
+def render_genesis_project_records_panel_html() -> str:
+    """INST-0232: the lists of one project, with tap-to-cycle evidence labels and task states.
+
+    Inputs: none. Outputs: HTML text with Requirements (6 colour-coded labels), Tasks (To do, In
+    progress, Done, Blocked), Acceptance Criteria, Decisions, Known Defects, a 200-item History and
+    Undoable Checkpoints. Errors: none; nothing is written to disk.
+    """
+    label_data = json.dumps([{"key": key, "text": text, "colour": colour}
+                             for key, text, colour in EVIDENCE_LABELS], separators=(",", ":"))
+    state_data = json.dumps([{"key": key, "text": text} for key, text in TASK_STATES], separators=(",", ":"))
+    legend = "".join('<li><span class="label" data-label="%s" style="color:%s">%s</span></li>'
+                     % (key, colour, _site_escape(text)) for key, text, colour in EVIDENCE_LABELS)
+    states = "".join('<li data-state="%s">%s</li>' % (key, _site_escape(text)) for key, text in TASK_STATES)
+    return (
+        '<section id="genesis-records" aria-label="Project records" data-labels=\'' + label_data
+        + "' data-states='" + state_data + "'>\n"
+        "<h2>Project records</h2>\n"
+        '<h3>Requirements</h3>\n<p>Tap a requirement to move to the next label.</p>\n'
+        '<ul id="genesis-label-legend">' + legend + "</ul>\n"
+        '<ul id="genesis-requirements" data-cycle="labels"></ul>\n'
+        '<h3>Tasks</h3>\n<p>Tap a task to move to the next state.</p>\n'
+        '<ul id="genesis-task-states">' + states + "</ul>\n"
+        '<ul id="genesis-tasks" data-cycle="states"></ul>\n'
+        '<h3>Acceptance Criteria</h3>\n<ul id="genesis-criteria"></ul>\n'
+        '<h3>Decisions</h3>\n<ul id="genesis-decisions"></ul>\n'
+        '<h3>Known Defects</h3>\n<ul id="genesis-defects"></ul>\n'
+        '<h3>History (newest %d)</h3>\n<ul id="genesis-history" data-max="%d"></ul>\n'
+        '<h3>Checkpoints</h3>\n<p>Every restore saves the current state first, so it can be undone.</p>\n'
+        '<ul id="genesis-checkpoints"></ul>\n'
+        '<button id="genesis-checkpoint-create" type="button">Save checkpoint</button>\n'
+        "</section>\n") % (HISTORY_MAX, HISTORY_MAX)
+
+
+def render_genesis_planner_and_site_builder_html() -> str:
+    """INST-0233: the "Plan from Description" checklist and the Static Website Builder.
+
+    Inputs: none. Outputs: HTML text with tick-boxes for INFERRED requirements, PROPOSED requirements
+    and starter tasks, plus a preview frame with sandbox="" (no scripts, no network) and a build button.
+    Errors: none; nothing is written to disk.
+    """
+    return (
+        '<section id="genesis-planner" aria-label="Plan from Description">\n'
+        "<h2>Plan from Description</h2>\n"
+        "<p>Rules and keywords only. No AI is used.</p>\n"
+        '<button id="genesis-plan-preview" type="button">Plan from Description</button>\n'
+        '<fieldset id="genesis-plan-inferred"><legend>INFERRED requirements</legend></fieldset>\n'
+        '<fieldset id="genesis-plan-proposed"><legend>PROPOSED requirements</legend></fieldset>\n'
+        '<fieldset id="genesis-plan-tasks"><legend>Starter tasks</legend></fieldset>\n'
+        '<button id="genesis-plan-apply" type="button">Add ticked items</button>\n'
+        "</section>\n"
+        '<section id="genesis-site-builder" aria-label="Static Website Builder">\n'
+        "<h2>Static Website Builder</h2>\n"
+        '<button id="genesis-site-preview" type="button">Preview</button>\n'
+        '<iframe id="genesis-site-frame" title="Site preview" sandbox="" referrerpolicy="no-referrer"'
+        ' src="about:blank"></iframe>\n'
+        '<button id="genesis-site-export" type="button">Build site bundle</button>\n'
+        '<p id="genesis-site-status" role="status"></p>\n'
+        "</section>\n")
+
+
+def render_genesis_capabilities_and_settings_html() -> str:
+    """INST-0234: capability table, test badge, settings, audit log and checksum import and export.
+
+    Inputs: none. Outputs: HTML text with the 5-tier Capability Registry table, the verification
+    badge, the Settings screen (autonomy A and B selectable, C and D disabled; theme SYSTEM, LIGHT,
+    DARK) with the audit log, and the SHA-256 checksum JSON export and import controls.
+    Errors: none; nothing is written to disk.
+    """
+    tiers = "".join('<tr data-tier="%s"><th scope="row">%s</th><td class="count">0</td></tr>'
+                    % (key, _site_escape(text)) for key, text in CAPABILITY_TIER_TEXT)
+    modes = "".join('<label><input type="radio" name="genesis-autonomy" value="%s"%s%s> Mode %s%s</label>\n'
+                    % (mode, " checked" if mode == "B" else "", "" if mode in AUTONOMY_ALLOWED else " disabled",
+                       mode, "" if mode in AUTONOMY_ALLOWED else " (disabled by policy)")
+                    for mode in AUTONOMY_ALLOWED + AUTONOMY_DISABLED)
+    return (
+        '<section id="genesis-capabilities" aria-label="Capability Registry">\n'
+        "<h2>Capability Registry</h2>\n"
+        '<table id="genesis-capability-table"><thead><tr><th>Status</th><th>Modules</th></tr></thead>'
+        "<tbody>" + tiers + "</tbody></table>\n"
+        '<ul id="genesis-capability-list"></ul>\n'
+        '<p id="genesis-verification-badge" class="badge">verification.json: not loaded</p>\n'
+        "</section>\n"
+        '<section id="genesis-settings" aria-label="Settings">\n'
+        "<h2>Settings</h2>\n"
+        '<fieldset id="genesis-autonomy"><legend>Autonomy</legend>\n' + modes + "</fieldset>\n"
+        '<label for="genesis-theme">Theme</label>\n'
+        '<select id="genesis-theme">' + _batch47_options(
+            (key, label) for key, label in THEMES) + "</select>\n"
+        '<h3>Audit log</h3>\n<ul id="genesis-audit-log"></ul>\n'
+        '<h3>Checksum JSON</h3>\n'
+        '<button id="genesis-json-export" type="button">Export project JSON</button>\n'
+        '<textarea id="genesis-json-text" aria-label="Project JSON" rows="6"></textarea>\n'
+        '<button id="genesis-json-import" type="button">Import project JSON</button>\n'
+        '<p id="genesis-json-status" role="status"></p>\n'
+        "</section>\n")
+
+
+_BATCH47_SCRIPT = """
+const api = (path, body) => fetch('/api/genesis/' + path, body === undefined ? {} : {
+  method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(r => r.json());
+const el = id => document.getElementById(id);
+const fill = (id, items) => { const list = el(id); list.textContent = '';
+  items.forEach(text => { const li = document.createElement('li'); li.textContent = text; list.appendChild(li); }); };
+let projects = [];
+const showProjects = () => {
+  const needle = el('genesis-search').value.toLowerCase(), cat = el('genesis-category-filter').value;
+  const shown = projects.filter(p => (cat === 'ALL' || p.category === cat) &&
+    (p.name + ' ' + p.description).toLowerCase().includes(needle));
+  el('genesis-empty-none').hidden = projects.length > 0;
+  el('genesis-empty-matches').hidden = !(projects.length > 0 && shown.length === 0);
+  fill('genesis-project-list', shown.map(p => p.name));
+};
+const stored = {STATIC_WEBSITE: 'WEBSITE', MOBILE_APP: 'ANDROID_APP', AUTOMATION_SCRIPT: 'AUTOMATION',
+  GAME_PROTOTYPE: 'GAME', DESKTOP_TOOL: 'OTHER', CLI_UTILITY: 'OTHER', DATA_PIPELINE: 'AUTOMATION',
+  DOCUMENT_ENGINE: 'OTHER'};
+api('projects').then(r => { projects = ((r.result || {}).projects || []).map(p =>
+  Object.assign({}, p, {category: stored[p.product_category] || p.product_category})); showProjects(); });
+el('genesis-search').addEventListener('input', showProjects);
+el('genesis-category-filter').addEventListener('change', showProjects);
+const cycle = (list, data) => list.addEventListener('click', event => {
+  const li = event.target.closest('li'); if (!li) return;
+  const order = JSON.parse(el('genesis-records').dataset[data]);
+  const at = order.findIndex(x => x.key === li.dataset.key);
+  const next = order[(at + 1) % order.length]; li.dataset.key = next.key; li.textContent = li.dataset.text + ' - ' + next.text;
+  if (next.colour) li.style.color = next.colour; });
+cycle(el('genesis-requirements'), 'labels');
+cycle(el('genesis-tasks'), 'states');
+"""
+
+
+def build_genesis_ui_page_html() -> str:
+    """INST-0231 to 0234 helper: all four Genesis panels in one page that can be served.
+
+    Inputs: none. Outputs: the page text (a fixed local page: no outside links, one inline script).
+    Errors: none; nothing is written to disk.
+    """
+    return ("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
+            '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+            "<title>Genesis - Start Our Own System</title>\n</head>\n<body>\n"
+            "<h1>Genesis</h1>\n"
+            + render_genesis_home_and_project_modal_html()
+            + render_genesis_project_records_panel_html()
+            + render_genesis_planner_and_site_builder_html()
+            + render_genesis_capabilities_and_settings_html()
+            + "<script>" + _BATCH47_SCRIPT + "</script>\n</body>\n</html>\n")
+
+
+def _batch47_serve(handler: BaseHTTPRequestHandler, config: dict) -> None:
+    """Inputs: a request handler and the server settings. Outputs: none; one reply is sent.
+
+    Errors: OSError if the client has gone away. GET of the Genesis page returns it as HTML;
+    every other request is answered as the Batch 46 server answers it.
+    """
+    if handler.command == "GET" and urlsplit(handler.path).path in ("/", "/" + UI_PAGE_NAME):
+        data = build_genesis_ui_page_html().encode("utf-8")
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/html; charset=utf-8")
+        handler.send_header("Content-Length", str(len(data)))
+        handler.send_header("X-Content-Type-Options", "nosniff")
+        handler.end_headers()
+        handler.connection.sendall(data)
+        return
+    _batch46_serve(handler, config)
+
+
+def create_genesis_ui_control_server(vault_dir: object, db_path: object, host: str = "127.0.0.1",
+                                     port: int = 0) -> ThreadingHTTPServer:
+    """INST-0235 helper: the Batch 46 server that also serves the Genesis page at /START_OUR_OWN_SYSTEM.html.
+
+    Inputs: the vault folder, an initialized Genesis database, a loopback host and a port (0 picks a
+    free one). Outputs: a ThreadingHTTPServer, not yet serving. Errors: GenesisError, as for
+    create_genesis_enabled_control_server.
+    """
+    server = create_genesis_enabled_control_server(vault_dir, db_path, host, port)
+    config = {"vault": server.vault_dir, "db_path": server.genesis_db_path}
+    server.server_close()
+    methods = {"do_GET": lambda handler: _batch47_serve(handler, config),
+               "do_POST": lambda handler: _batch46_serve(handler, config),
+               "log_message": _batch46_stay_quiet, "server_version": "ApccsGenesis/1.0"}
+    ui_server = ThreadingHTTPServer((host, port), type("GenesisUiHandler", (BaseHTTPRequestHandler,), methods))
+    ui_server.daemon_threads = True
+    ui_server.vault_dir = config["vault"]
+    ui_server.genesis_db_path = config["db_path"]
+    return ui_server
+
+
+def _batch47_call(base_url: str, route: str, body: object = None) -> dict:
+    """Inputs: the server address, a route and an optional JSON body. Outputs: the reply body.
+
+    Errors: GenesisError if the server does not answer with ok true.
+    """
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(base_url + route, data=data, method="GET" if body is None else "POST",
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            reply = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        raise GenesisError("Smoke test call failed: " + route) from error
+    if not isinstance(reply, dict) or reply.get("ok") is not True:
+        raise GenesisError("Smoke test call was refused: " + route)
+    return reply["result"]
+
+
+def run_genesis_full_vertical_smoke_test(vault_dir: object) -> dict:
+    """INST-0235: start the local server and walk the whole Genesis workflow end to end.
+
+    Inputs: an existing vault folder. Outputs: {"passed": True, "steps": [...], "panels": [...],
+    "routes": [...], "checksum": ...}. A temporary Genesis database holds made-up data (the
+    "Personal Task Manager" sample and one synthetic project); the server uses an ephemeral loopback
+    port and is always stopped. The check fetches START_OUR_OWN_SYSTEM.html and finds every panel,
+    seeds the sample, creates a project, runs the planner, cycles an evidence label, builds the
+    CSP-locked site, then exports and re-imports the checksummed JSON. Nothing is written to the vault.
+    Errors: GenesisError (a ValueError) if the vault is not a real folder or any step fails.
+    """
+    if isinstance(vault_dir, bool) or not isinstance(vault_dir, (str, Path)) or not str(vault_dir).strip() \
+            or not Path(vault_dir).is_dir():
+        raise GenesisError("A real vault directory is required")
+    steps, routes = [], []
+    with tempfile.TemporaryDirectory(prefix="apccs_genesis_smoke_") as temp:
+        db_path = Path(temp) / "genesis.sqlite3"
+        connection = _connect(db_path)
+        try:
+            _ensure_schema(connection)
+            _batch41_ensure_schema(connection)
+            _batch44_ensure_schema(connection)
+        finally:
+            connection.close()
+        server = create_genesis_ui_control_server(vault_dir, db_path, "127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = "http://127.0.0.1:%d" % server.server_address[1]
+
+            def call(route: str, body: object = None) -> dict:
+                """Inputs: route and body. Outputs: the result. Errors: GenesisError."""
+                routes.append(route)
+                return _batch47_call(base, route, body)
+
+            with urllib.request.urlopen(base + "/" + UI_PAGE_NAME, timeout=10) as response:
+                page = response.read().decode("utf-8")
+            panels = [name for name in ("genesis-home", "genesis-records", "genesis-planner",
+                                        "genesis-site-builder", "genesis-capabilities", "genesis-settings")
+                      if 'id="%s"' % name in page]
+            if len(panels) != 6 or 'sandbox=""' not in page:
+                raise GenesisError("The Genesis page is missing a panel")
+            steps.append("page_and_panels")
+            seeded = seed_sample_personal_task_manager_once(db_path)
+            if seeded.get("seeded") is not True:
+                raise GenesisError("The sample project was not seeded")
+            if len(call("/api/genesis/projects")["projects"]) != 1:
+                raise GenesisError("The sample project is not listed")
+            steps.append("seed_sample")
+            call("/api/genesis/projects", {"project_id": "smoke1", "name": "Smoke Test Project",
+                                           "product_category": "STATIC_WEBSITE",
+                                           "description": "Synthetic site where people can search and share notes."})
+            steps.append("create_project")
+            plan = call("/api/genesis/plan_preview", {"project_id": "smoke1"})
+            if not plan["inferred"] or not plan["tasks"]:
+                raise GenesisError("The planner found nothing")
+            call("/api/genesis/plan_apply", {"project_id": "smoke1", "plan_preview": plan,
+                                             "selected_req_ids": [plan["inferred"][0]["id"]],
+                                             "selected_task_ids": [plan["tasks"][0]["id"]]})
+            steps.append("rule_planner")
+            added = call("/api/genesis/requirements", {"project_id": "smoke1", "action": "add",
+                                                       "text": "Pages load quickly"})
+            cycled = call("/api/genesis/requirements", {"project_id": "smoke1", "action": "cycle_label",
+                                                        "req_id": added["req_id"]})
+            if (added["label"], cycled["label"]) != ("USER_PROVIDED", "INFERRED"):
+                raise GenesisError("The evidence label did not cycle")
+            steps.append("cycle_evidence_label")
+            preview = call("/api/genesis/static_site_preview", {"project_id": "smoke1"})
+            bundle = call("/api/genesis/static_site_export", {"project_id": "smoke1"})
+            receipt = verify_static_website_csp_and_safety(preview["html"])
+            if preview["iframe_sandbox"] != "" or preview["allow_scripts"] or not receipt.get("sha256") \
+                    or STATIC_SITE_CSP_META not in preview["html"] or bundle["manifest"]["files"][0]["name"] != "index.html":
+                raise GenesisError("The static website is not locked down")
+            steps.append("static_website")
+            exported = call("/api/genesis/export_json?project_id=smoke1")
+            text = json.dumps(exported, sort_keys=True, separators=(",", ":"))
+            imported = call("/api/genesis/import_json", {"json_text": text, "project_id": "smoke2"})
+            again = call("/api/genesis/export_json?project_id=smoke2")
+            if again["project"]["requirements"] != exported["project"]["requirements"] or imported is None:
+                raise GenesisError("The checksummed JSON did not round-trip")
+            steps.append("json_round_trip")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+    return {"passed": True, "steps": steps, "panels": panels, "routes": sorted(set(routes)),
+            "checksum": exported["sha256"]}
