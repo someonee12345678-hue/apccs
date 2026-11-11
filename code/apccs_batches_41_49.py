@@ -2452,3 +2452,302 @@ def run_genesis_full_vertical_smoke_test(vault_dir: object) -> dict:
             thread.join(5)
     return {"passed": True, "steps": steps, "panels": panels, "routes": sorted(set(routes)),
             "checksum": exported["sha256"]}
+
+
+# ---------------------------------------------------------------------------
+# Batch 48 (INST-0236..0240): the optional UCLRCDE legal plugin. APCCS never imports or
+# reads UCLRCDE code. Built under the 2026-11-11 gate ruling: no file is written, the mount
+# record lives in the Genesis database, and the page slot is returned as HTML text.
+# ---------------------------------------------------------------------------
+import re
+import sys
+
+from apccs_core import sha256 as core_sha256
+from apccs_core import validate_engine_manifest
+
+BATCH48_CANARY_LINE = "Canary check: T = Z -> anvil"
+PLUGIN_ABSENT_STATUS = "OPTIONAL_PLUGIN_NOT_INSTALLED"
+PLUGIN_ABSENT_MESSAGE = "UCLRCDE plugin not installed — APCCS running in standard mode"
+PLUGIN_PROXY_MESSAGE = "Optional plugin uclrcde is not installed. All APCCS and Genesis features remain active."
+PLUGIN_SLOT_TEXT_ABSENT = "Not Installed (Optional — APCCS & Genesis Active)"
+PLUGIN_SLOT_TEXT_MOUNTED = "Mounted / Ready"
+PLUGIN_MANIFEST_MAX_BYTES = 1048576
+_BATCH48_SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\Z")
+_BATCH48_SUBPATH = re.compile(r"legal(?:/[A-Za-z0-9][A-Za-z0-9_.-]*)*\Z")
+_BATCH48_HEX = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def _batch48_ensure_schema(db: sqlite3.Connection) -> None:
+    """Inputs: open database. Outputs: the plugin mount table exists. Errors: sqlite3.Error."""
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS optional_plugin_mounts (
+            session_id TEXT PRIMARY KEY,
+            engine_id TEXT NOT NULL,
+            namespace TEXT NOT NULL,
+            manifest_sha256 TEXT NOT NULL,
+            mounted_at TEXT NOT NULL
+        );
+    """)
+
+
+@contextmanager
+def _batch48_db(db_path: object) -> Iterator[sqlite3.Connection]:
+    """Inputs: database path. Outputs: open transaction-scoped connection. Errors: GenesisError."""
+    if isinstance(db_path, bool) or not isinstance(db_path, (str, Path)) or not str(db_path).strip():
+        raise GenesisError("Initialized Genesis database is required")
+    with _batch41_db(db_path) as db:
+        _batch48_ensure_schema(db)
+        yield db
+
+
+def _batch48_vault(vault_dir: object) -> Path:
+    """Inputs: a vault folder. Outputs: its absolute path. Errors: GenesisError if it is not a real folder."""
+    if isinstance(vault_dir, bool) or not isinstance(vault_dir, (str, Path)) or not str(vault_dir).strip():
+        raise GenesisError("A real vault directory is required")
+    path = Path(vault_dir).absolute()
+    if not path.is_dir() or path.is_symlink():
+        raise GenesisError("A real vault directory is required")
+    return path
+
+
+def check_optional_plugin_manifest(manifest: object) -> dict:
+    """INST-0236 helper: check a plugin manifest as data, never importing its entry point.
+
+    Inputs: a manifest dictionary with the six engine keys (INST-0051..0060 rules) plus
+    "rules_sha256", the SHA-256 of its rules text. Outputs: {"engine_id", "manifest_sha256",
+    "namespace"}. Errors: GenesisError if the schema is wrong or the checksum does not match.
+    """
+    verdict = validate_engine_manifest(manifest)
+    if verdict.get("passed") is not True:
+        raise GenesisError("Plugin manifest refused: " + "; ".join(verdict.get("errors", [])))
+    declared = manifest.get("rules_sha256")
+    if not isinstance(declared, str) or _BATCH48_HEX.match(declared) is None:
+        raise GenesisError("Plugin manifest needs a 64-character lowercase rules_sha256")
+    if declared != core_sha256(manifest["rules_text"].encode("utf-8")):
+        raise GenesisError("Plugin manifest rules_sha256 does not match its rules text")
+    return {"engine_id": manifest["engine_id"], "manifest_sha256": verdict["manifest_sha256"],
+            "namespace": "uclrcde:" + manifest["engine_id"]}
+
+
+def probe_optional_uclrcde_plugin(vault_dir: object, external_plugin_manifest_path: object = None) -> dict:
+    """INST-0236: find out whether an optional uclrcde plugin manifest is present.
+
+    Inputs: an existing vault folder and an optional manifest file name (a .json file inside the
+    vault). Outputs: {"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED",
+    "apccs_healthy": True} when there is no manifest, otherwise {"installed": True, "status":
+    "OPTIONAL_PLUGIN_READY", "apccs_healthy": True, "engine_id", "manifest_sha256"}. No uclrcde code
+    is imported or run. Errors: GenesisError for a bad vault, an unsafe path (traversal, a link,
+    outside the vault, not a .json file, too large) or a malformed manifest.
+    """
+    vault = _batch48_vault(vault_dir)
+    absent = {"installed": False, "status": PLUGIN_ABSENT_STATUS, "apccs_healthy": True}
+    if external_plugin_manifest_path is None:
+        return absent
+    if isinstance(external_plugin_manifest_path, bool) or not isinstance(external_plugin_manifest_path, (str, Path)) \
+            or not str(external_plugin_manifest_path).strip():
+        raise GenesisError("Plugin manifest path must be text")
+    given = Path(external_plugin_manifest_path)
+    if ".." in given.parts or "\x00" in str(given):
+        raise GenesisError("Unsafe plugin manifest path")
+    path = given if given.is_absolute() else vault / given
+    if path.suffix != ".json":
+        raise GenesisError("Plugin manifest must be a .json file")
+    if not path.exists() and not path.is_symlink():
+        return absent
+    if path.is_symlink() or not path.is_file():
+        raise GenesisError("Unsafe plugin manifest path")
+    try:
+        path.resolve().relative_to(vault.resolve())
+    except ValueError as error:
+        raise GenesisError("Plugin manifest must be inside the vault") from error
+    if path.stat().st_size > PLUGIN_MANIFEST_MAX_BYTES:
+        raise GenesisError("Plugin manifest is too large")
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise GenesisError("Plugin manifest is not readable JSON") from error
+    checked = check_optional_plugin_manifest(manifest)
+    return {"installed": True, "status": "OPTIONAL_PLUGIN_READY", "apccs_healthy": True,
+            "engine_id": checked["engine_id"], "manifest_sha256": checked["manifest_sha256"]}
+
+
+def mount_or_unmount_optional_uclrcde(vault_dir: object, db_path: object, session_id: object,
+                                      plugin_manifest: object = None) -> dict:
+    """INST-0237: mount the optional plugin for a session, or unmount it, in its own namespace.
+
+    Inputs: a vault folder, a Genesis database, a session id and an optional manifest dictionary.
+    Outputs: with a valid manifest the plugin is mounted: {"mounted": True, "status": "MOUNTED", "engine_id",
+    "namespace"}. With no manifest an existing mount is removed ({"mounted": False, "status":
+    "UNMOUNTED"}); if nothing was mounted the answer is the clean non-blocking status
+    {"mounted": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "message": ...}. Only the mount
+    table changes; projects and every other Genesis record are untouched.
+    Errors: GenesisError for a bad vault, database, session id or manifest.
+    """
+    _batch48_vault(vault_dir)
+    if not isinstance(session_id, str) or _BATCH48_SESSION.match(session_id) is None:
+        raise GenesisError("A session id of 1 to 100 letters, digits, dots, dashes or underscores is required")
+    checked = None if plugin_manifest is None else check_optional_plugin_manifest(plugin_manifest)
+    with _batch48_db(db_path) as db:
+        if checked is not None:
+            db.execute("INSERT OR REPLACE INTO optional_plugin_mounts VALUES (?, ?, ?, ?, ?)",
+                       (session_id, checked["engine_id"], checked["namespace"], checked["manifest_sha256"],
+                        datetime.now(timezone.utc).isoformat()))
+            return {"mounted": True, "status": "MOUNTED", "engine_id": checked["engine_id"],
+                    "namespace": checked["namespace"]}
+        removed = db.execute("DELETE FROM optional_plugin_mounts WHERE session_id = ?", (session_id,)).rowcount
+    if removed:
+        return {"mounted": False, "status": "UNMOUNTED", "message": "UCLRCDE plugin unmounted"}
+    return {"mounted": False, "status": PLUGIN_ABSENT_STATUS, "message": PLUGIN_ABSENT_MESSAGE}
+
+
+def handle_optional_legal_proxy_api(vault_dir: object, db_path: object, subpath: object, method: object,
+                                    body_bytes: object, plugin_handler: object = None) -> dict:
+    """INST-0238: answer /api/legal/* requests whether or not the plugin is installed.
+
+    Inputs: a vault folder, a Genesis database, a path such as "legal/status" or "/api/legal/status",
+    a method (GET or POST), the request body bytes (empty or a JSON object) and an optional handler
+    function taking (path, method, body dictionary) and returning a dictionary. Outputs: with no
+    handler {"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "message": ...}; with
+    a handler that is mounted in this database {"installed": True, "status": "OK", "result": ...};
+    a handler that is given but not mounted, or that fails, gets a clean status instead of an error.
+    Errors: GenesisError for a malformed path, method, body or handler; no other route is affected.
+    """
+    _batch48_vault(vault_dir)
+    if not isinstance(subpath, str) or "\x00" in subpath:
+        raise GenesisError("Malformed legal path")
+    route = subpath[len("/api/"):] if subpath.startswith("/api/") else subpath.lstrip("/")
+    if _BATCH48_SUBPATH.match(route) is None or ".." in route.split("/"):
+        raise GenesisError("Malformed legal path")
+    if method not in ("GET", "POST"):
+        raise GenesisError("Legal requests must be GET or POST")
+    if body_bytes is None:
+        body_bytes = b""
+    if not isinstance(body_bytes, (bytes, bytearray)) or len(body_bytes) > PLUGIN_MANIFEST_MAX_BYTES:
+        raise GenesisError("Request body must be bytes of at most one MiB")
+    body = {}
+    if body_bytes.strip():
+        try:
+            body = json.loads(bytes(body_bytes).decode("utf-8"))
+        except (UnicodeError, ValueError) as error:
+            raise GenesisError("Request body must be a JSON object") from error
+        if not isinstance(body, dict):
+            raise GenesisError("Request body must be a JSON object")
+    if plugin_handler is None:
+        return {"installed": False, "status": PLUGIN_ABSENT_STATUS, "message": PLUGIN_PROXY_MESSAGE}
+    if not callable(plugin_handler):
+        raise GenesisError("The plugin handler must be callable")
+    with _batch48_db(db_path) as db:
+        mounted = db.execute("SELECT COUNT(*) FROM optional_plugin_mounts").fetchone()[0]
+    if not mounted:
+        return {"installed": False, "status": "OPTIONAL_PLUGIN_NOT_MOUNTED", "message": PLUGIN_PROXY_MESSAGE}
+    try:
+        result = plugin_handler(route, method, body)
+    except Exception as error:  # a plugin failure must never reach other APCCS routes
+        return {"installed": True, "status": "PLUGIN_ERROR", "message": "The plugin could not answer: "
+                + type(error).__name__}
+    if not isinstance(result, dict):
+        return {"installed": True, "status": "PLUGIN_ERROR", "message": "The plugin gave an unusable answer"}
+    return {"installed": True, "status": "OK", "result": result}
+
+
+def render_optional_plugin_slot_html(plugin_mounted: object = False) -> str:
+    """INST-0239: the Left Side-Loader's UCLRCDE Legal Engine slot, as HTML text.
+
+    Inputs: True when a plugin manifest is mounted, False (the default) when it is not.
+    Outputs: an HTML fragment naming "UCLRCDE Legal Engine" as an "Optional Plugin Slot" with
+    "Not Installed (Optional — APCCS & Genesis Active)" or "Mounted / Ready". Errors: GenesisError
+    if the argument is not True or False. Nothing is written; no other panel is changed.
+    """
+    if not isinstance(plugin_mounted, bool):
+        raise GenesisError("plugin_mounted must be True or False")
+    state = PLUGIN_SLOT_TEXT_MOUNTED if plugin_mounted else PLUGIN_SLOT_TEXT_ABSENT
+    return ('<section id="legal-plugin-slot" data-plugin-state="%s">\n<h2>UCLRCDE Legal Engine</h2>\n'
+            "<p>Optional Plugin Slot</p>\n<p>%s</p>\n</section>\n"
+            % ("mounted" if plugin_mounted else "absent", html.escape(state)))
+
+
+def build_genesis_ui_page_with_plugin_slot_html(plugin_mounted: object = False) -> str:
+    """INST-0239: the whole Genesis page with the optional plugin slot added before its script.
+
+    Inputs: True or False, as for render_optional_plugin_slot_html. Outputs: the page HTML text,
+    with every Genesis panel unchanged. Errors: GenesisError for a bad argument.
+    """
+    slot = render_optional_plugin_slot_html(plugin_mounted)
+    page = build_genesis_ui_page_html()
+    marker = "<script>"
+    if page.count(marker) != 1:
+        raise GenesisError("The Genesis page has an unexpected shape")
+    return page.replace(marker, slot + marker)
+
+
+def _batch48_project_ids(db_path: object) -> list:
+    """Inputs: a Genesis database. Outputs: the project ids it holds. Errors: GenesisError."""
+    return [row["project_id"] for row in list_and_filter_genesis_projects(db_path)["projects"]]
+
+
+def verify_optional_legal_plugin_decoupling(vault_dir: object) -> dict:
+    """INST-0240: prove APCCS works with the legal plugin absent and with a synthetic one mounted.
+
+    Inputs: an existing vault folder. Outputs: {"passed": True, "absent_mode": {...},
+    "mounted_mode": {...}}. A temporary Genesis database holds made-up data. Absent mode: no
+    uclrcde module is loaded, the local server serves the page with all six panels, the slot says
+    Not Installed and /api/legal/status gives the fallback. Mounted mode: a synthetic manifest and
+    a mock handler mount, answer in their own namespace, and unmount with the projects unchanged.
+    Nothing is written to the vault. Errors: GenesisError if the vault is bad or any check fails.
+    """
+    _batch48_vault(vault_dir)
+    panel_ids = ("genesis-home", "genesis-records", "genesis-planner", "genesis-site-builder",
+                 "genesis-capabilities", "genesis-settings")
+    with tempfile.TemporaryDirectory(prefix="apccs_genesis_legal_") as temp:
+        db_path = Path(temp) / "genesis.sqlite3"
+        connection = _connect(db_path)
+        try:
+            _ensure_schema(connection)
+            _batch41_ensure_schema(connection)
+            _batch44_ensure_schema(connection)
+        finally:
+            connection.close()
+        create_or_update_genesis_project(db_path, "legal1", "Plugin Check Project", "STATIC_WEBSITE",
+                                         "Synthetic project used to check that plugin changes lose no data.")
+        before = _batch48_project_ids(db_path)
+        if any(name.split(".")[0] == "uclrcde" for name in sys.modules) or list(Path(temp).rglob("*uclrcde*")):
+            raise GenesisError("A uclrcde file or module is present")
+        probe = probe_optional_uclrcde_plugin(vault_dir)
+        status = handle_optional_legal_proxy_api(vault_dir, db_path, "/api/legal/status", "GET", b"")
+        slot_absent = build_genesis_ui_page_with_plugin_slot_html(False)
+        server = create_genesis_ui_control_server(vault_dir, db_path, "127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = "http://127.0.0.1:%d" % server.server_address[1]
+            with urllib.request.urlopen(base + "/" + UI_PAGE_NAME, timeout=10) as response:
+                page = response.read().decode("utf-8")
+            capabilities = _batch47_call(base, "/api/genesis/capabilities")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+        if probe["installed"] or probe["apccs_healthy"] is not True or status["installed"] \
+                or status["status"] != PLUGIN_ABSENT_STATUS or html.escape(PLUGIN_SLOT_TEXT_ABSENT) not in slot_absent \
+                or any('id="%s"' % name not in page or 'id="%s"' % name not in slot_absent for name in panel_ids) \
+                or not capabilities:
+            raise GenesisError("Absent mode check failed")
+        absent_mode = {"probe": probe["status"], "proxy": status["status"], "panels": list(panel_ids),
+                       "slot": PLUGIN_SLOT_TEXT_ABSENT}
+        body = "Synthetic rule one.\nSynthetic rule two."
+        manifest = {"engine_id": "synthetic_legal", "name": "Synthetic Legal Engine", "version": "1.0.0",
+                    "rules_text": body, "schema_version": 1, "entry_point": "synthetic_legal:handle",
+                    "rules_sha256": core_sha256(body.encode("utf-8"))}
+        mounted = mount_or_unmount_optional_uclrcde(vault_dir, db_path, "legal-check", manifest)
+        routed = handle_optional_legal_proxy_api(
+            vault_dir, db_path, "legal/status", "POST", b'{"ping": 1}',
+            lambda route, verb, data: {"route": route, "method": verb, "echo": data})
+        slot_mounted = build_genesis_ui_page_with_plugin_slot_html(True)
+        gone = mount_or_unmount_optional_uclrcde(vault_dir, db_path, "legal-check")
+        after = _batch48_project_ids(db_path)
+        if mounted["status"] != "MOUNTED" or routed["status"] != "OK" or routed["result"]["echo"] != {"ping": 1} \
+                or PLUGIN_SLOT_TEXT_MOUNTED not in slot_mounted or gone["status"] != "UNMOUNTED" or before != after:
+            raise GenesisError("Mounted mode check failed")
+        mounted_mode = {"mount": mounted["status"], "namespace": mounted["namespace"], "proxy": routed["status"],
+                        "unmount": gone["status"], "projects_before": before, "projects_after": after}
+    return {"passed": True, "absent_mode": absent_mode, "mounted_mode": mounted_mode}
