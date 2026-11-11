@@ -3685,7 +3685,7 @@ End of Batch MC-A3.
 
 This add-only correction lifts the Batch 41 hold recorded on 2026-11-05. Read it before building any of Batches 41–47. Where it differs from the earlier wording of those batches, it overrides that wording. Where the source says nothing, the earlier wording stands, and so does the APCCS storage choice (SQLite, Python standard library).
 
-**Source:** repository `someonee12345678-hue/genesis`, file `genesis-source-v0.2-cloudbuild.zip`. Inside it is the Genesis git history; its last commit is `29cd8b8 Project record v0.2`. Files read: `app/src/main/java/com/genesis/control/data/Model.kt`, `MainActivity.kt`, `engine/RuleBasedPlanner.kt`, `engine/StaticWebsiteBuilder.kt`, `engine/Engines.kt`, `data/Capabilities.kt`, and `docs/FEATURES.md`. Claude read them on 2026-11-10 (log Entry 0344).
+**Source:** repository `someonee12345678-hue/genesis`, file `genesis-source-v0.2-cloudbuild.zip`. Inside it is the Genesis git history; its last commit is `29cd8b8 Project record v0.2`. Files read: `app/src/main/java/com/genesis/control/data/Model.kt`, `MainActivity.kt`, `engine/RuleBasedPlanner.kt`, `engine/StaticWebsiteBuilder.kt`, `engine/Engines.kt`, `data/Capabilities.kt`, and `docs/FEATURES.md`. Claude read them on 2026-11-10 (log Entry 0346).
 
 **The answer to the hold:** Genesis v0.2 has **no defect severity at all.** A known defect is a plain note, an id plus its text: the same `Note` type as acceptance criteria and decisions. The `severity="MEDIUM"` in INST-0204 came from the architect, not from Genesis. It is removed.
 
