@@ -8,14 +8,19 @@ Errors: any failed check exits non-zero.
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 from pathlib import Path
 import sqlite3
 import tempfile
+import threading
 import unittest
+import urllib.error
+import urllib.request
 
 import apccs_batches_41_49 as batch
 import apccs_genesis as genesis
+from apccs_q1_part2 import handle_control_panel_api
 
 
 def new_db(case: unittest.TestCase) -> Path:
@@ -995,6 +1000,289 @@ class Batch45Tests(unittest.TestCase):
                                          ([{"module_id": "m1", "status_label": "GREAT"}], {"test_cases": []})):
             with self.subTest(registry=bad_registry, report=bad_report), self.assertRaises(genesis.GenesisError):
                 batch.audit_capabilities_against_verification_report(bad_registry, bad_report)
+
+
+class Batch46Tests(unittest.TestCase):
+    """Inputs: Batch 46 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH46_CANARY_LINE, flush=True)
+
+    def make(self) -> Path:
+        """Inputs: none. Outputs: a fresh database with made-up projects. Errors: GenesisError."""
+        return new_db(self)
+
+    def projects(self, db: Path, route: str, method: str = "POST", body: object = None) -> dict:
+        """Inputs: database, route, method, body. Outputs: the projects-router reply. Errors: none."""
+        raw = b"" if body is None else json.dumps(body).encode("utf-8")
+        return batch.handle_genesis_projects_api(db, route, method, raw)
+
+    def admin(self, db: Path, route: str, method: str = "POST", body: object = None) -> dict:
+        """Inputs: database, route, method, body. Outputs: the admin-router reply. Errors: none."""
+        raw = b"" if body is None else json.dumps(body).encode("utf-8")
+        return batch.handle_genesis_admin_api(db, route, method, raw)
+
+    def site(self, db: Path, route: str, body: object = None, method: str = "POST") -> dict:
+        """Inputs: database, route, body. Outputs: the planner-and-site-router reply. Errors: none."""
+        raw = b"" if body is None else json.dumps(body).encode("utf-8")
+        return batch.handle_genesis_planner_and_site_api(db, db.parent.parent, route, method, raw)
+
+    # INST-0226
+    def test_226_defaults_and_updates(self) -> None:
+        """Inputs: a new database. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        first = batch.get_or_update_genesis_settings(db)
+        self.assertEqual((first["autonomy_mode"], first["theme"]), ("B", "SYSTEM"))
+        self.assertEqual(first["theme_label"], "Follow system (default)")
+        self.assertTrue(first["device_backup_disabled"])
+        changed = batch.get_or_update_genesis_settings(db, autonomy_mode="A", theme="DARK")
+        self.assertEqual((changed["autonomy_mode"], changed["theme"], changed["theme_label"]), ("A", "DARK", "Dark"))
+        again = batch.get_or_update_genesis_settings(db, theme="LIGHT")
+        self.assertEqual((again["autonomy_mode"], again["theme"]), ("A", "LIGHT"))
+        self.assertEqual(batch.get_or_update_genesis_settings(db), again)
+        self.assertTrue(again["device_backup_disabled"])
+
+    def test_226_modes_c_and_d_and_bad_values_are_refused(self) -> None:
+        """Inputs: refused values. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        for mode in ("C", "D"):
+            with self.subTest(mode=mode), self.assertRaises(genesis.GenesisError) as caught:
+                batch.get_or_update_genesis_settings(db, autonomy_mode=mode)
+            self.assertEqual(str(caught.exception), "AUTONOMY_C_D_DISABLED_BY_POLICY")
+        for mode in ("Z", "a", 1, ""):
+            with self.subTest(mode=mode), self.assertRaises(genesis.GenesisError):
+                batch.get_or_update_genesis_settings(db, autonomy_mode=mode)
+        for theme in ("FOLLOW_SYSTEM", "dark", 3, ""):
+            with self.subTest(theme=theme), self.assertRaises(genesis.GenesisError):
+                batch.get_or_update_genesis_settings(db, theme=theme)
+        with self.assertRaises(genesis.GenesisError):
+            batch.get_or_update_genesis_settings(db, autonomy_mode="A", theme="BAD")
+        self.assertEqual(batch.get_or_update_genesis_settings(db)["autonomy_mode"], "B")
+        with self.assertRaises(genesis.GenesisError):
+            batch.get_or_update_genesis_settings(db.parent / "missing.sqlite3")
+
+    # INST-0227
+    def test_227_projects_and_records_are_routed(self) -> None:
+        """Inputs: calls to every project route. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        made = self.projects(db, "/api/genesis/projects", "POST", {
+            "project_id": "p9", "name": "Routed", "product_category": "GAME_PROTOTYPE", "description": "Score table"})
+        self.assertEqual(made["http_status"], 200)
+        self.assertTrue(made["body"]["ok"])
+        listed = self.projects(db, "/api/genesis/projects?search=routed&category=GAME_PROTOTYPE", "GET")
+        self.assertEqual([item["project_id"] for item in listed["body"]["result"]["projects"]], ["p9"])
+        none = self.projects(db, "/api/genesis/projects?search=zzz", "GET")
+        self.assertEqual(none["body"]["result"]["status"], "EMPTY_NO_MATCHES")
+        req = self.projects(db, "/api/genesis/requirements", "POST", {
+            "project_id": "p9", "action": "add", "text": "Show scores"})
+        self.assertEqual(req["body"]["result"]["label"], "USER_PROVIDED")
+        task = self.projects(db, "/api/genesis/tasks", "POST", {"project_id": "p9", "action": "add", "title": "Build"})
+        self.assertEqual(task["http_status"], 200)
+        for route, key in (("criteria", "Criterion text"), ("decisions", "Decision text")):
+            reply = self.projects(db, "/api/genesis/" + route, "POST", {
+                "project_id": "p9", "action": "add", "content": key})
+            self.assertEqual(reply["http_status"], 200, reply)
+        defect = self.projects(db, "/api/genesis/defects", "POST", {
+            "project_id": "p9", "action": "add", "summary": "Typo"})
+        self.assertEqual(defect["http_status"], 200)
+        cp = self.projects(db, "/api/genesis/checkpoints/", "POST", {
+            "project_id": "p9", "action": "create", "label": "first"})
+        self.assertEqual(cp["http_status"], 200)
+
+    def test_227_bad_input_gives_400_and_wrong_routes_404_405(self) -> None:
+        """Inputs: bad requests. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        for route, body in (
+                ("/api/genesis/projects", {"project_id": "x", "name": "", "product_category": "OTHER", "description": "d"}),
+                ("/api/genesis/projects", {"project_id": "x", "name": "N", "product_category": "NOPE", "description": "d"}),
+                ("/api/genesis/requirements", {"project_id": "nope", "action": "add", "text": "t"}),
+                ("/api/genesis/requirements", {"action": "add", "text": "t"}),
+                ("/api/genesis/requirements", {"project_id": "p1", "action": "add", "text": "t", "evidence_label": "BAD"}),
+                ("/api/genesis/tasks", {"project_id": "p1", "action": "cycle_status", "task_id": 999}),
+                ("/api/genesis/criteria", {"project_id": 5, "action": "add", "content": "c"}),
+                ("/api/genesis/defects", {"project_id": "p1", "action": "edit", "defect_id": 4, "summary": "s"}),
+                ("/api/genesis/checkpoints", {"project_id": "p1", "action": "restore", "checkpoint_id": 77})):
+            with self.subTest(route=route, body=body):
+                reply = self.projects(db, route, "POST", body)
+                self.assertEqual(reply["http_status"], 400)
+                self.assertFalse(reply["body"]["ok"])
+                self.assertTrue(reply["body"]["error"])
+        self.assertEqual(self.projects(db, "/api/genesis/nothing")["http_status"], 404)
+        self.assertEqual(self.projects(db, "/api/genesis/tasks", "GET")["http_status"], 405)
+        raw = batch.handle_genesis_projects_api(db, "/api/genesis/tasks", "POST", b"{not json")
+        self.assertEqual(raw["http_status"], 400)
+        listy = batch.handle_genesis_projects_api(db, "/api/genesis/tasks", "POST", b"[1]")
+        self.assertEqual(listy["http_status"], 400)
+        huge = batch.handle_genesis_projects_api(db, "/api/genesis/tasks", "POST", b" " * (1_048_576 + 1))
+        self.assertEqual(huge["http_status"], 400)
+        self.assertEqual(batch.handle_genesis_projects_api(db, 5, "POST", b"")["http_status"], 400)
+        missing = batch.handle_genesis_projects_api(db.parent / "none.sqlite3", "/api/genesis/projects", "GET", b"")
+        self.assertEqual(missing["http_status"], 400)
+
+    # INST-0228
+    def test_228_planner_and_site_routes(self) -> None:
+        """Inputs: planner and site calls. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        genesis.create_or_update_genesis_project(db, "p3", "Shop", "WEB_APP", "Users sign in and search for items")
+        preview = self.site(db, "/api/genesis/plan_preview", {"project_id": "p3"})
+        self.assertEqual(preview["http_status"], 200)
+        plan = preview["body"]["result"]
+        self.assertTrue(plan["inferred"])
+        applied = self.site(db, "/api/genesis/plan_apply", {
+            "project_id": "p3", "plan_preview": plan, "selected_req_ids": ["INF-1"], "selected_task_ids": ["TASK-1"]})
+        self.assertEqual(applied["http_status"], 200, applied)
+        page = self.site(db, "/api/genesis/static_site_preview", {"project_id": "p3"})
+        self.assertFalse(page["body"]["result"]["allow_scripts"])
+        self.assertIn("<h1>Shop</h1>", page["body"]["result"]["html"])
+        exported = self.site(db, "/api/genesis/static_site_export", {"project_id": "p3"})
+        self.assertEqual(exported["http_status"], 200)
+        self.assertEqual(exported["body"]["result"]["manifest"]["serve_as"], "index.html")
+        self.assertFalse(Path(exported["body"]["result"]["folder"]).exists())
+
+    def test_228_bad_input_is_rejected(self) -> None:
+        """Inputs: bad requests. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        for route, body in (("/api/genesis/plan_preview", {"project_id": "nope"}),
+                            ("/api/genesis/plan_preview", {}),
+                            ("/api/genesis/plan_apply", {"project_id": "p1", "plan_preview": "x"}),
+                            ("/api/genesis/static_site_preview", {"project_id": 3}),
+                            ("/api/genesis/static_site_export", {"project_id": "p1", "export_subdir": "../out"}),
+                            ("/api/genesis/static_site_export", {"project_id": "nope"})):
+            with self.subTest(route=route, body=body):
+                self.assertEqual(self.site(db, route, body)["http_status"], 400)
+        self.assertEqual(self.site(db, "/api/genesis/plan_preview", {"project_id": "p1"}, "GET")["http_status"], 405)
+        self.assertEqual(self.site(db, "/api/genesis/elsewhere", {})["http_status"], 404)
+        self.assertEqual(batch.handle_genesis_planner_and_site_api(db, db.parent.parent, "/api/genesis/plan_preview",
+                                                                    None, b"")["http_status"], 400)
+
+    # INST-0229
+    def test_229_export_import_audit_capabilities_verification_settings(self) -> None:
+        """Inputs: calls to every admin route. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        exported = self.admin(db, "/api/genesis/export_json?project_id=p1", "GET")
+        self.assertEqual(exported["http_status"], 200)
+        envelope = exported["body"]["result"]
+        self.assertEqual(envelope["format"], "genesis-project")
+        imported = self.admin(db, "/api/genesis/import_json", "POST", {
+            "json_text": json.dumps(envelope), "project_id": "copy1"})
+        self.assertEqual(imported["http_status"], 200, imported)
+        self.assertEqual(imported["body"]["result"]["outcome"], "IMPORTED")
+        log = self.admin(db, "/api/genesis/audit_log", "GET")
+        self.assertEqual(log["body"]["result"]["entries"][0]["project_id"], "copy1")
+        caps = self.admin(db, "/api/genesis/capabilities", "GET")
+        self.assertEqual(len(caps["body"]["result"]["capabilities"]), 5)
+        xml = '<testsuite><testcase classname="a" name="t1"/></testsuite>'
+        verified = self.admin(db, "/api/genesis/verification", "POST", {"xml_text": xml})
+        self.assertTrue(verified["body"]["result"]["all_passed"])
+        stored = self.admin(db, "/api/genesis/verification", "GET")
+        self.assertEqual(len(stored["body"]["result"]["reports"]), 1)
+        settings = self.admin(db, "/api/genesis/settings", "POST", {"theme": "LIGHT", "autonomy_mode": "A"})
+        self.assertEqual(settings["body"]["result"]["theme"], "LIGHT")
+        self.assertEqual(self.admin(db, "/api/genesis/settings", "GET")["body"]["result"]["autonomy_mode"], "A")
+
+    def test_229_bad_input_is_rejected(self) -> None:
+        """Inputs: bad requests. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        exported = self.admin(db, "/api/genesis/export_json?project_id=p1", "GET")["body"]["result"]
+        tampered = dict(exported, sha256="0" * 64)
+        for route, body in (
+                ("/api/genesis/export_json", {"project_id": "nope"}),
+                ("/api/genesis/import_json", {"json_text": "{}"}),
+                ("/api/genesis/import_json", {"json_text": json.dumps(tampered)}),
+                ("/api/genesis/verification", {"xml_text": "/etc/hostname"}),
+                ("/api/genesis/verification", {"xml_text": "<!DOCTYPE x [<!ENTITY a 'b'>]><testsuite/>"}),
+                ("/api/genesis/verification", {}),
+                ("/api/genesis/settings", {"autonomy_mode": "C"}),
+                ("/api/genesis/settings", {"theme": "FOLLOW_SYSTEM"})):
+            with self.subTest(route=route, body=body):
+                self.assertEqual(self.admin(db, route, "POST", body)["http_status"], 400)
+        refused = self.admin(db, "/api/genesis/settings", "POST", {"autonomy_mode": "D"})
+        self.assertEqual(refused["body"]["error"], "AUTONOMY_C_D_DISABLED_BY_POLICY")
+        self.assertEqual(self.admin(db, "/api/genesis/audit_log", "POST")["http_status"], 405)
+        self.assertEqual(self.admin(db, "/api/genesis/unknown", "GET")["http_status"], 404)
+
+    # INST-0230
+    def start_server(self) -> tuple:
+        """Inputs: none. Outputs: the base URL, vault and database of a live loopback server. Errors: GenesisError."""
+        db = self.make()
+        vault = db.parent.parent
+        server = batch.create_genesis_enabled_control_server(vault, db, "127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        def stop() -> None:
+            """Inputs: none. Outputs: none; the server stops. Errors: none."""
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+
+        self.addCleanup(stop)
+        return "http://127.0.0.1:%d" % server.server_address[1], vault, db
+
+    def fetch(self, url: str, method: str = "GET", body: object = None, headers: dict = None) -> tuple:
+        """Inputs: URL, method, body and headers. Outputs: the status and decoded JSON. Errors: none."""
+        raw = None if body is None else (body if isinstance(body, bytes) else json.dumps(body).encode("utf-8"))
+        request = urllib.request.Request(url, data=raw, method=method, headers=headers or {})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                return response.status, json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read().decode("utf-8"))
+
+    def test_230_live_requests_valid_and_existing_routes(self) -> None:
+        """Inputs: live HTTP requests. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        base, vault, db = self.start_server()
+        status, body = self.fetch(base + "/api/genesis/projects")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body["result"]["projects"]), 2)
+        status, body = self.fetch(base + "/api/genesis/projects", "POST", {
+            "project_id": "live1", "name": "Live", "product_category": "DESKTOP_TOOL", "description": "Made up"})
+        self.assertEqual(status, 200)
+        status, body = self.fetch(base + "/api/genesis/requirements", "POST", {
+            "project_id": "live1", "action": "add", "text": "Works"})
+        self.assertEqual((status, body["result"]["label"]), (200, "USER_PROVIDED"))
+        status, body = self.fetch(base + "/api/genesis/plan_preview", "POST", {"project_id": "live1"})
+        self.assertEqual(status, 200)
+        status, body = self.fetch(base + "/api/genesis/capabilities")
+        self.assertEqual(status, 200)
+        status, body = self.fetch(base + "/api/genesis/settings")
+        self.assertEqual(body["result"]["theme"], "SYSTEM")
+        expected = handle_control_panel_api("GET", "/api/status", b"", vault)
+        status, body = self.fetch(base + "/api/status")
+        self.assertEqual((status, body), (expected["http_status"], expected["body"]))
+
+    def test_230_live_bad_input_is_rejected(self) -> None:
+        """Inputs: bad live requests. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        base, vault, db = self.start_server()
+        self.assertEqual(self.fetch(base + "/api/genesis/requirements", "POST", {"action": "add"})[0], 400)
+        self.assertEqual(self.fetch(base + "/api/genesis/requirements", "POST", b"{oops",
+                                    {"Content-Type": "application/json"})[0], 400)
+        self.assertEqual(self.fetch(base + "/api/genesis/settings", "POST", {"autonomy_mode": "C"})[1]["error"],
+                         "AUTONOMY_C_D_DISABLED_BY_POLICY")
+        self.assertEqual(self.fetch(base + "/api/genesis/tasks")[0], 405)
+        self.assertEqual(self.fetch(base + "/api/genesis/missing")[0], 404)
+        self.assertEqual(self.fetch(base + "/elsewhere")[0], 404)
+        self.assertEqual(self.fetch(base + "/api/genesis/tasks", "POST", {"project_id": "nope", "action": "add",
+                                                                      "title": "t"})[0], 400)
+        status, _body = self.fetch(base + "/api/genesis/tasks", "POST", b"{}", {"Content-Length": "abc"})
+        self.assertIn(status, (400, 413))
+        connection = http.client.HTTPConnection(base.split("//")[1], timeout=10)
+        self.addCleanup(connection.close)
+        connection.putrequest("POST", "/api/genesis/tasks")
+        connection.putheader("Content-Length", "1048577")
+        connection.endheaders()
+        self.assertEqual(connection.getresponse().status, 413)
+
+    def test_230_server_refuses_unsafe_setup(self) -> None:
+        """Inputs: bad server settings. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        vault = db.parent.parent
+        for host, port, vault_arg, db_arg in (("0.0.0.0", 0, vault, db), ("example.com", 0, vault, db),
+                                              ("127.0.0.1", -1, vault, db), ("127.0.0.1", "80", vault, db),
+                                              ("127.0.0.1", 0, vault / "missing", db),
+                                              ("127.0.0.1", 0, vault, vault / "missing.sqlite3"),
+                                              ("127.0.0.1", 0, 5, db), ("127.0.0.1", 0, vault, None)):
+            with self.subTest(host=host, port=port), self.assertRaises(genesis.GenesisError):
+                batch.create_genesis_enabled_control_server(vault_arg, db_arg, host, port)
 
 
 if __name__ == "__main__":

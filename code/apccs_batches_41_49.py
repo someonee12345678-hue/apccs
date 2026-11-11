@@ -1746,3 +1746,348 @@ def audit_capabilities_against_verification_report(capability_registry_list: obj
                 downgraded.append(entry.get("module_id"))
         audited.append(result)
     return {"modules": audited, "downgraded": downgraded, "all_ok": not downgraded}
+
+
+# ---------------------------------------------------------------------------
+# Batch 46 (INST-0226..0230): settings, the three /api/genesis routers and the live server.
+# Genesis v0.2 corrections: theme SYSTEM / LIGHT / DARK (plan/QUEUE.md, 2026-11-10).
+# Gate ruling (2026-11-11): results stay in the database; the server writes no file.
+# ---------------------------------------------------------------------------
+import ipaddress
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
+
+from apccs_genesis import list_and_filter_genesis_projects
+from apccs_q1_part2 import handle_control_panel_api
+
+BATCH46_CANARY_LINE = "Canary check: T = X -> motorcycle"
+AUTONOMY_ALLOWED = ("A", "B")
+AUTONOMY_DISABLED = ("C", "D")
+AUTONOMY_DISABLED_MESSAGE = "AUTONOMY_C_D_DISABLED_BY_POLICY"
+THEMES = (("SYSTEM", "Follow system (default)"), ("LIGHT", "Light"), ("DARK", "Dark"))
+GENESIS_API_PREFIX = "/api/genesis/"
+API_BODY_MAX_BYTES = 1_048_576
+
+
+def _batch46_ensure_schema(db: sqlite3.Connection) -> None:
+    """Inputs: open database. Outputs: the settings table exists. Errors: sqlite3.Error."""
+    db.execute("CREATE TABLE IF NOT EXISTS genesis_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+
+
+def _batch46_settings_view(db: sqlite3.Connection) -> dict:
+    """Inputs: open database. Outputs: the current settings with defaults filled in. Errors: sqlite3.Error."""
+    stored = {row["key"]: row["value"] for row in db.execute("SELECT key, value FROM genesis_settings")}
+    theme = stored.get("theme", "SYSTEM")
+    labels = dict(THEMES)
+    return {"autonomy_mode": stored.get("autonomy_mode", "B"), "theme": theme,
+            "theme_label": labels.get(theme, labels["SYSTEM"]),
+            "autonomy_allowed": list(AUTONOMY_ALLOWED), "autonomy_disabled": list(AUTONOMY_DISABLED),
+            "device_backup_disabled": True}
+
+
+def get_or_update_genesis_settings(db_path: object, autonomy_mode: object = None, theme: object = None) -> dict:
+    """INST-0226: Genesis settings kept in SQLite, with the autonomy and theme guard.
+
+    Inputs: database path, and optionally a new autonomy mode (A or B) and a new theme (SYSTEM, LIGHT or
+    DARK). Defaults are mode B and SYSTEM, shown as "Follow system (default)". Outputs: autonomy_mode,
+    theme, theme_label, the allowed and disabled modes, and device_backup_disabled, which is always True
+    and cannot be changed. Nothing is saved unless every given value is valid.
+    Errors: GenesisError (a ValueError); modes C and D are refused with AUTONOMY_C_D_DISABLED_BY_POLICY.
+    """
+    if autonomy_mode is not None:
+        if isinstance(autonomy_mode, str) and autonomy_mode in AUTONOMY_DISABLED:
+            raise GenesisError(AUTONOMY_DISABLED_MESSAGE)
+        if not isinstance(autonomy_mode, str) or autonomy_mode not in AUTONOMY_ALLOWED:
+            raise GenesisError("Unknown autonomy mode; use A or B")
+    if theme is not None and (not isinstance(theme, str) or theme not in dict(THEMES)):
+        raise GenesisError("Unknown theme; use one of: " + ", ".join(key for key, _label in THEMES))
+    with _batch41_db(db_path) as db:
+        _batch46_ensure_schema(db)
+        for key, value in (("autonomy_mode", autonomy_mode), ("theme", theme)):
+            if value is not None:
+                db.execute("INSERT INTO genesis_settings(key, value) VALUES(?, ?) "
+                           "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+        return _batch46_settings_view(db)
+
+
+def _batch46_reply(status: int, body: object) -> dict:
+    """Inputs: an HTTP status and a JSON-ready body. Outputs: the reply record. Errors: none."""
+    return {"http_status": status, "body": body}
+
+
+def _batch46_data(method: str, query_text: str, body_bytes: object) -> dict:
+    """Inputs: method, the query string and the body. Outputs: the query values, plus the JSON body for POST.
+
+    Errors: GenesisError if the body is not bytes, is over 1 MiB, or is not a JSON object.
+    """
+    data = {key: values[0] for key, values in parse_qs(query_text, keep_blank_values=True).items()}
+    if method != "POST":
+        return data
+    if body_bytes is None:
+        body_bytes = b""
+    if not isinstance(body_bytes, bytes) or len(body_bytes) > API_BODY_MAX_BYTES:
+        raise GenesisError("The request body must be bytes of at most 1 MiB")
+    if not body_bytes.strip():
+        return data
+    try:
+        parsed = json.loads(body_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        raise GenesisError("The request body is not valid JSON") from error
+    if not isinstance(parsed, dict):
+        raise GenesisError("The request body must be a JSON object")
+    data.update(parsed)
+    return data
+
+
+def _batch46_project_id(data: dict) -> str:
+    """Inputs: request data. Outputs: its project_id text. Errors: GenesisError if it is missing or not text."""
+    value = data.get("project_id")
+    if not isinstance(value, str) or not value.strip():
+        raise GenesisError("project_id must be text")
+    return value
+
+
+def _batch46_answer(routes: dict, db_path: object, vault_dir: object, subpath: object, method: object,
+                    body_bytes: object) -> dict:
+    """Inputs: a route table, paths, the subpath, method and body. Outputs: {"http_status", "body"}.
+
+    Errors: none raised; 404 for an unknown route, 405 for the wrong method, 400 for invalid input
+    (the message is the GenesisError text), 500 if the database or disk fails.
+    """
+    if not isinstance(subpath, str) or not isinstance(method, str):
+        return _batch46_reply(400, {"ok": False, "error": "subpath and method must be text"})
+    parts = urlsplit(subpath)
+    route = parts.path
+    if route.endswith("/") and len(route) > 1:
+        route = route[:-1]
+    entry = routes.get(route)
+    if entry is None:
+        return _batch46_reply(404, {"ok": False, "error": "Unknown Genesis route"})
+    verb = method.upper()
+    allowed_verbs, function = entry
+    if verb not in allowed_verbs:
+        return _batch46_reply(405, {"ok": False, "error": "Method not allowed", "allow": list(allowed_verbs)})
+    try:
+        data = _batch46_data(verb, parts.query, body_bytes)
+        result = function(db_path, vault_dir, data, verb)
+    except ValueError as error:
+        return _batch46_reply(400, {"ok": False, "error": str(error)})
+    except (sqlite3.Error, OSError):
+        return _batch46_reply(500, {"ok": False, "error": "Genesis could not complete the request"})
+    return _batch46_reply(200, {"ok": True, "result": result})
+
+
+_PROJECT_ROUTES = {
+    "/api/genesis/projects": (("GET", "POST"), lambda db, vault, data, verb: (
+        list_and_filter_genesis_projects(db, data.get("search", ""), data.get("category", "ALL"))
+        if verb == "GET" else create_or_update_genesis_project(
+            db, data.get("project_id"), data.get("name"), data.get("product_category"),
+            data.get("description"), data.get("dependencies", "")))),
+    "/api/genesis/requirements": (("POST",), lambda db, vault, data, verb: manage_genesis_requirement(
+        db, _batch46_project_id(data), data.get("action"), data.get("req_id"), data.get("text", ""),
+        data.get("evidence_label"))),
+    "/api/genesis/tasks": (("POST",), lambda db, vault, data, verb: manage_genesis_task(
+        db, _batch46_project_id(data), data.get("action"), data.get("task_id"), data.get("title", ""),
+        data.get("status"))),
+    "/api/genesis/criteria": (("POST",), lambda db, vault, data, verb: manage_genesis_criteria_and_decisions(
+        db, _batch46_project_id(data), "ACCEPTANCE_CRITERIA", data.get("action"), data.get("item_id"),
+        data.get("content", ""))),
+    "/api/genesis/decisions": (("POST",), lambda db, vault, data, verb: manage_genesis_criteria_and_decisions(
+        db, _batch46_project_id(data), "DECISIONS", data.get("action"), data.get("item_id"),
+        data.get("content", ""))),
+    "/api/genesis/defects": (("POST",), lambda db, vault, data, verb: manage_genesis_defects_and_record_history(
+        db, _batch46_project_id(data), data.get("action"), data.get("defect_id"), data.get("summary", ""))),
+    "/api/genesis/checkpoints": (("POST",), lambda db, vault, data, verb: checkpoint_and_restore_genesis_project(
+        db, _batch46_project_id(data), data.get("action"), data.get("checkpoint_id"), data.get("label", ""))),
+}
+
+
+def handle_genesis_projects_api(db_path: object, subpath: object, method: object, body_bytes: object) -> dict:
+    """INST-0227: route the project and record calls (INST-0197 to 0205) with JSON replies.
+
+    Inputs: database path, a subpath such as /api/genesis/requirements (a query string is allowed), the
+    HTTP method and the request body bytes (a JSON object). Routes: projects (GET lists, with search and
+    category; POST creates or updates), requirements, tasks, criteria, decisions, defects and checkpoints
+    (all POST, with the fields of the function behind each). Outputs: {"http_status", "body"}; the body is
+    {"ok": true, "result": ...} or {"ok": false, "error": ...}.
+    Errors: none raised. Invalid input gives 400, an unknown route 404, a wrong method 405.
+    """
+    return _batch46_answer(_PROJECT_ROUTES, db_path, None, subpath, method, body_bytes)
+
+
+def _batch46_plan_apply(db_path: object, data: dict) -> dict:
+    """Inputs: database and request data. Outputs: the result of applying the ticked plan items. Errors: GenesisError."""
+    return apply_selected_plan_items_to_project(
+        db_path, _batch46_project_id(data), data.get("plan_preview"), data.get("selected_req_ids"),
+        data.get("selected_task_ids"))
+
+
+_PLANNER_ROUTES = {
+    "/api/genesis/plan_preview": (("POST",), lambda db, vault, data, verb: run_rule_based_planner_preview(
+        db, _batch46_project_id(data))),
+    "/api/genesis/plan_apply": (("POST",), lambda db, vault, data, verb: _batch46_plan_apply(db, data)),
+    "/api/genesis/static_site_preview": (("POST",), lambda db, vault, data, verb: create_sandboxed_preview_descriptor(
+        db, _batch46_project_id(data))),
+    "/api/genesis/static_site_export": (("POST",), lambda db, vault, data, verb: build_static_website_bundle(
+        db, vault, _batch46_project_id(data), data.get("export_subdir", "exports/genesis_sites"))),
+}
+
+
+def handle_genesis_planner_and_site_api(db_path: object, vault_dir: object, subpath: object, method: object,
+                                        body_bytes: object) -> dict:
+    """INST-0228: route the planner and static website calls (INST-0206 to 0215).
+
+    Inputs: database path, vault folder, a subpath, the HTTP method and the JSON body bytes. Routes (all
+    POST): plan_preview and static_site_preview and static_site_export take project_id (the export also
+    takes export_subdir); plan_apply takes project_id, plan_preview, selected_req_ids and selected_task_ids.
+    The export keeps the page in the database and writes no file. Outputs: {"http_status", "body"}.
+    Errors: none raised. Invalid input gives 400, an unknown route 404, a wrong method 405.
+    """
+    return _batch46_answer(_PLANNER_ROUTES, db_path, vault_dir, subpath, method, body_bytes)
+
+
+def _batch46_audit_log(db_path: object) -> dict:
+    """Inputs: database path. Outputs: the settings audit log, newest first (at most 500). Errors: GenesisError."""
+    with _batch44_db(db_path) as db:
+        rows = db.execute("SELECT audit_id, timestamp, action_type, project_id, project_name, sha256, outcome "
+                          "FROM genesis_settings_audit_log ORDER BY audit_id DESC").fetchall()
+    return {"entries": [dict(row) for row in rows]}
+
+
+def _batch46_verification(db_path: object, verb: str, data: dict) -> dict:
+    """Inputs: database, method and data. Outputs: stored reports (GET) or a new report from xml_text (POST).
+
+    Errors: GenesisError. The XML must be given as text; a file path is never read.
+    """
+    if verb == "GET":
+        with _batch41_db(db_path) as db:
+            _batch45_ensure_schema(db)
+            rows = db.execute("SELECT sha256, stored_at, report_json FROM genesis_verification_reports "
+                              "ORDER BY stored_at DESC, sha256").fetchall()
+        return {"reports": [{"sha256": row["sha256"], "stored_at": row["stored_at"],
+                             "report": json.loads(row["report_json"])} for row in rows]}
+    xml_text = data.get("xml_text")
+    if not isinstance(xml_text, str) or not xml_text.lstrip().startswith("<"):
+        raise GenesisError("xml_text must be JUnit XML text")
+    return convert_junit_xml_to_verification_json(xml_text, db_path)
+
+
+_ADMIN_ROUTES = {
+    "/api/genesis/export_json": (("GET", "POST"), lambda db, vault, data, verb: build_genesis_project_checksum_json(
+        db, _batch46_project_id(data))),
+    "/api/genesis/import_json": (("POST",), lambda db, vault, data, verb: execute_audited_genesis_state_action(
+        db, "IMPORT_PROJECT", data)),
+    "/api/genesis/audit_log": (("GET",), lambda db, vault, data, verb: _batch46_audit_log(db)),
+    "/api/genesis/capabilities": (("GET",), lambda db, vault, data, verb: {
+        "capabilities": get_genesis_capability_registry(db)}),
+    "/api/genesis/verification": (("GET", "POST"), lambda db, vault, data, verb: _batch46_verification(
+        db, verb, data)),
+    "/api/genesis/settings": (("GET", "POST"), lambda db, vault, data, verb: get_or_update_genesis_settings(
+        db, data.get("autonomy_mode") if verb == "POST" else None, data.get("theme") if verb == "POST" else None)),
+}
+
+
+def handle_genesis_admin_api(db_path: object, subpath: object, method: object, body_bytes: object) -> dict:
+    """INST-0229: route export, import, audit log, capabilities, verification and settings (INST-0216 to 0226).
+
+    Inputs: database path, a subpath, the HTTP method and the JSON body bytes. Routes: export_json (project_id),
+    import_json (POST json_text, optional project_id), audit_log (GET), capabilities (GET), verification (GET
+    lists stored reports; POST xml_text adds one) and settings (GET reads; POST autonomy_mode and/or theme).
+    Outputs: {"http_status", "body"} in the same shape as the other Genesis routers.
+    Errors: none raised. Invalid input gives 400, an unknown route 404, a wrong method 405.
+    """
+    return _batch46_answer(_ADMIN_ROUTES, db_path, None, subpath, method, body_bytes)
+
+
+def _batch46_dispatch(db_path: object, vault_dir: object, subpath: str, method: str, body_bytes: bytes) -> dict:
+    """Inputs: paths, subpath, method and body. Outputs: the first router reply that is not 404. Errors: none."""
+    reply = handle_genesis_projects_api(db_path, subpath, method, body_bytes)
+    if reply["http_status"] == 404:
+        reply = handle_genesis_planner_and_site_api(db_path, vault_dir, subpath, method, body_bytes)
+    if reply["http_status"] == 404:
+        reply = handle_genesis_admin_api(db_path, subpath, method, body_bytes)
+    return reply
+
+
+def _batch46_send(handler: BaseHTTPRequestHandler, reply: dict) -> None:
+    """Inputs: a request handler and a reply record. Outputs: none; the JSON reply goes to the client.
+
+    Errors: OSError if the client has gone away.
+    """
+    data = json.dumps(reply["body"], sort_keys=True, ensure_ascii=False).encode("utf-8")
+    handler.send_response(reply["http_status"])
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Content-Length", str(len(data)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.end_headers()
+    if handler.command != "HEAD":
+        handler.connection.sendall(data)
+
+
+def _batch46_serve(handler: BaseHTTPRequestHandler, config: dict) -> None:
+    """Inputs: a request handler and the server settings. Outputs: none; one reply is sent.
+
+    Errors: OSError if the client has gone away. /api/genesis/* goes to the Genesis routers, other /api/*
+    paths go to the existing APCCS control panel, everything else is 404. A bad or oversized length is refused.
+    """
+    route = urlsplit(handler.path).path
+    verb = handler.command
+    body = b""
+    if verb == "POST":
+        length_text = handler.headers.get("Content-Length", "0")
+        if not length_text.isdigit():
+            _batch46_send(handler, _batch46_reply(400, {"ok": False, "error": "Invalid Content-Length"}))
+            return
+        if int(length_text) > API_BODY_MAX_BYTES:
+            _batch46_send(handler, _batch46_reply(413, {"ok": False, "error": "Request body too large"}))
+            return
+        body = handler.rfile.read(int(length_text))
+    if route.startswith(GENESIS_API_PREFIX):
+        reply = _batch46_dispatch(config["db_path"], config["vault"], handler.path, verb, body)
+    elif route.startswith("/api/") and verb in ("GET", "POST"):
+        reply = handle_control_panel_api(verb, handler.path, body, config["vault"])
+    else:
+        reply = _batch46_reply(404, {"ok": False, "error": "Not found"})
+    _batch46_send(handler, reply)
+
+
+def _batch46_stay_quiet(handler: BaseHTTPRequestHandler, message_format: str, *arguments: object) -> None:
+    """Inputs: a request handler and a log line. Outputs: none; request lines are not logged. Errors: none."""
+    return None
+
+
+def create_genesis_enabled_control_server(vault_dir: object, db_path: object, host: str = "127.0.0.1",
+                                          port: int = 8501) -> ThreadingHTTPServer:
+    """INST-0230: the loopback control server with every /api/genesis/* route added.
+
+    Inputs: the vault folder, an initialized Genesis database path, a loopback host and a port (0 picks a
+    free one). Outputs: a ThreadingHTTPServer, not yet serving (call serve_forever; shutdown stops it), with
+    vault_dir and genesis_db_path attributes. GET and POST /api/genesis/* use the three Genesis routers; the
+    existing /api/status, /api/engines, /api/switch, /api/plan and /api/search and the other APCCS /api/*
+    routes still answer as before. Bad input gives 400, 405 or 413; unknown routes give 404.
+    Errors: GenesisError if the host is not a loopback address, the port is invalid, or the database or
+    vault folder is missing. Nothing is opened first.
+    """
+    try:
+        is_loopback = host.lower() == "localhost" or ipaddress.ip_address(host).is_loopback
+    except (AttributeError, ValueError):
+        is_loopback = False
+    if not is_loopback:
+        raise GenesisError("The Genesis control server must bind to localhost")
+    if type(port) is not int or not 0 <= port <= 65535:
+        raise GenesisError("port must be a whole number from 0 to 65535")
+    vault = Path(vault_dir).absolute() if isinstance(vault_dir, (str, Path)) else None
+    if vault is None or not vault.is_dir():
+        raise GenesisError("A real vault directory is required")
+    database = Path(db_path).absolute() if isinstance(db_path, (str, Path)) else None
+    if database is None or not database.is_file() or database.is_symlink():
+        raise GenesisError("Initialized Genesis database is required")
+    config = {"vault": vault, "db_path": database}
+    methods = {"do_" + verb: (lambda handler: _batch46_serve(handler, config)) for verb in ("GET", "POST")}
+    methods["log_message"] = _batch46_stay_quiet
+    methods["server_version"] = "ApccsGenesis/1.0"
+    server = ThreadingHTTPServer((host, port), type("GenesisHandler", (BaseHTTPRequestHandler,), methods))
+    server.daemon_threads = True
+    server.vault_dir = vault
+    server.genesis_db_path = database
+    return server
