@@ -11,6 +11,11 @@
 #   2. Every other check that ran is finished and none failed.
 #   3. There's no open issue whose title starts with STOP, and no STOP file on main.
 #   4. It isn't a draft, has no "hold" label, and its title doesn't name Batch 41-49.
+#      Changed 2026-11-10 (log Entry 0346, Owner 18:15-18:18 "everything automated ... as
+#      soon as the batch is done checking"): the Batch 41-49 title hold ends by itself once
+#      plan/QUEUE.md on main contains the heading "## Batch 41 hold lifted". The plan, not
+#      this file, decides; delete that heading (add-only plan: add a "hold restored" note
+#      and remove nothing) or add a "hold" label to stop a single pull request.
 #   5. It comes from this repository (not a copy) and GitHub says it merges cleanly.
 # After a merge it posts how to undo it, then starts the tests on main again.
 # Safety: it never checks out or runs pull request code. It only reads GitHub's
@@ -67,6 +72,7 @@ jobs:
           Output: merges, one undo note per merge, and a summary in the run page.
           Errors: a GitHub error on one pull request is reported and skipped.
           """
+          import base64
           import json
           import os
           import re
@@ -82,6 +88,8 @@ jobs:
           REQUIRED_CHECKS = ("Protected files untouched", "Frozen files and all tests")
           SELF_CHECK = "Auto-merge gate"
           HELD_TITLE = re.compile(r"\b(?:batch\s*4[1-9]|inst-0204)\b", re.IGNORECASE)
+          HOLD_LIFTED = re.compile(r"^## Batch 41 hold lifted\b", re.MULTILINE)
+          HOLD_RESTORED = re.compile(r"^## Batch 41 hold restored\b", re.MULTILINE)
           HOLD_LABELS = {"hold", "do-not-merge", "do not merge"}
           CLEAN_STATES = {"clean", "has_hooks"}
 
@@ -122,6 +130,19 @@ jobs:
               if call("GET", f"/repos/{REPO}/contents/STOP?ref=main", missing_ok=True) is not None:
                   return "a STOP file is on main"
               return None
+
+
+          def batch_41_hold_lifted() -> bool:
+              """True when plan/QUEUE.md on main records the Batch 41 hold as lifted (and not restored after)."""
+              try:
+                  meta = call("GET", f"/repos/{REPO}/contents/plan/QUEUE.md?ref=main")
+                  text = base64.b64decode((meta or {}).get("content") or "").decode("utf-8", "replace")
+              except Exception as err:  # can't read the plan: keep the hold
+                  print(f"Could not read plan/QUEUE.md, keeping the Batch 41-49 hold: {err}")
+                  return False
+              lifted = [m.start() for m in HOLD_LIFTED.finditer(text)]
+              restored = [m.start() for m in HOLD_RESTORED.finditer(text)]
+              return bool(lifted) and (not restored or max(lifted) > max(restored))
 
 
           def check_problem(sha: str) -> str | None:
@@ -172,6 +193,7 @@ jobs:
               if not pulls:
                   lines.append("No open pull requests.")
               merged = 0
+              hold_lifted = batch_41_hold_lifted() if any(HELD_TITLE.search(i.get("title", "")) for i in pulls or []) else False
               for item in pulls:
                   number, title = item["number"], item.get("title", "")
                   labels = {label.get("name", "").lower() for label in item.get("labels", [])}
@@ -181,7 +203,7 @@ jobs:
                   if labels & HOLD_LABELS:
                       lines.append(f"- #{number}: held (hold label).")
                       continue
-                  if HELD_TITLE.search(title):
+                  if HELD_TITLE.search(title) and not hold_lifted:
                       lines.append(f"- #{number}: held (Batch 41-49 are on hold).")
                       continue
                   try:
