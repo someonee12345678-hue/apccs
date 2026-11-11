@@ -10,6 +10,12 @@
 # (more accurate, about twice as slow, still well inside 10 minutes); fallback is
 # qwen3.5:2b, which is proven on this runner. The instructions now ask it to stay close
 # to the file's own words.
+# Changed 2026-11-10 at 17:56 (log Entry 0341, ledger Q034): the 4B re-test got 4 of 5
+# right but turned "Made-up data only" into "Made-up data is forbidden". Every answer
+# that read a file now ends with a quote check: plain software (code/apccs_quote_check.py,
+# no AI) flags points whose rule words (only, never, not, forbidden...) aren't in the
+# matching passage of the file, or whose words are mostly not in the file. It warns;
+# it never changes or blocks the answer.
 #
 # How to use (works from the GitHub phone app):
 #   1. Open an issue and write the task in plain words.
@@ -207,7 +213,7 @@ jobs:
                    "model, the Owner sets the repository variable OLLAMA_MODEL to an Ollama tag.")
 
           body = issue.get("body") or ""
-          parts, notes = [f"TASK: {issue['title']}\n\n{body}"], []
+          parts, notes, sources = [f"TASK: {issue['title']}\n\n{body}"], [], []
           room = MAX_CHARS - len(parts[0])
           for line in body.splitlines():
               if not line.strip().lower().startswith("file:"):
@@ -225,6 +231,7 @@ jobs:
                   notes.append(f"cut `{rel}` to its first {room:,} of {len(text):,} characters")
                   text = text[:room]
               room -= len(text)
+              sources.append(text)
               parts.append(f"--- FILE {rel} ---\n{text}")
           task = "\n\n".join(parts)[: MAX_CHARS + 200]
 
@@ -280,6 +287,15 @@ jobs:
           if notes:
               footer += " " + "; ".join(notes) + "."
           footer += " Check it before relying on it."
-          comment((answer or "(empty answer)") + footer)
+          check = ""
+          if sources and answer:
+              # Quote check (ledger Q034): plain software compares each point with the files.
+              try:
+                  sys.path.insert(0, str(WORKSPACE / "code"))
+                  import apccs_quote_check
+                  check = apccs_quote_check.report(apccs_quote_check.check_answer(answer, sources))
+              except Exception as err:  # the answer still posts if the checker breaks
+                  check = f"Quote check not run: {type(err).__name__}: {err}"[:300]
+          comment((answer or "(empty answer)") + (f"\n\n{check}" if check else "") + footer)
           print(f"Posted answer from {model}: {usage.get('completion_tokens', '?')} tokens in {seconds:.0f} s.")
           PY
