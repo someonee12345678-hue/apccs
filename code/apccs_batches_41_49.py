@@ -467,3 +467,212 @@ def checkpoint_and_restore_genesis_project(db_path: object, project_id: str, act
                    "(SELECT audit_id FROM genesis_audit_log ORDER BY audit_id DESC LIMIT ?)", (AUDIT_MAX,))
     return {"action": "restore", "project_id": project_id, "checkpoint_id": checkpoint_id,
             "label": restored_label, "auto_checkpoint_id": auto_id, "auto_label": auto_label}
+
+
+# ---------------------------------------------------------------------------
+# Batch 42 (INST-0206..0210): the rule-based planner, from Genesis v0.2.
+# Genesis's 10 project types are used here. Projects stored with the older
+# APCCS type names are mapped to them by GENESIS_CATEGORY_FROM_STORED.
+# ---------------------------------------------------------------------------
+BATCH42_CANARY_LINE = "Canary check: T = Y -> lighthouse"
+GENESIS_CATEGORIES = (
+    ("WEBSITE", "Website"), ("WEB_APP", "Web app"), ("PWA", "PWA"), ("ANDROID_APP", "Android app"),
+    ("API", "API"), ("DASHBOARD", "Dashboard"), ("AUTOMATION", "Automation"), ("AI_APP", "AI app"),
+    ("GAME", "Game"), ("OTHER", "Other"),
+)
+GENESIS_CATEGORY_FROM_STORED = {
+    "WEB_APP": "WEB_APP", "MOBILE_APP": "ANDROID_APP", "DESKTOP_TOOL": "OTHER", "CLI_UTILITY": "OTHER",
+    "STATIC_WEBSITE": "WEBSITE", "DATA_PIPELINE": "AUTOMATION", "AUTOMATION_SCRIPT": "AUTOMATION",
+    "DOCUMENT_ENGINE": "OTHER", "GAME_PROTOTYPE": "GAME", "OTHER": "OTHER",
+}
+KEYWORD_RULES = (
+    (("login", "log in", "sign in", "account", "password"), "Users can create an account and sign in"),
+    (("offline",), "Works without an internet connection"),
+    (("payment", "pay ", "checkout", "subscription", "buy"), "Accept payments (requires a payment provider)"),
+    (("notification", "remind", "alert"), "Send reminders or notifications"),
+    (("search", "find"), "Search content"),
+    (("filter", "sort"), "Filter and sort lists"),
+    (("photo", "image", "camera", "picture"), "Add photos or images"),
+    (("map", "location", "gps", "nearby"), "Show locations on a map"),
+    (("chat", "message"), "Send messages between users"),
+    (("share",), "Share content with other apps or people"),
+    (("calendar", "schedule", "booking", "appointment"), "Schedule or book dates and times"),
+    (("chart", "graph", "report", "analytics"), "Show charts or reports"),
+    (("export", "download", "csv"), "Export data"),
+    (("admin",), "Administrator management area"),
+    (("contact", "form"), "Contact or input form"),
+    (("dark mode", "theme"), "Light and dark themes"),
+    (("task", "to-do", "todo"), "Create and complete tasks"),
+    (("upload", "file"), "Upload or attach files"),
+    (("score", "level", "leaderboard"), "Track scores or levels"),
+)
+PROPOSED_REQUIREMENTS = (
+    "Accessible: readable text, screen reader labels, 48dp touch targets",
+    "User data is stored securely and can be exported",
+)
+STARTER_TASKS = {
+    "WEBSITE": ("List pages and content", "Choose layout and colours", "Write page text",
+                "Generate static site", "Check on phone and desktop", "Publish (needs hosting)"),
+    "WEB_APP": ("Define screens and user flows", "Design data model", "Build front end",
+                "Build back end / storage", "Write tests", "Deploy"),
+    "PWA": ("Define screens", "Add web app manifest", "Add service worker for offline",
+            "Test install on Android", "Deploy over HTTPS"),
+    "ANDROID_APP": ("Define screens and navigation", "Design data model", "Build UI", "Add local storage",
+                    "Write unit tests", "Build and sign APK"),
+    "API": ("List endpoints", "Define request/response schemas", "Implement endpoints", "Add authentication",
+            "Write API tests", "Document API"),
+    "DASHBOARD": ("List metrics", "Identify data sources", "Design charts", "Build data loading",
+                  "Verify numbers against source"),
+    "AUTOMATION": ("Describe trigger", "Describe steps", "Identify needed accounts/integrations",
+                   "Add dry-run mode", "Add logging and limits"),
+    "AI_APP": ("Define AI task and limits", "Choose AI provider and check cost", "Design prompts",
+               "Add safety checks", "Evaluate outputs"),
+    "GAME": ("Describe game rules", "Design controls", "Build game loop", "Add scoring", "Playtest"),
+    "OTHER": ("Clarify goal", "List requirements", "Choose technology", "Build prototype", "Test"),
+}
+_PLAN_LABELS = ("INFERRED", "PROPOSED")
+
+
+def infer_requirements_from_description(description_text: object) -> list:
+    """INST-0206: Genesis's 19 keyword rules, no AI.
+
+    Inputs: a description. Outputs: INFERRED candidates in rule order, each with its
+    first matched keyword. Errors: GenesisError for empty or non-text descriptions.
+    """
+    if not isinstance(description_text, str) or not description_text.strip():
+        raise GenesisError("Description must be non-empty text")
+    haystack = " " + description_text.lower() + " "
+    found = []
+    for keywords, text in KEYWORD_RULES:
+        matched = next((word for word in keywords if word in haystack), None)
+        if matched is not None:
+            found.append({"text": text, "label": "INFERRED", "matched_keyword": matched})
+    return found
+
+
+def _batch42_category(product_category: object) -> str:
+    """Inputs: a Genesis category name. Outputs: the name. Errors: GenesisError if unknown."""
+    if not isinstance(product_category, str) or product_category not in dict(GENESIS_CATEGORIES):
+        raise GenesisError("Unknown product category")
+    return product_category
+
+
+def generate_proposed_category_requirements(product_category: object) -> list:
+    """INST-0207: the two PROPOSED requirements every category gets.
+
+    Inputs: one of the 10 Genesis categories. Outputs: PROPOSED candidates.
+    Errors: GenesisError for an unknown category.
+    """
+    _batch42_category(product_category)
+    return [{"text": text, "label": "PROPOSED"} for text in PROPOSED_REQUIREMENTS]
+
+
+def generate_category_starter_tasks(product_category: object, inferred_reqs_list: object) -> list:
+    """INST-0208: starter tasks from the category alone.
+
+    Inputs: a category and the inferred requirements (shape checked, otherwise unused).
+    Outputs: ordered tasks, all TODO. Errors: GenesisError for a bad category or list.
+    """
+    _batch42_category(product_category)
+    if not isinstance(inferred_reqs_list, (list, tuple)):
+        raise GenesisError("Requirement list must be a list")
+    for item in inferred_reqs_list:
+        if not isinstance(item, dict) or not isinstance(item.get("text"), str) or not item["text"].strip():
+            raise GenesisError("Each requirement must be a record with text")
+    return [{"title": title, "status": "TODO"} for title in STARTER_TASKS[product_category]]
+
+
+def _batch42_plan_items(plan_preview_dict: object) -> tuple:
+    """Inputs: a plan preview. Outputs: requirement and task maps keyed by id. Errors: GenesisError."""
+    if not isinstance(plan_preview_dict, dict):
+        raise GenesisError("Plan preview must be a record")
+    reqs, tasks = {}, {}
+    for key in ("inferred", "proposed"):
+        for item in plan_preview_dict.get(key) or []:
+            if not isinstance(item, dict) or item.get("label") != key.upper():
+                raise GenesisError("Plan preview has a badly formed requirement")
+            reqs[_batch42_text_id(item.get("id"))] = _validate_text(item.get("text"), "Requirement text", 1, LIST_ITEM_MAX)
+    for item in plan_preview_dict.get("tasks") or []:
+        if not isinstance(item, dict):
+            raise GenesisError("Plan preview has a badly formed task")
+        tasks[_batch42_text_id(item.get("id"))] = _validate_text(item.get("title"), "Task title", 1, LIST_ITEM_MAX)
+    return reqs, tasks
+
+
+def _batch42_text_id(value: object) -> str:
+    """Inputs: a candidate id. Outputs: the id. Errors: GenesisError if not text."""
+    if not isinstance(value, str) or not value.strip():
+        raise GenesisError("Candidate id must be text")
+    return value
+
+
+def _batch42_selection(selected: object, known: dict, label: str) -> list:
+    """Inputs: chosen ids and the known ids. Outputs: chosen ids in order. Errors: GenesisError."""
+    if not isinstance(selected, (list, tuple)):
+        raise GenesisError(label + " selection must be a list")
+    for item in selected:
+        if not isinstance(item, str) or item not in known:
+            raise GenesisError("Unknown " + label + " candidate id")
+    return list(dict.fromkeys(selected))
+
+
+def apply_selected_plan_items_to_project(db_path: object, project_id: str, plan_preview_dict: object,
+                                         selected_req_ids: object, selected_task_ids: object) -> dict:
+    """INST-0209: add only the ticked candidates, skipping duplicates.
+
+    Inputs: database, project, plan preview, ticked requirement ids, ticked task ids.
+    Outputs: counts added and skipped. Errors: GenesisError for unknown ids or bad input.
+    """
+    reqs, tasks = _batch42_plan_items(plan_preview_dict)
+    chosen_reqs = _batch42_selection(selected_req_ids, reqs, "requirement")
+    chosen_tasks = _batch42_selection(selected_task_ids, tasks, "task")
+    added_reqs = added_tasks = skipped = 0
+    with _batch41_db(db_path) as db:
+        project_id, _name = _batch41_project(db, project_id)
+        have_reqs = {row["text"] for row in db.execute(
+            "SELECT text FROM requirements WHERE project_id=?", (project_id,))}
+        have_tasks = {row["text"] for row in db.execute("SELECT text FROM tasks WHERE project_id=?", (project_id,))}
+        for cid in chosen_reqs:
+            if reqs[cid] in have_reqs:
+                skipped += 1
+                continue
+            label = "INFERRED" if cid.startswith("INF-") else "PROPOSED"
+            new_id = db.execute("INSERT INTO requirements(project_id,text) VALUES(?,?)",
+                                (project_id, reqs[cid])).lastrowid
+            db.execute("INSERT INTO requirement_labels(requirement_id,label) VALUES(?,?)", (new_id, label))
+            have_reqs.add(reqs[cid])
+            added_reqs += 1
+        for cid in chosen_tasks:
+            if tasks[cid] in have_tasks:
+                skipped += 1
+                continue
+            db.execute("INSERT INTO tasks(project_id,text,status) VALUES(?,?,'TODO')", (project_id, tasks[cid]))
+            have_tasks.add(tasks[cid])
+            added_tasks += 1
+        if added_reqs or added_tasks:
+            _batch41_history(db, project_id, "Plan applied: %d requirements, %d tasks added"
+                             % (added_reqs, added_tasks))
+    return {"project_id": project_id, "requirements_added": added_reqs, "tasks_added": added_tasks,
+            "skipped_duplicates": skipped}
+
+
+def run_rule_based_planner_preview(db_path: object, project_id: str) -> dict:
+    """INST-0210: the full deterministic preview for one project (no AI, no network).
+
+    Inputs: database and project. Outputs: a plan preview with candidate ids, to hand to
+    apply_selected_plan_items_to_project. Errors: GenesisError for bad or unmappable input.
+    """
+    with _batch41_db(db_path) as db:
+        project_id, _name = _batch41_project(db, project_id)
+        row = db.execute("SELECT description, product_category FROM projects WHERE project_id=?",
+                         (project_id,)).fetchone()
+    category = GENESIS_CATEGORY_FROM_STORED.get(row["product_category"], row["product_category"])
+    inferred = infer_requirements_from_description(row["description"])
+    proposed = generate_proposed_category_requirements(category)
+    tasks = generate_category_starter_tasks(category, inferred)
+    return {
+        "project_id": project_id, "category": category, "description": row["description"],
+        "inferred": [dict(item, id="INF-%d" % n) for n, item in enumerate(inferred, 1)],
+        "proposed": [dict(item, id="PRO-%d" % n) for n, item in enumerate(proposed, 1)],
+        "tasks": [dict(item, id="TASK-%d" % n) for n, item in enumerate(tasks, 1)],
+    }
