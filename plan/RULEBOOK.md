@@ -87,3 +87,4 @@ roles, not companies. When the main agent is out of usage, the backup takes the 
 Save every proposal, report and research result where every agent can read it: a plan PR in
 apccs (`plan/architect/`), or Drive › Claude 2. Never leave it only in your own app's library
 or chat. The Owner must not have to carry files between agents (ledger Q023).
+- 2026-11-10: the Batch 41–49 hold is lifted. This replaces the hold line above. Build 41–49 in order, and first read "Batches 41–47: Genesis v0.2 source check" at the end of `plan/QUEUE.md`; it overrides their earlier wording. Ledger Q035.
