@@ -3680,3 +3680,125 @@ Not checked: Termux on the Owner's Nothing Phone; Android stopping background ap
 Owner install step (needs his OK; ledger Q025): he creates a fine-grained, read-only GitHub token for apccs only and stores it on his phone in `~/.apccs_env`. No agent ever sees, stores or asks for it.
 
 End of Batch MC-A3.
+
+## Batch 41 hold lifted — Batches 41–47: Genesis v0.2 source check (Architect's correction, 2026-11-10)
+
+This add-only correction lifts the Batch 41 hold recorded on 2026-11-05. Read it before building any of Batches 41–47. Where it differs from the earlier wording of those batches, it overrides that wording. Where the source says nothing, the earlier wording stands, and so does the APCCS storage choice (SQLite, Python standard library).
+
+**Source:** repository `someonee12345678-hue/genesis`, file `genesis-source-v0.2-cloudbuild.zip`. Inside it is the Genesis git history; its last commit is `29cd8b8 Project record v0.2`. Files read: `app/src/main/java/com/genesis/control/data/Model.kt`, `MainActivity.kt`, `engine/RuleBasedPlanner.kt`, `engine/StaticWebsiteBuilder.kt`, `engine/Engines.kt`, `data/Capabilities.kt`, and `docs/FEATURES.md`. Claude read them on 2026-11-10 (log Entry 0346).
+
+**The answer to the hold:** Genesis v0.2 has **no defect severity at all.** A known defect is a plain note, an id plus its text: the same `Note` type as acceptance criteria and decisions. The `severity="MEDIUM"` in INST-0204 came from the architect, not from Genesis. It is removed.
+
+**Limits on text, from Genesis `Validation`:** project name 1–60 characters, description 1–2000, each list item (requirement, task title, criterion, decision, defect) 1–300, dependencies at most 1000. Lengths are counted after trimming. Blank text is rejected.
+
+### Batch 41: instructions 201–205. Canary: `Canary check: T = X -> motorcycle`. Ready to build.
+
+Target repository: `someonee12345678-hue/apccs`. Target: add to the end of `code/apccs_genesis.py`; tests in `code/test_apccs_genesis.py`. Every existing byte of both files stays as it is. Follow apccs `AGENTS.md`: standard library only, no network, made-up data only, tests write only inside temporary folders, and each instruction gets a normal-use test and a bad-input test. Refusals raise `ValueError`.
+
+- **INST-0201: [GENESIS_REQUIREMENTS_AND_SIX_EVIDENCE_LABELS]**
+  Build `manage_genesis_requirement(db_path, project_id, action, req_id, text="", evidence_label=None)`. It supports `add`, `edit`, `delete` and `cycle_label`. These are Genesis's six evidence labels in their fixed order, each with its exact label text and colour token:
+  1. `VERIFIED`: text `VERIFIED`, colour `#1B7F3B` (green).
+  2. `USER_PROVIDED`: text `USER-PROVIDED`, colour `#1565C0` (blue).
+  3. `INFERRED`: text `INFERRED`, colour `#6A1B9A` (purple).
+  4. `PROPOSED`: text `PROPOSED`, colour `#00838F` (teal).
+  5. `UNVERIFIED`: text `UNVERIFIED`, colour `#8D6E00` (amber).
+  6. `FAILED`: text `FAILED`, colour `#C62828` (red).
+
+  A new requirement without a label gets `USER_PROVIDED`. `cycle_label` moves to the next label in that order, and `FAILED` goes back to `VERIFIED`. Every result includes the label text and the colour token. Reject an unknown `project_id`, unknown `req_id`, invalid text (see limits above), or an invalid label. This replaces the earlier label list, which had `DOCUMENTED` and `REPORTED`; those labels aren't in Genesis.
+
+- **INST-0202: [GENESIS_TASKS_FOUR_STATE_CYCLER]**
+  Build `manage_genesis_task(db_path, project_id, action, task_id, title="", status=None)`. It supports `add`, `edit`, `delete` and `cycle_status` across Genesis's four task states in this order: `TODO` (text `To do`), `IN_PROGRESS` (`In progress`), `DONE` (`Done`), `BLOCKED` (`Blocked`). After `BLOCKED` it goes back to `TODO`. A new task gets `TODO`. Reject a blank or too-long title, an unknown `task_id`, or an invalid status. The enum name is `TODO`, as in Genesis, not `TO_DO`.
+
+- **INST-0203: [GENESIS_ACCEPTANCE_CRITERIA_AND_DECISIONS_LISTS]**
+  Build `manage_genesis_criteria_and_decisions(db_path, project_id, list_type, action, item_id, content="")`. It supports `add`, `edit` and `delete` on a project's `ACCEPTANCE_CRITERIA` and `DECISIONS` lists. Each item is an id plus its text, as in Genesis. There is no `rationale` field, because Genesis has none. Reject an invalid `list_type`, invalid content, or an edit or delete of a missing item.
+
+- **INST-0204: [GENESIS_KNOWN_DEFECTS_AND_BOUNDED_200_HISTORY]**
+  Build `manage_genesis_defects_and_record_history(db_path, project_id, action, defect_id=None, summary="")`. It manages the `KNOWN_DEFECTS` list with `add`, `edit` and `delete`. Each defect is an id plus its text. **There is no severity.**
+
+  Every project change made by INST-0201 to INST-0205 adds one history entry to a per-project history table. Each entry is a time plus a text. Only the newest **200** entries per project are kept (Genesis `HISTORY_MAX = 200`); older entries for that project are pruned, and other projects' history is untouched. History texts for defects are `Known defect added`, `Known defect edited` and `Known defect deleted`.
+
+  Reject invalid summary text (see limits above), and reject an edit or delete of a missing defect.
+
+- **INST-0205: [GENESIS_IMMUTABLE_COPY_CHECKPOINT_AND_UNDO_RESTORE]**
+  Build `checkpoint_and_restore_genesis_project(db_path, project_id, action, checkpoint_id=None, label="")`. It supports `create` and `restore`.
+
+  A checkpoint is an isolated deep copy, saved as JSON, of the project's editable content: name, description, category, requirements, tasks, acceptance criteria, decisions, known defects and dependencies. It does not include other checkpoints or history. Each checkpoint stores a time and an `auto` flag. Creating one logs the history entry `Checkpoint saved: <label>`.
+
+  `restore` does these steps in order:
+  1. Save the current content as an automatic checkpoint (`auto` true) labelled `Auto-save before restoring '<label>'`, where `<label>` is the label of the checkpoint being restored.
+  2. Replace the content with the chosen checkpoint's content.
+  3. Log the history entry `Restored checkpoint: <label>`.
+  4. Add an audit-log entry with action `RESTORE` and detail `Restored '<label>' in '<project name>' (current state auto-saved)`. The audit log keeps only its newest 500 entries.
+
+  This makes every restore undoable at once. Reject an unknown checkpoint, a checkpoint belonging to another project, or one whose stored JSON is corrupt.
+
+### Batches 42–47: corrections from the same source
+
+- **INST-0206:** Use exactly Genesis's 19 keyword rules, in this order. Matching is done on the description in lower case, with a space added at each end; a rule matches when the description contains any of its keywords. Each match makes one `INFERRED` requirement with the text shown. Recording the first keyword that matched stays as worded. This replaces the earlier keyword examples (authentication/PIN, storage, accessibility, privacy, forms/validation).
+  1. `login`, `log in`, `sign in`, `account`, `password` → Users can create an account and sign in
+  2. `offline` → Works without an internet connection
+  3. `payment`, `pay ` (with its trailing space), `checkout`, `subscription`, `buy` → Accept payments (requires a payment provider)
+  4. `notification`, `remind`, `alert` → Send reminders or notifications
+  5. `search`, `find` → Search content
+  6. `filter`, `sort` → Filter and sort lists
+  7. `photo`, `image`, `camera`, `picture` → Add photos or images
+  8. `map`, `location`, `gps`, `nearby` → Show locations on a map
+  9. `chat`, `message` → Send messages between users
+  10. `share` → Share content with other apps or people
+  11. `calendar`, `schedule`, `booking`, `appointment` → Schedule or book dates and times
+  12. `chart`, `graph`, `report`, `analytics` → Show charts or reports
+  13. `export`, `download`, `csv` → Export data
+  14. `admin` → Administrator management area
+  15. `contact`, `form` → Contact or input form
+  16. `dark mode`, `theme` → Light and dark themes
+  17. `task`, `to-do`, `todo` → Create and complete tasks
+  18. `upload`, `file` → Upload or attach files
+  19. `score`, `level`, `leaderboard` → Track scores or levels
+
+- **INST-0207:** Genesis has no category-specific proposed requirements. Every category gets the same two `PROPOSED` requirements:
+  - `Accessible: readable text, screen reader labels, 48dp touch targets`
+  - `User data is stored securely and can be exported`
+
+  Still reject unknown categories. The 10 categories, as enum name and label, are:
+  - `WEBSITE` Website
+  - `WEB_APP` Web app
+  - `PWA` PWA
+  - `ANDROID_APP` Android app
+  - `API` API
+  - `DASHBOARD` Dashboard
+  - `AUTOMATION` Automation
+  - `AI_APP` AI app
+  - `GAME` Game
+  - `OTHER` Other
+
+- **INST-0208:** Starter tasks come from the category alone, all with status `TODO`. `inferred_reqs_list` is still checked for its shape, but it doesn't change the list. The lists, in order:
+  - WEBSITE: List pages and content; Choose layout and colours; Write page text; Generate static site; Check on phone and desktop; Publish (needs hosting).
+  - WEB_APP: Define screens and user flows; Design data model; Build front end; Build back end / storage; Write tests; Deploy.
+  - PWA: Define screens; Add web app manifest; Add service worker for offline; Test install on Android; Deploy over HTTPS.
+  - ANDROID_APP: Define screens and navigation; Design data model; Build UI; Add local storage; Write unit tests; Build and sign APK.
+  - API: List endpoints; Define request/response schemas; Implement endpoints; Add authentication; Write API tests; Document API.
+  - DASHBOARD: List metrics; Identify data sources; Design charts; Build data loading; Verify numbers against source.
+  - AUTOMATION: Describe trigger; Describe steps; Identify needed accounts/integrations; Add dry-run mode; Add logging and limits.
+  - AI_APP: Define AI task and limits; Choose AI provider and check cost; Design prompts; Add safety checks; Evaluate outputs.
+  - GAME: Describe game rules; Design controls; Build game loop; Add scoring; Playtest.
+  - OTHER: Clarify goal; List requirements; Choose technology; Build prototype; Test.
+
+- **INST-0211:** The function is `build_static_project_website_html(db_path, project_id)`, with no `theme` parameter (Genesis has one fixed template).
+  - **Page contents:** the project name as the page title and as the heading, the category label, an `About` section with the description, a `Features` list made of the requirement texts except those labelled `FAILED`, and an `Acceptance criteria` list. A list with no items is left out.
+  - **Left out:** tasks, decisions and known defects.
+  - **Footer:** `Generated from a template by Genesis. Not AI-generated.`
+  - **Escaping:** escape `&`, `<`, `>`, `"` and `'`, with `'` written as `&#39;`. Python's `html.escape(..., quote=True)` writes `&#x27;` instead, so post-process its output or escape by hand.
+- **INST-0212:** The exact Content-Security-Policy is `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">`, as in Genesis. The forbidden-content checks stay as worded.
+- **INST-0216:** The envelope keys are `format`, `sha256` and `project`. `format` is `genesis-project`. The project carries `schemaVersion` 2, not `GENESIS_PROJECT_V1` or schema 1. The canonical JSON stays as worded (`sort_keys=True, separators=(",", ":")`). Known limit: the Genesis Android app checksums in field-declaration order, so exports aren't interchangeable with the phone app. Making them interchangeable is out of scope.
+- **INST-0217:** Accept `format == "genesis-project"` and a `schemaVersion` from 1 to 2. Use Genesis's messages:
+  - `Not a Genesis project export.`
+  - `Checksum mismatch: the file was changed or damaged.`
+  - `Unsupported schema version N.`
+
+  Field limits are as above. The evidence labels and task states are those of INST-0201 and INST-0202 here.
+- **INST-0221, INST-0222:** These match the source (5 capability states; 5 engine interfaces). No change.
+- **INST-0226:** The theme values are `SYSTEM` (default, shown as `Follow system (default)`), `LIGHT` and `DARK`, not `FOLLOW_SYSTEM`. Autonomy matches the source: `A` and `B` allowed, default `B`, `C` and `D` disabled.
+- **INST-0232 and every later reference** to evidence labels or task states uses the corrected values in INST-0201 and INST-0202 here.
+- **Batches 48–49** don't come from Genesis and are unchanged. They build in order after Batch 47.
+
+End of Batches 41–47 source check.
