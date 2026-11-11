@@ -676,3 +676,250 @@ def run_rule_based_planner_preview(db_path: object, project_id: str) -> dict:
         "proposed": [dict(item, id="PRO-%d" % n) for n, item in enumerate(proposed, 1)],
         "tasks": [dict(item, id="TASK-%d" % n) for n, item in enumerate(tasks, 1)],
     }
+
+
+# ---------------------------------------------------------------------------
+# Batch 43 (INST-0211..0215): the static project website, from Genesis v0.2.
+# Genesis has one fixed template, so there is no theme (plan/QUEUE.md, 2026-11-10).
+# ---------------------------------------------------------------------------
+import hashlib
+import html
+from html.parser import HTMLParser
+from pathlib import PurePosixPath
+import re
+import tempfile
+
+from apccs_genesis import create_or_update_genesis_project
+
+BATCH43_CANARY_LINE = "Canary check: T = Z -> anvil"
+STATIC_SITE_CSP_META = ('<meta http-equiv="Content-Security-Policy" '
+                        'content="default-src \'none\'; style-src \'unsafe-inline\'">')
+STATIC_SITE_FOOTER = "Generated from a template by Genesis. Not AI-generated."
+_RESOURCE_ATTRIBUTES = ("src", "srcset", "href", "action", "formaction", "data", "poster", "background")
+_SCRIPT_URL_PREFIXES = ("javascript:", "vbscript:", "data:text/html")
+XSS_TEST_STRINGS = (
+    "<script>alert(1)</script>",
+    '" onmouseover="alert(1)',
+    "javascript:evil()",
+    '<img src="https://example.invalid/x.png">',
+)
+
+
+def _site_escape(text: object) -> str:
+    """Inputs: any text. Outputs: HTML-safe text with the apostrophe written as &#39;. Errors: none."""
+    return html.escape(str(text), quote=True).replace("&#x27;", "&#39;")
+
+
+def _site_list(items: list) -> str:
+    """Inputs: texts. Outputs: an escaped HTML list, or nothing when empty. Errors: none."""
+    if not items:
+        return ""
+    return "<ul>\n" + "".join("<li>%s</li>\n" % _site_escape(item) for item in items) + "</ul>\n"
+
+
+def build_static_project_website_html(db_path: object, project_id: str) -> str:
+    """INST-0211: one self-contained index.html page from a Genesis project record.
+
+    Inputs: database path and project id. Outputs: the HTML text. Tasks, decisions and known
+    defects are left out; requirements labelled FAILED are left out of the Features list.
+    Errors: GenesisError (a ValueError) for an unknown project or an unusable database.
+    """
+    with _batch41_db(db_path) as db:
+        project_id, _name = _batch41_project(db, project_id)
+        content = _batch41_snapshot(db, project_id)
+    category = GENESIS_CATEGORY_FROM_STORED.get(content["category"], content["category"])
+    category_label = dict(GENESIS_CATEGORIES).get(category, category)
+    features = [item["text"] for item in content["requirements"] if item["label"] != "FAILED"]
+    parts = [
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n",
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n",
+        STATIC_SITE_CSP_META + "\n",
+        "<title>%s</title>\n" % _site_escape(content["name"]),
+        "<style>body{font-family:sans-serif;max-width:40em;margin:2em auto;padding:0 1em;line-height:1.5}"
+        ".category{color:#555}footer{margin-top:2em;color:#555;font-size:0.9em}</style>\n",
+        "</head>\n<body>\n",
+        "<h1>%s</h1>\n" % _site_escape(content["name"]),
+        "<p class=\"category\">%s</p>\n" % _site_escape(category_label),
+        "<h2>About</h2>\n<p>%s</p>\n" % _site_escape(content["description"]),
+    ]
+    if features:
+        parts.append("<h2>Features</h2>\n" + _site_list(features))
+    if content["acceptance_criteria"]:
+        parts.append("<h2>Acceptance criteria</h2>\n" + _site_list(content["acceptance_criteria"]))
+    parts.append("<footer>%s</footer>\n</body>\n</html>\n" % _site_escape(STATIC_SITE_FOOTER))
+    return "".join(parts)
+
+
+def _style_loads_outside(style_text: str) -> bool:
+    """Inputs: style text in lower case. Outputs: True if it loads from outside. Errors: none."""
+    return "@import" in style_text or any(
+        marker in style_text for marker in ("url(http", "url('http", 'url("http', "url(//"))
+
+
+class _SiteScanner(HTMLParser):
+    """Inputs: HTML fed to it. Outputs: a list of problems found in tags and attributes. Errors: none."""
+
+    def __init__(self) -> None:
+        """Inputs: none. Outputs: a scanner with no problems yet. Errors: none."""
+        super().__init__(convert_charrefs=True)
+        self.problems = []
+        self._in_style = False
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        """Inputs: tag and attributes. Outputs: problems noted. Errors: none."""
+        if tag == "script":
+            self.problems.append("a script tag")
+        self._in_style = tag == "style"
+        for name, value in attrs:
+            text = (value or "").strip().lower()
+            if name.startswith("on"):
+                self.problems.append("an inline event handler (%s)" % name)
+            if text.startswith(_SCRIPT_URL_PREFIXES):
+                self.problems.append("a script or HTML data link (%s)" % name)
+            if name in _RESOURCE_ATTRIBUTES and text.startswith(("http://", "https://", "//")):
+                self.problems.append("an external resource load (%s)" % name)
+            if name == "style" and _style_loads_outside(text):
+                self.problems.append("an external resource load in a style")
+
+    def handle_startendtag(self, tag: str, attrs: list) -> None:
+        """Inputs: self-closing tag and attributes. Outputs: problems noted. Errors: none."""
+        self.handle_starttag(tag, attrs)
+        self._in_style = False
+
+    def handle_endtag(self, tag: str) -> None:
+        """Inputs: closing tag. Outputs: none. Errors: none."""
+        if tag == "style":
+            self._in_style = False
+
+    def handle_data(self, data: str) -> None:
+        """Inputs: text. Outputs: style text is checked for outside loads. Errors: none."""
+        if self._in_style and _style_loads_outside(data.lower()):
+            self.problems.append("an external resource load in a style")
+
+
+def verify_static_website_csp_and_safety(html_text: object) -> dict:
+    """INST-0212: check a generated page carries the exact policy and nothing unsafe.
+
+    Inputs: the HTML text. Outputs: a receipt with the checks passed, the byte size and SHA-256.
+    Errors: GenesisError (a ValueError) when the policy is missing or the page has a script tag,
+    a javascript:, vbscript: or data:text/html link, an inline on*= handler or an external load.
+    Plain text that only mentions such words is fine: the page escapes it, and only real tags count.
+    """
+    if not isinstance(html_text, str) or not html_text.strip():
+        raise GenesisError("HTML text is required")
+    if html_text.count(STATIC_SITE_CSP_META) != 1:
+        raise GenesisError("The exact Content-Security-Policy header must appear once")
+    if "<script" in html_text.lower():
+        raise GenesisError("The page contains a script tag")
+    scanner = _SiteScanner()
+    scanner.feed(html_text)
+    scanner.close()
+    if scanner.problems:
+        raise GenesisError("The page contains " + scanner.problems[0])
+    raw = html_text.encode("utf-8")
+    return {"verified": True, "csp": STATIC_SITE_CSP_META, "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "checks": ["exact CSP header", "no script tag", "no javascript/vbscript/data:text/html link",
+                       "no inline event handler", "no external resource load"]}
+
+
+def create_sandboxed_preview_descriptor(db_path: object, project_id: str) -> dict:
+    """INST-0213: the verified page plus strict preview settings (no scripts, network or files).
+
+    Inputs: database path and project id. Outputs: html, iframe_sandbox, allow_scripts,
+    allow_network, allow_file_access and sha256. Errors: GenesisError for a bad project or page.
+    """
+    page = build_static_project_website_html(db_path, project_id)
+    receipt = verify_static_website_csp_and_safety(page)
+    return {"project_id": project_id.strip(), "html": page, "iframe_sandbox": "", "allow_scripts": False,
+            "allow_network": False, "allow_file_access": False, "sha256": receipt["sha256"]}
+
+
+def _site_export_folder(vault_dir: object, export_subdir: object, project_id: str) -> Path:
+    """Inputs: vault, sub-folder and project id. Outputs: a safe folder inside the vault. Errors: GenesisError."""
+    if isinstance(vault_dir, bool) or not isinstance(vault_dir, (str, Path)) or not str(vault_dir).strip():
+        raise GenesisError("A real vault directory is required")
+    vault = Path(vault_dir).absolute()
+    if not vault.is_dir() or vault.is_symlink() or vault.resolve() != vault:
+        raise GenesisError("A real vault directory is required")
+    if not isinstance(export_subdir, str) or not export_subdir.strip():
+        raise GenesisError("export_subdir must be text")
+    sub = PurePosixPath(export_subdir.strip())
+    if sub.is_absolute() or "\\" in export_subdir or any(
+            part in ("..", ".", "") for part in export_subdir.strip().split("/")):
+        raise GenesisError("export_subdir must stay inside the vault")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", project_id) or project_id in (".", ".."):
+        raise GenesisError("project_id cannot be used as a folder name")
+    folder = vault.joinpath(*sub.parts, project_id)
+    current = vault
+    for part in folder.relative_to(vault).parts:
+        current = current / part
+        if current.is_symlink() or (current.exists() and not current.is_dir()):
+            raise GenesisError("The export path cannot contain symlinks or files")
+    return folder
+
+
+def build_static_website_bundle(db_path: object, vault_dir: object, project_id: str,
+                                export_subdir: str = "exports/genesis_sites") -> dict:
+    """INST-0214 (second ruling, 2026-11-11): keep the verified page and its manifest in the database.
+
+    Inputs: database, vault folder, project id, a sub-folder of the vault. Outputs: the planned
+    folder, the page text and the manifest; both are saved in the site_bundles table. No file is
+    written. Errors: GenesisError for path traversal, symlinks or HTML that does not verify
+    (nothing is saved then).
+    """
+    page = build_static_project_website_html(db_path, project_id)
+    receipt = verify_static_website_csp_and_safety(page)
+    project_id = project_id.strip()
+    folder = _site_export_folder(vault_dir, export_subdir, project_id)
+    manifest = {"project_id": project_id, "serve_as": "index.html", "publish_to": str(folder),
+                "files": [{"name": "index.html", "bytes": receipt["bytes"], "sha256": receipt["sha256"]}],
+                "csp_verification": {"verified": True, "csp": receipt["csp"], "checks": receipt["checks"]}}
+    manifest_text = json.dumps(manifest, indent=2, sort_keys=True)
+    connection = _connect(db_path)
+    try:
+        with connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS site_bundles (project_id TEXT PRIMARY KEY, page_text TEXT NOT NULL, "
+                               "manifest_json TEXT NOT NULL, page_sha256 TEXT NOT NULL)")
+            connection.execute("INSERT OR REPLACE INTO site_bundles VALUES (?, ?, ?, ?)",
+                               (project_id, page, manifest_text, receipt["sha256"]))
+    finally:
+        connection.close()
+    return {"folder": str(folder), "page_text": page, "manifest": manifest}
+
+
+def audit_static_website_against_xss_vectors(db_path: object) -> dict:
+    """INST-0215: prove the page builder escapes four hostile strings in every field it shows.
+
+    Inputs: a Genesis database path. Outputs: a report with one row per string. The test runs
+    on a temporary database, so the real one is not changed.
+    Errors: GenesisError if the database is unusable or any string gets through unescaped.
+    """
+    if isinstance(db_path, bool) or not isinstance(db_path, (str, Path)) or not str(db_path).strip():
+        raise GenesisError("Initialized Genesis database is required")
+    source = Path(db_path).absolute()
+    if not source.is_file() or source.is_symlink():
+        raise GenesisError("Initialized Genesis database is required")
+    rows = []
+    with tempfile.TemporaryDirectory(prefix="apccs_xss_audit_") as temp:
+        copy = Path(temp) / "audit.sqlite3"
+        connection = _connect(copy)
+        try:
+            _ensure_schema(connection)
+            _batch41_ensure_schema(connection)
+        finally:
+            connection.close()
+        for number, hostile in enumerate(XSS_TEST_STRINGS, 1):
+            project_id = "xss%d" % number
+            create_or_update_genesis_project(copy, project_id, hostile[:60], "WEB_APP", hostile)
+            manage_genesis_requirement(copy, project_id, "add", None, hostile)
+            manage_genesis_criteria_and_decisions(copy, project_id, "ACCEPTANCE_CRITERIA", "add", None, hostile)
+            page = build_static_project_website_html(copy, project_id)
+            verify_static_website_csp_and_safety(page)
+            scanner = _SiteScanner()
+            scanner.feed(page)
+            if _site_escape(hostile) not in page or scanner.problems or "<img" in page.lower():
+                raise GenesisError("Hostile string %d was not escaped" % number)
+            rows.append({"input": hostile, "escaped_as": _site_escape(hostile), "passed_csp_check": True,
+                         "fields_checked": ["name", "description", "feature", "acceptance criterion"]})
+    return {"all_escaped": True, "tested": len(rows), "rows": rows}

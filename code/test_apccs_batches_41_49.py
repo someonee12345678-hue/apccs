@@ -458,5 +458,148 @@ class Batch42Tests(unittest.TestCase):
             batch.run_rule_based_planner_preview(db.parent / "missing.sqlite3", "p3")
 
 
+class Batch43Tests(unittest.TestCase):
+    """Inputs: Batch 43 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH43_CANARY_LINE, flush=True)
+
+    def make(self, description: str = "Synthetic description") -> Path:
+        """Inputs: a description. Outputs: a database holding one made-up project p3. Errors: GenesisError."""
+        db = new_db(self)
+        genesis.create_or_update_genesis_project(db, "p3", "Made-up Site", "STATIC_WEBSITE", description)
+        return db
+
+    def test_211_page_has_required_parts_and_leaves_out_the_rest(self) -> None:
+        """Inputs: a made-up project. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make("About <b>us</b> & 'friends'")
+        batch.manage_genesis_requirement(db, "p3", "add", None, "Keep it simple")
+        batch.manage_genesis_requirement(db, "p3", "add", None, "Broken idea", "FAILED")
+        batch.manage_genesis_criteria_and_decisions(db, "p3", "ACCEPTANCE_CRITERIA", "add", None, "Loads fast")
+        batch.manage_genesis_criteria_and_decisions(db, "p3", "DECISIONS", "add", None, "Secret decision")
+        batch.manage_genesis_task(db, "p3", "add", None, "Secret task")
+        batch.manage_genesis_defects_and_record_history(db, "p3", "add", None, "Secret defect")
+        page = batch.build_static_project_website_html(db, "p3")
+        self.assertIn("<title>Made-up Site</title>", page)
+        self.assertIn("<h1>Made-up Site</h1>", page)
+        self.assertIn("Website", page)
+        self.assertIn("<h2>About</h2>", page)
+        self.assertIn("About &lt;b&gt;us&lt;/b&gt; &amp; &#39;friends&#39;", page)
+        self.assertIn("<li>Keep it simple</li>", page)
+        self.assertNotIn("Broken idea", page)
+        self.assertIn("<li>Loads fast</li>", page)
+        for hidden in ("Secret decision", "Secret task", "Secret defect"):
+            self.assertNotIn(hidden, page)
+        self.assertIn("Generated from a template by Genesis. Not AI-generated.", page)
+        self.assertIn(batch.STATIC_SITE_CSP_META, page)
+
+    def test_211_empty_lists_are_left_out_and_bad_input_is_rejected(self) -> None:
+        """Inputs: a bare project and bad ids. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        page = batch.build_static_project_website_html(db, "p3")
+        self.assertNotIn("Features", page)
+        self.assertNotIn("Acceptance criteria", page)
+        for bad in ("nope", "", None, 7):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.build_static_project_website_html(db, bad)
+        with self.assertRaises(TypeError):
+            batch.build_static_project_website_html(db, "p3", "DARK")
+
+    def test_212_exact_policy_is_required_and_unsafe_pages_are_refused(self) -> None:
+        """Inputs: good and hostile pages. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        good = batch.build_static_project_website_html(db, "p3")
+        receipt = batch.verify_static_website_csp_and_safety(good)
+        self.assertTrue(receipt["verified"])
+        self.assertEqual(len(receipt["sha256"]), 64)
+        csp = batch.STATIC_SITE_CSP_META
+        for name, page in (
+            ("no policy", good.replace(csp, "")),
+            ("old policy", good.replace(csp, csp.replace("style-src", "img-src data:; style-src"))),
+            ("script", good.replace("</body>", "<script>1</script></body>")),
+            ("javascript link", good.replace("</body>", '<a href="javascript:x()">a</a></body>')),
+            ("vbscript link", good.replace("</body>", '<a href="VBScript:x">a</a></body>')),
+            ("html data link", good.replace("</body>", '<a href="data:text/html,x">a</a></body>')),
+            ("event handler", good.replace("<h1>", '<h1 onclick="x()">')),
+            ("external image", good.replace("</body>", '<img src="https://example.invalid/a.png"></body>')),
+            ("external css", good.replace("</style>", "@import 'x.css';</style>")),
+            ("empty", ""), ("not text", None)):
+            with self.subTest(name=name), self.assertRaises(genesis.GenesisError):
+                batch.verify_static_website_csp_and_safety(page)
+
+    def test_213_descriptor_has_strict_settings_and_matching_hash(self) -> None:
+        """Inputs: a made-up project. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        item = batch.create_sandboxed_preview_descriptor(db, "p3")
+        self.assertEqual(item["iframe_sandbox"], "")
+        self.assertIs(item["allow_scripts"], False)
+        self.assertIs(item["allow_network"], False)
+        self.assertIs(item["allow_file_access"], False)
+        self.assertEqual(item["sha256"], batch.verify_static_website_csp_and_safety(item["html"])["sha256"])
+        with self.assertRaises(genesis.GenesisError):
+            batch.create_sandboxed_preview_descriptor(db, "nope")
+
+    def test_214_bundle_is_kept_in_the_database_with_a_manifest(self) -> None:
+        """Inputs: a vault in a temporary folder. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        vault = db.parent.parent
+        result = batch.build_static_website_bundle(db, vault, "p3")
+        folder = Path(result["folder"])
+        self.assertEqual(folder, vault / "exports" / "genesis_sites" / "p3")
+        page = result["page_text"]
+        manifest = result["manifest"]
+        self.assertEqual(manifest["files"][0]["bytes"], len(page.encode("utf-8")))
+        self.assertEqual(manifest["files"][0]["sha256"], batch.verify_static_website_csp_and_safety(page)["sha256"])
+        self.assertTrue(manifest["csp_verification"]["verified"])
+        self.assertEqual(manifest["files"][0]["name"], "index.html")
+        self.assertEqual(manifest["serve_as"], "index.html")
+        self.assertEqual(manifest["publish_to"], str(folder))
+        self.assertFalse(folder.exists())
+        connection = genesis._connect(db)
+        try:
+            row = connection.execute("SELECT page_text, manifest_json, page_sha256 FROM site_bundles WHERE project_id = ?", ("p3",)).fetchone()
+        finally:
+            connection.close()
+        self.assertEqual(row["page_text"], page)
+        self.assertEqual(json.loads(row["manifest_json"]), manifest)
+        self.assertEqual(row["page_sha256"], manifest["files"][0]["sha256"])
+
+    def test_214_traversal_symlinks_and_bad_names_are_rejected(self) -> None:
+        """Inputs: unsafe paths. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        vault = db.parent.parent
+        for bad in ("../outside", "/abs", "a/../../b", "", "a\\b", "./x", 5):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.build_static_website_bundle(db, vault, "p3", bad)
+        (vault / "link").symlink_to(vault / "state")
+        with self.assertRaises(genesis.GenesisError):
+            batch.build_static_website_bundle(db, vault, "p3", "link/x")
+        with self.assertRaises(genesis.GenesisError):
+            batch.build_static_website_bundle(db, vault / "missing", "p3")
+        with self.assertRaises(genesis.GenesisError):
+            batch.build_static_website_bundle(db, vault, "nope")
+        genesis.create_or_update_genesis_project(db, "../evil", "Bad", "OTHER", "Synthetic")
+        with self.assertRaises(genesis.GenesisError):
+            batch.build_static_website_bundle(db, vault, "../evil")
+        self.assertFalse((vault.parent / "evil").exists())
+
+    def test_215_all_four_hostile_strings_are_escaped(self) -> None:
+        """Inputs: a made-up database. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make()
+        before = db.read_bytes()
+        report = batch.audit_static_website_against_xss_vectors(db)
+        self.assertTrue(report["all_escaped"])
+        self.assertEqual(report["tested"], 4)
+        self.assertEqual([row["input"] for row in report["rows"]], list(batch.XSS_TEST_STRINGS))
+        self.assertTrue(all(row["passed_csp_check"] for row in report["rows"]))
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", report["rows"][0]["escaped_as"])
+        self.assertEqual(db.read_bytes(), before)
+
+    def test_215_bad_database_is_rejected(self) -> None:
+        """Inputs: a missing database. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for bad in ("/nonexistent/none.sqlite3", "", None):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.audit_static_website_against_xss_vectors(bad)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
