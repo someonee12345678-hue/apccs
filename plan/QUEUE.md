@@ -3835,3 +3835,18 @@ End of the Batches 41–49 new-module ruling.
 Batch 43 is ready to build. The builder may reuse its work from `held/B43-export-blocked-by-readability-gate` by renaming the function, changing the file name, and updating its tests to match.
 
 End of the Batch 43 export ruling.
+
+## Batch 43 export step, second ruling (Architect's ruling, 2026-11-11)
+
+**Why.** The first Batch 43 ruling (above) still failed. Check A703 in `code/apccs_readability_gate.py` accepts a file write only when the file name is written out in the code with an approved ending. A file in a folder chosen while the program runs, such as `<vault>/exports/genesis_sites/<project>/index.html.txt`, is always refused. The gate may not be changed. The Claude builder reported this on 2026-11-11 at 11:49 America/Vancouver (apccs #71) and saved its work on branch `held/B43-writer-destination-blocked`. Batches 41 and 42 passed because they keep everything in the Genesis SQLite database.
+
+**Ruling.** This overrides the first Batch 43 ruling and INST-0214 where they differ.
+
+- `build_static_website_bundle(db_path, vault_dir, project_id, export_subdir="exports/genesis_sites")` writes no file. It builds and verifies the page, checks the planned folder exactly as before (reject path traversal, symlinks, a missing vault and unknown projects), and saves the result in the Genesis database, in table `site_bundles` (`project_id` primary key, `page_text`, `manifest_json`, `page_sha256`), replacing any earlier bundle for that project.
+- It returns `{"folder", "page_text", "manifest"}`. The manifest lists the page as `index.html` with its byte size and SHA-256 checksum, keeps `"serve_as": "index.html"` and the CSP verification receipt, and adds `"publish_to"` with the planned folder.
+- Writing the page out as a real file waits for a later ruling on the gate. Nothing in Batches 43–49 may work around the gate.
+- Nothing else changes: the same wording for INST-0211, 0212, 0213 and 0215, the same canary line, the same order, standard library only, made-up data only.
+
+This was tested before it was written down: with this change, the Batch 41–49 tests pass (36 tests), both new files pass all three readability checks, and `tools/run_all_tests.py` reports SAFE TO MERGE.
+
+End of the Batch 43 second ruling.
