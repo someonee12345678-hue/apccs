@@ -1,0 +1,22 @@
+/* Mission control: phone first, read only. Every text size is 14 px or more, and every
+   state colour is always shown together with its state word. */
+:root { --working: #0b6b2f; --blocked: #a4262c; --done: #1f4fa3; --idle: #5a5a5a; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 12px; font-family: sans-serif; font-size: 16px; line-height: 1.4; color: #111; background: #fff; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+h2 { font-size: 18px; margin: 16px 0 8px; }
+label, select, p, li { font-size: 16px; }
+select { max-width: 100%; padding: 4px; }
+#status { margin: 0 0 8px; }
+#legend { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; }
+.state-working { background: var(--working); fill: var(--working); }
+.state-blocked { background: var(--blocked); fill: var(--blocked); }
+.state-done { background: var(--done); fill: var(--done); }
+.state-idle { background: var(--idle); fill: var(--idle); }
+#map-svg { width: 100%; height: auto; border: 1px solid #ccc; }
+#map-svg text { font-size: 14px; fill: #111; }
+#map-svg .node-label { fill: #fff; font-weight: bold; }
+#map-svg line { stroke: #444; stroke-width: 1.5; }
+#timeline-list, #jobs-list { padding-left: 20px; margin: 0; }
+li { margin-bottom: 6px; overflow-wrap: anywhere; }
