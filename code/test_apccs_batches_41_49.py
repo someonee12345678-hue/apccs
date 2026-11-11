@@ -338,5 +338,125 @@ class Batch41Tests(unittest.TestCase):
         self.assertEqual(len(self.query("SELECT 1 FROM requirements")), 1)
 
 
+class Batch42Tests(unittest.TestCase):
+    """Inputs: Batch 42 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH42_CANARY_LINE, flush=True)
+
+    def make(self, description: str, category: str = "OTHER") -> Path:
+        """Inputs: a description and stored category. Outputs: a database path. Errors: GenesisError."""
+        self.db = new_db(self)
+        genesis.create_or_update_genesis_project(self.db, "p3", "Planner Made-up", category, description)
+        return self.db
+
+    def test_206_keyword_rules_in_order_with_first_keyword(self) -> None:
+        """Inputs: made-up descriptions. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        found = batch.infer_requirements_from_description("Sign in, then SEARCH and pay now; works Offline")
+        self.assertEqual([item["text"] for item in found], [
+            "Users can create an account and sign in", "Works without an internet connection",
+            "Accept payments (requires a payment provider)", "Search content"])
+        self.assertEqual(found[0]["matched_keyword"], "sign in")
+        self.assertTrue(all(item["label"] == "INFERRED" for item in found))
+        self.assertEqual(batch.infer_requirements_from_description("PAYMENT"), [
+            {"text": "Accept payments (requires a payment provider)", "label": "INFERRED",
+             "matched_keyword": "payment"}])
+        self.assertEqual(batch.infer_requirements_from_description("paypal"), [])
+        self.assertEqual(len(batch.KEYWORD_RULES), 19)
+
+    def test_206_bad_input_is_rejected(self) -> None:
+        """Inputs: bad descriptions. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for bad in ("", "   ", None, 5, ["offline"]):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.infer_requirements_from_description(bad)
+
+    def test_207_every_category_gets_the_two_proposed_items(self) -> None:
+        """Inputs: all 10 categories. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        self.assertEqual(len(batch.GENESIS_CATEGORIES), 10)
+        for name, _label in batch.GENESIS_CATEGORIES:
+            got = batch.generate_proposed_category_requirements(name)
+            self.assertEqual([item["text"] for item in got], list(batch.PROPOSED_REQUIREMENTS))
+            self.assertTrue(all(item["label"] == "PROPOSED" for item in got))
+        for bad in ("STATIC_WEBSITE", "website", "", None, 3):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.generate_proposed_category_requirements(bad)
+
+    def test_208_starter_tasks_follow_the_category_only(self) -> None:
+        """Inputs: categories and lists. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        one = batch.generate_category_starter_tasks("PWA", [])
+        two = batch.generate_category_starter_tasks("PWA", [{"text": "Export data"}])
+        self.assertEqual(one, two)
+        self.assertEqual([item["title"] for item in one][:2], ["Define screens", "Add web app manifest"])
+        self.assertTrue(all(item["status"] == "TODO" for item in one))
+        self.assertEqual(len(batch.generate_category_starter_tasks("WEBSITE", [])), 6)
+        for name, _label in batch.GENESIS_CATEGORIES:
+            self.assertTrue(batch.generate_category_starter_tasks(name, []))
+        for args in (("NOPE", []), ("API", "text"), ("API", [{"x": 1}]), ("API", [5]), (None, [])):
+            with self.subTest(args=args), self.assertRaises(genesis.GenesisError):
+                batch.generate_category_starter_tasks(*args)
+
+    def test_209_only_ticked_items_are_added_and_duplicates_skipped(self) -> None:
+        """Inputs: a plan preview. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make("offline search app", "STATIC_WEBSITE")
+        plan = batch.run_rule_based_planner_preview(db, "p3")
+        first = batch.apply_selected_plan_items_to_project(db, "p3", plan, ["INF-1", "PRO-1"], ["TASK-1"])
+        self.assertEqual((first["requirements_added"], first["tasks_added"]), (2, 1))
+        again = batch.apply_selected_plan_items_to_project(db, "p3", plan, ["INF-1", "INF-2"], ["TASK-1"])
+        self.assertEqual((again["requirements_added"], again["tasks_added"], again["skipped_duplicates"]),
+                         (1, 0, 2))
+        connection = genesis._connect(db)
+        try:
+            labels = [tuple(r) for r in connection.execute(
+                "SELECT r.text, l.label FROM requirements r JOIN requirement_labels l "
+                "ON l.requirement_id=r.requirement_id WHERE r.project_id='p3' ORDER BY r.requirement_id")]
+            history = [r[0] for r in connection.execute(
+                "SELECT text FROM project_history WHERE project_id='p3' ORDER BY history_id")]
+        finally:
+            connection.close()
+        self.assertEqual(labels[1], ("Accessible: readable text, screen reader labels, 48dp touch targets",
+                                     "PROPOSED"))
+        self.assertEqual(len(labels), 3)
+        self.assertEqual(history[0], "Plan applied: 2 requirements, 1 tasks added")
+
+    def test_209_unknown_or_bad_selection_changes_nothing(self) -> None:
+        """Inputs: bad selections. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make("offline")
+        plan = batch.run_rule_based_planner_preview(db, "p3")
+        for args in (("p3", plan, ["INF-99"], []), ("p3", plan, [], ["TASK-99"]), ("p3", plan, "INF-1", []),
+                     ("p3", plan, [5], []), ("p3", "plan", [], []), ("p3", {"inferred": [{"id": "INF-1",
+                      "text": "x", "label": "PROPOSED"}]}, [], []), ("nope", plan, [], [])):
+            with self.subTest(args=str(args)[:40]), self.assertRaises(genesis.GenesisError):
+                batch.apply_selected_plan_items_to_project(db, *args)
+        connection = genesis._connect(db)
+        try:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM requirements WHERE project_id='p3'")
+                             .fetchone()[0], 0)
+        finally:
+            connection.close()
+
+    def test_210_preview_is_deterministic_and_maps_stored_categories(self) -> None:
+        """Inputs: a made-up project. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make("Photo chart report, share by chat", "MOBILE_APP")
+        first = batch.run_rule_based_planner_preview(db, "p3")
+        second = batch.run_rule_based_planner_preview(db, "p3")
+        self.assertEqual(json.dumps(first, sort_keys=True), json.dumps(second, sort_keys=True))
+        self.assertEqual(first["category"], "ANDROID_APP")
+        self.assertEqual(first["tasks"][-1]["title"], "Build and sign APK")
+        self.assertEqual(len(first["proposed"]), 2)
+        self.assertEqual(first["inferred"][0]["id"], "INF-1")
+        for stored, wanted in batch.GENESIS_CATEGORY_FROM_STORED.items():
+            self.assertIn(wanted, dict(batch.GENESIS_CATEGORIES))
+            self.assertIn(stored, genesis.ALLOWED_CATEGORIES)
+        self.assertEqual(set(batch.GENESIS_CATEGORY_FROM_STORED), set(genesis.ALLOWED_CATEGORIES))
+
+    def test_210_bad_input_is_rejected(self) -> None:
+        """Inputs: bad project ids. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = self.make("offline")
+        for bad in ("nope", "", None, 4):
+            with self.subTest(bad=bad), self.assertRaises(genesis.GenesisError):
+                batch.run_rule_based_planner_preview(db, bad)
+        with self.assertRaises(genesis.GenesisError):
+            batch.run_rule_based_planner_preview(db.parent / "missing.sqlite3", "p3")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
