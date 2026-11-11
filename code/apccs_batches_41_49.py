@@ -923,3 +923,424 @@ def audit_static_website_against_xss_vectors(db_path: object) -> dict:
             rows.append({"input": hostile, "escaped_as": _site_escape(hostile), "passed_csp_check": True,
                          "fields_checked": ["name", "description", "feature", "acceptance criterion"]})
     return {"all_escaped": True, "tested": len(rows), "rows": rows}
+
+
+# ---------------------------------------------------------------------------
+# Batch 44 (INST-0216..0220): JSON export and import with a checksum, an audit log,
+# the four execution modes and a round-trip check, from Genesis v0.2 (plan/QUEUE.md,
+# "Batch 41 hold lifted": envelope keys, schema version 2, Genesis's messages).
+# ---------------------------------------------------------------------------
+BATCH44_CANARY_LINE = "Canary check: T = W -> compass"
+GENESIS_EXPORT_FORMAT = "genesis-project"
+GENESIS_SCHEMA_VERSION = 2
+GENESIS_SCHEMA_VERSIONS_ACCEPTED = (1, 2)
+SETTINGS_AUDIT_MAX = 500
+AUDIT_ACTION_TYPES = ("DELETE_PROJECT", "RESTORE_CHECKPOINT", "IMPORT_PROJECT")
+EXECUTION_MODES = {
+    "LOCAL": ("IMPLEMENTED", "Rule-based planner, static HTML builder and validation run on this device."),
+    "MANUAL": ("IMPLEMENTED", "JSON and HTML export and import are done by hand."),
+    "REMOTE": ("NEEDS_EXTERNAL_INTEGRATION", "Needs an external CI or computer engine."),
+    "HYBRID": ("NEEDS_EXTERNAL_INTEGRATION", "Plan locally, build remotely, verify locally."),
+}
+_ENVELOPE_REQUIRED = ("name", "description", "category", "requirements", "tasks")
+_ENVELOPE_LISTS = ("acceptance_criteria", "decisions", "known_defects")
+
+
+def _batch44_ensure_schema(db: sqlite3.Connection) -> None:
+    """Inputs: open database. Outputs: batch 44 tables exist. Errors: sqlite3.Error."""
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS genesis_settings_audit_log (
+            audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            project_name TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            outcome TEXT NOT NULL
+        );
+        CREATE TRIGGER IF NOT EXISTS genesis_settings_audit_log_immutable
+        BEFORE UPDATE ON genesis_settings_audit_log
+        BEGIN
+            SELECT RAISE(ABORT, 'The audit log cannot be edited');
+        END;
+        CREATE TABLE IF NOT EXISTS genesis_project_backups (
+            backup_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            envelope_json TEXT NOT NULL
+        );
+    """)
+
+
+@contextmanager
+def _batch44_db(db_path: object) -> Iterator[sqlite3.Connection]:
+    """Inputs: database path. Outputs: open transaction-scoped connection with batch 44 tables. Errors: GenesisError."""
+    with _batch41_db(db_path) as db:
+        _batch44_ensure_schema(db)
+        yield db
+
+
+def _batch44_canonical(value: object) -> str:
+    """Inputs: any JSON-ready value. Outputs: canonical compact JSON. Errors: ValueError for non-JSON values."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _batch44_checksum(project: object) -> str:
+    """Inputs: a project payload. Outputs: SHA-256 of its canonical JSON. Errors: ValueError for non-JSON values."""
+    return hashlib.sha256(_batch44_canonical(project).encode("utf-8")).hexdigest()
+
+
+def _batch44_project_payload(db: sqlite3.Connection, project_id: str) -> dict:
+    """Inputs: database and a known project id. Outputs: the full project record. Errors: sqlite3.Error."""
+    content = _batch41_snapshot(db, project_id)
+    category = GENESIS_CATEGORY_FROM_STORED.get(content["category"], content["category"])
+    checkpoints = []
+    for row in db.execute("SELECT label, created_at, auto, content_json FROM genesis_checkpoints "
+                          "WHERE project_id=? ORDER BY checkpoint_id", (project_id,)):
+        checkpoints.append({"label": row["label"], "created_at": row["created_at"],
+                            "auto": bool(row["auto"]), "content": json.loads(row["content_json"])})
+    history = [{"time": row["changed_at"], "text": row["text"]} for row in db.execute(
+        "SELECT changed_at, text FROM project_history WHERE project_id=? ORDER BY history_id", (project_id,))]
+    return {"schemaVersion": GENESIS_SCHEMA_VERSION, "projectId": project_id, "name": content["name"],
+            "description": content["description"], "category": category,
+            "dependencies": content["dependencies"], "requirements": content["requirements"],
+            "tasks": content["tasks"], "acceptance_criteria": content["acceptance_criteria"],
+            "decisions": content["decisions"], "known_defects": content["known_defects"],
+            "checkpoints": checkpoints, "history": history[-HISTORY_MAX:]}
+
+
+def _batch44_envelope(db: sqlite3.Connection, project_id: str) -> dict:
+    """Inputs: database and a known project id. Outputs: the checksummed envelope. Errors: sqlite3.Error."""
+    project = _batch44_project_payload(db, project_id)
+    return {"format": GENESIS_EXPORT_FORMAT, "sha256": _batch44_checksum(project), "project": project}
+
+
+def build_genesis_project_checksum_json(db_path: object, project_id: str) -> dict:
+    """INST-0216: the project record in an envelope with its SHA-256 over compact canonical JSON.
+
+    Inputs: database path and project id. Outputs: {"format": "genesis-project", "sha256", "project"}
+    where project carries schemaVersion 2 and the metadata, requirements, tasks, criteria, decisions,
+    defects, checkpoints and newest 200 history entries; use json.dumps with sort_keys=True and
+    separators=(",", ":") for the file text. Errors: GenesisError (a ValueError) for an unknown project.
+    """
+    with _batch44_db(db_path) as db:
+        project_id, _name = _batch41_project(db, project_id)
+        return _batch44_envelope(db, project_id)
+
+
+def _batch44_text_list(value: object, label: str) -> list:
+    """Inputs: a list of texts. Outputs: the cleaned list. Errors: GenesisError."""
+    if not isinstance(value, list):
+        raise GenesisError(label + " must be a list")
+    return [_validate_text(item, label, 1, LIST_ITEM_MAX) for item in value]
+
+
+def _batch44_check_project(project: dict) -> dict:
+    """Inputs: a project payload. Outputs: a cleaned copy. Errors: GenesisError for any invalid field."""
+    for key in _ENVELOPE_REQUIRED:
+        if key not in project:
+            raise GenesisError("Missing key: " + key)
+    clean = {"name": _validate_text(project["name"], "name", 1, 60),
+             "description": _validate_text(project["description"], "description", 1, 2000),
+             "dependencies": _validate_text(project.get("dependencies", ""), "dependencies", 0, 1000)}
+    if not isinstance(project["category"], str) or project["category"] not in dict(GENESIS_CATEGORIES):
+        raise GenesisError("Unknown product category")
+    clean["category"] = project["category"]
+    if not isinstance(project["requirements"], list) or not isinstance(project["tasks"], list):
+        raise GenesisError("requirements and tasks must be lists")
+    clean["requirements"], clean["tasks"] = [], []
+    for item in project["requirements"]:
+        if not isinstance(item, dict) or set(item) != {"text", "label"}:
+            raise GenesisError("Each requirement needs exactly text and label")
+        clean["requirements"].append({"text": _validate_text(item["text"], "requirement", 1, LIST_ITEM_MAX),
+                                      "label": _label_key(item["label"])})
+    for item in project["tasks"]:
+        if not isinstance(item, dict) or set(item) != {"title", "status"}:
+            raise GenesisError("Each task needs exactly title and status")
+        clean["tasks"].append({"title": _validate_text(item["title"], "task", 1, LIST_ITEM_MAX),
+                               "status": _state_key(item["status"])})
+    for key in _ENVELOPE_LISTS:
+        clean[key] = _batch44_text_list(project.get(key, []), key)
+    if "projectId" in project:
+        clean["projectId"] = _validate_text(project["projectId"], "projectId", 1, 100)
+    clean["checkpoints"] = _batch44_check_checkpoints(project.get("checkpoints", []))
+    clean["history"] = _batch44_check_history(project.get("history", []))
+    return clean
+
+
+def _batch44_check_checkpoints(items: object) -> list:
+    """Inputs: stored checkpoints. Outputs: cleaned checkpoints. Errors: GenesisError."""
+    if not isinstance(items, list):
+        raise GenesisError("checkpoints must be a list")
+    cleaned = []
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {"label", "created_at", "auto", "content"}:
+            raise GenesisError("Each checkpoint needs label, created_at, auto and content")
+        if not isinstance(item["auto"], bool) or not isinstance(item["content"], dict):
+            raise GenesisError("A checkpoint has a badly formed auto flag or content")
+        shaped = dict(item["content"])
+        if shaped.get("category") in dict(GENESIS_CATEGORIES):
+            shaped["category"] = "OTHER"
+        _batch41_checked_snapshot(_batch44_canonical(shaped))
+        cleaned.append({"label": _validate_text(item["label"], "checkpoint label", 1, LIST_ITEM_MAX),
+                        "created_at": _validate_text(item["created_at"], "checkpoint time", 1, 64),
+                        "auto": item["auto"], "content": item["content"]})
+    return cleaned
+
+
+def _batch44_check_history(items: object) -> list:
+    """Inputs: stored history entries. Outputs: the newest 200, cleaned. Errors: GenesisError."""
+    if not isinstance(items, list):
+        raise GenesisError("history must be a list")
+    cleaned = []
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {"time", "text"}:
+            raise GenesisError("Each history entry needs time and text")
+        cleaned.append({"time": _validate_text(item["time"], "history time", 1, 64),
+                        "text": _validate_text(item["text"], "history text", 1, LIST_ITEM_MAX)})
+    return cleaned[-HISTORY_MAX:]
+
+
+def validate_and_parse_genesis_import_json(json_text: object) -> dict:
+    """INST-0217: check an exported file before anything is imported.
+
+    Inputs: the JSON text. Outputs: {"format", "schema_version", "sha256", "project"} with the cleaned
+    project, when the format is genesis-project, the schema version is 1 or 2, the checksum matches
+    and every field is valid (10 categories, 6 evidence labels, 4 task states, name 1-60,
+    description 1-2000, dependencies at most 1000). Errors: GenesisError (a ValueError) for bad
+    JSON, a wrong format, an unsupported version, a changed checksum, an unknown value or a missing key.
+    """
+    if not isinstance(json_text, str):
+        raise GenesisError("Not a Genesis project export.")
+    try:
+        data = json.loads(json_text)
+    except ValueError as error:
+        raise GenesisError("Not a Genesis project export.") from error
+    if not isinstance(data, dict) or data.get("format") != GENESIS_EXPORT_FORMAT:
+        raise GenesisError("Not a Genesis project export.")
+    project, claimed = data.get("project"), data.get("sha256")
+    if not isinstance(project, dict) or not isinstance(claimed, str):
+        raise GenesisError("Missing key: project or sha256")
+    version = project.get("schemaVersion")
+    if isinstance(version, bool) or not isinstance(version, int) or version not in GENESIS_SCHEMA_VERSIONS_ACCEPTED:
+        raise GenesisError("Unsupported schema version %s." % (version,))
+    if _batch44_checksum(project) != claimed:
+        raise GenesisError("Checksum mismatch: the file was changed or damaged.")
+    return {"format": GENESIS_EXPORT_FORMAT, "schema_version": version, "sha256": claimed,
+            "project": _batch44_check_project(project)}
+
+
+def _batch44_audit(db: sqlite3.Connection, action_type: str, project_id: str, project_name: str,
+                   sha256: str, outcome: str) -> None:
+    """Inputs: database and the six audit fields. Outputs: one row added, newest 500 kept. Errors: sqlite3.Error."""
+    db.execute("INSERT INTO genesis_settings_audit_log(timestamp,action_type,project_id,project_name,sha256,outcome) "
+               "VALUES(?,?,?,?,?,?)", (_batch41_now(), action_type, project_id, project_name, sha256, outcome))
+    db.execute("DELETE FROM genesis_settings_audit_log WHERE audit_id NOT IN (SELECT audit_id FROM "
+               "genesis_settings_audit_log ORDER BY audit_id DESC LIMIT ?)", (SETTINGS_AUDIT_MAX,))
+
+
+def _batch44_backup(db: sqlite3.Connection, project_id: str, action_type: str) -> str:
+    """Inputs: database, project and action. Outputs: checksum of the backed-up envelope. Errors: sqlite3.Error."""
+    envelope = _batch44_envelope(db, project_id)
+    db.execute("INSERT INTO genesis_project_backups(project_id,created_at,action_type,envelope_json) VALUES(?,?,?,?)",
+               (project_id, _batch41_now(), action_type, _batch44_canonical(envelope)))
+    return envelope["sha256"]
+
+
+def _batch44_payload_id(payload: dict, key: str) -> str:
+    """Inputs: payload and key. Outputs: a project id of 1-100 characters. Errors: GenesisError."""
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > 100:
+        raise GenesisError(key + " must contain 1 to 100 characters")
+    return value.strip()
+
+
+def _batch44_import(db: sqlite3.Connection, project_id: str, parsed: dict) -> dict:
+    """Inputs: database, target id and parsed import. Outputs: the import result. Errors: sqlite3.Error."""
+    project = parsed["project"]
+    existing = db.execute("SELECT created_seq FROM projects WHERE project_id=?", (project_id,)).fetchone()
+    backed_up = existing is not None
+    if backed_up:
+        _batch44_backup(db, project_id, "IMPORT_PROJECT")
+        for table in ("requirements", "tasks", "acceptance_criteria", "decisions", "known_defects",
+                      "genesis_checkpoints", "project_history"):
+            db.execute("DELETE FROM " + table + " WHERE project_id=?", (project_id,))
+    sequence = int(db.execute("SELECT value FROM genesis_meta WHERE key='sequence'").fetchone()[0]) + 1
+    db.execute("UPDATE genesis_meta SET value=? WHERE key='sequence'", (str(sequence),))
+    created = existing["created_seq"] if backed_up else sequence
+    db.execute("INSERT INTO projects(project_id,name,product_category,description,dependencies,created_seq,updated_seq) "
+               "VALUES(?,?,?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET name=excluded.name, "
+               "product_category=excluded.product_category, description=excluded.description, "
+               "dependencies=excluded.dependencies, updated_seq=excluded.updated_seq",
+               (project_id, project["name"], project["category"], project["description"],
+                project["dependencies"], created, sequence))
+    for item in project["requirements"]:
+        new_id = db.execute("INSERT INTO requirements(project_id,text) VALUES(?,?)",
+                            (project_id, item["text"])).lastrowid
+        db.execute("INSERT INTO requirement_labels(requirement_id,label) VALUES(?,?)", (new_id, item["label"]))
+    db.executemany("INSERT INTO tasks(project_id,text,status) VALUES(?,?,?)",
+                   [(project_id, item["title"], item["status"]) for item in project["tasks"]])
+    for key, table in (("acceptance_criteria", "acceptance_criteria"), ("decisions", "decisions"),
+                       ("known_defects", "known_defects")):
+        db.executemany("INSERT INTO " + table + "(project_id,text) VALUES(?,?)",
+                       [(project_id, text) for text in project[key]])
+    db.executemany("INSERT INTO genesis_checkpoints(project_id,label,created_at,auto,content_json) VALUES(?,?,?,?,?)",
+                   [(project_id, item["label"], item["created_at"], 1 if item["auto"] else 0,
+                     _batch44_canonical(item["content"])) for item in project["checkpoints"]])
+    db.executemany("INSERT INTO project_history(project_id,changed_at,text) VALUES(?,?,?)",
+                   [(project_id, item["time"], item["text"]) for item in project["history"]])
+    return {"project_id": project_id, "project_name": project["name"], "overwrote": backed_up}
+
+
+def execute_audited_genesis_state_action(db_path: object, action_type: str, payload_dict: object) -> dict:
+    """INST-0218: delete, restore or import a project and log it in the settings audit log.
+
+    Inputs: database path, DELETE_PROJECT, RESTORE_CHECKPOINT or IMPORT_PROJECT, and a payload
+    (project_id; plus checkpoint_id for a restore; plus json_text and an optional project_id for an
+    import). Outputs: a result with the audit fields (timestamp, action_type, project_id, project_name,
+    sha256, outcome). A delete or an overwriting import first backs the project up in
+    genesis_project_backups, so no project is lost. Nothing is changed when the action is refused.
+    Errors: GenesisError (a ValueError) for an unknown action, a bad payload or a failed check.
+    """
+    if not isinstance(action_type, str) or action_type not in AUDIT_ACTION_TYPES:
+        raise GenesisError("Unknown action_type; use one of: " + ", ".join(AUDIT_ACTION_TYPES))
+    if not isinstance(payload_dict, dict):
+        raise GenesisError("payload_dict must be a record")
+    parsed = None
+    if action_type == "IMPORT_PROJECT":
+        parsed = validate_and_parse_genesis_import_json(payload_dict.get("json_text"))
+        target = (_batch44_payload_id(payload_dict, "project_id") if "project_id" in payload_dict
+                  else parsed["project"].get("projectId") or "")
+        if not isinstance(target, str) or not target.strip() or len(target.strip()) > 100:
+            raise GenesisError("project_id must contain 1 to 100 characters")
+    if action_type == "RESTORE_CHECKPOINT":
+        outcome = checkpoint_and_restore_genesis_project(db_path, payload_dict.get("project_id"), "restore",
+                                                         payload_dict.get("checkpoint_id"))
+        with _batch44_db(db_path) as db:
+            project_id, name = _batch41_project(db, payload_dict["project_id"])
+            sha = _batch44_envelope(db, project_id)["sha256"]
+            _batch44_audit(db, action_type, project_id, name, sha, "RESTORED")
+        done = {"project_id": project_id, "project_name": name, "sha256": sha, "outcome": "RESTORED",
+                "checkpoint_id": outcome["checkpoint_id"], "auto_checkpoint_id": outcome["auto_checkpoint_id"]}
+    else:
+        with _batch44_db(db_path) as db:
+            if action_type == "DELETE_PROJECT":
+                project_id, name = _batch41_project(db, payload_dict.get("project_id"))
+                sha = _batch44_backup(db, project_id, action_type)
+                for table in ("requirements", "tasks", "acceptance_criteria", "decisions", "known_defects",
+                              "genesis_checkpoints", "project_history"):
+                    db.execute("DELETE FROM " + table + " WHERE project_id=?", (project_id,))
+                db.execute("DELETE FROM projects WHERE project_id=?", (project_id,))
+                _batch44_audit(db, action_type, project_id, name, sha, "DELETED_WITH_BACKUP")
+                done = {"project_id": project_id, "project_name": name, "sha256": sha,
+                        "outcome": "DELETED_WITH_BACKUP"}
+            else:
+                result = _batch44_import(db, target.strip(), parsed)
+                outcome_text = "IMPORTED_OVER_BACKUP" if result["overwrote"] else "IMPORTED"
+                _batch44_audit(db, action_type, result["project_id"], result["project_name"],
+                               parsed["sha256"], outcome_text)
+                done = {"project_id": result["project_id"], "project_name": result["project_name"],
+                        "sha256": parsed["sha256"], "outcome": outcome_text}
+    with _batch44_db(db_path) as db:
+        row = db.execute("SELECT timestamp FROM genesis_settings_audit_log ORDER BY audit_id DESC LIMIT 1").fetchone()
+    done.update({"timestamp": row["timestamp"], "action_type": action_type})
+    return done
+
+
+def evaluate_genesis_execution_mode(mode: object, has_external_runner: object = False,
+                                    owner_approved: object = False) -> dict:
+    """INST-0219: Genesis's four execution modes, failing closed for REMOTE and HYBRID.
+
+    Inputs: LOCAL, MANUAL, REMOTE or HYBRID; whether a verified external runner exists (True); and
+    the Owner's approval (the text "YES", or True). Outputs: mode, status (IMPLEMENTED or
+    NEEDS_EXTERNAL_INTEGRATION), allowed and a reason. REMOTE and HYBRID are allowed only with both.
+    Errors: GenesisError (a ValueError) for an unknown mode.
+    """
+    if not isinstance(mode, str) or mode not in EXECUTION_MODES:
+        raise GenesisError("Unknown execution mode; use one of: " + ", ".join(EXECUTION_MODES))
+    status, description = EXECUTION_MODES[mode]
+    if status == "IMPLEMENTED":
+        return {"mode": mode, "status": status, "allowed": True, "reason": description}
+    runner_ok = has_external_runner is True
+    approved = owner_approved is True or owner_approved == "YES"
+    if not runner_ok:
+        return {"mode": mode, "status": status, "allowed": False,
+                "reason": "Refused: no verified external runner. " + description}
+    if not approved:
+        return {"mode": mode, "status": status, "allowed": False,
+                "reason": "Refused: the Owner has not approved with YES. " + description}
+    return {"mode": mode, "status": status, "allowed": True,
+            "reason": "Allowed: verified external runner and Owner approval. " + description}
+
+
+def _batch44_dump(path: Path) -> list:
+    """Inputs: a database path. Outputs: its full SQL dump lines. Errors: sqlite3.Error."""
+    connection = _connect(path)
+    try:
+        return list(connection.iterdump())
+    finally:
+        connection.close()
+
+
+def _batch44_flip_checksum(json_text: str) -> str:
+    """Inputs: envelope JSON text. Outputs: the same text with one character of the checksum changed. Errors: none."""
+    data = json.loads(json_text)
+    first = data["sha256"][0]
+    data["sha256"] = ("0" if first != "0" else "1") + data["sha256"][1:]
+    return json.dumps(data)
+
+
+def verify_genesis_json_roundtrip_integrity(db_path: object, project_id: str) -> dict:
+    """INST-0220: prove a project survives export and import, and that tampering is refused.
+
+    Inputs: database path and project id. Outputs: a report (passed, fields_compared, checksum,
+    audit_recorded, tamper_rejected, enum_injection_rejected, database_unchanged). The import runs in a
+    clean temporary database, so the real one is not changed. Errors: GenesisError (a ValueError)
+    for an unknown project or if any check fails.
+    """
+    with _batch44_db(db_path) as db:
+        project_id, _name = _batch41_project(db, project_id)
+        envelope = _batch44_envelope(db, project_id)
+    source = Path(db_path).absolute()
+    before = _batch44_dump(source)
+    text = _batch44_canonical(envelope)
+    with tempfile.TemporaryDirectory(prefix="apccs_roundtrip_") as temp:
+        clean = Path(temp) / "clean.sqlite3"
+        connection = _connect(clean)
+        try:
+            _ensure_schema(connection)
+            _batch41_ensure_schema(connection)
+            _batch44_ensure_schema(connection)
+        finally:
+            connection.close()
+        done = execute_audited_genesis_state_action(clean, "IMPORT_PROJECT", {"json_text": text})
+        with _batch44_db(clean) as db:
+            again = _batch44_envelope(db, project_id)
+            audit = db.execute("SELECT action_type, project_id, sha256, outcome FROM genesis_settings_audit_log"
+                               ).fetchall()
+        if again != envelope or _batch44_canonical(again) != text:
+            raise GenesisError("Round trip changed the project")
+        if len(audit) != 1 or audit[0]["action_type"] != "IMPORT_PROJECT" or audit[0]["sha256"] != envelope["sha256"] \
+                or audit[0]["project_id"] != project_id or done["outcome"] != "IMPORTED":
+            raise GenesisError("The import was not recorded in the audit log")
+        injected = json.loads(text)
+        injected["project"]["category"] = "NOT_A_CATEGORY"
+        injected["sha256"] = _batch44_checksum(injected["project"])
+        refused = {}
+        clean_before = _batch44_dump(clean)
+        for name, bad in (("tamper", _batch44_flip_checksum(text)), ("enum", json.dumps(injected))):
+            try:
+                execute_audited_genesis_state_action(clean, "IMPORT_PROJECT", {"json_text": bad})
+            except GenesisError:
+                refused[name] = True
+            else:
+                raise GenesisError("A tampered file was accepted (" + name + ")")
+        if _batch44_dump(clean) != clean_before:
+            raise GenesisError("A refused import changed the database")
+    if _batch44_dump(source) != before:
+        raise GenesisError("The check changed the real database")
+    fields = len(envelope["project"])
+    return {"passed": True, "fields_compared": fields, "checksum": envelope["sha256"], "audit_recorded": True,
+            "tamper_rejected": refused["tamper"], "enum_injection_rejected": refused["enum"],
+            "database_unchanged": True}
