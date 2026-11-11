@@ -3681,7 +3681,7 @@ Owner install step (needs his OK; ledger Q025): he creates a fine-grained, read-
 
 End of Batch MC-A3.
 
-## Batches 41–47: Genesis v0.2 source check (Architect's correction, 2026-11-10)
+## Batch 41 hold lifted — Batches 41–47: Genesis v0.2 source check (Architect's correction, 2026-11-10)
 
 This add-only correction lifts the Batch 41 hold recorded on 2026-11-05. Read it before building any of Batches 41–47. Where it differs from the earlier wording of those batches, it overrides that wording. Where the source says nothing, the earlier wording stands, and so does the APCCS storage choice (SQLite, Python standard library).
 
