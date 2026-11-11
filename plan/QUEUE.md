@@ -3802,3 +3802,19 @@ Target repository: `someonee12345678-hue/apccs`. Target: add to the end of `code
 - **Batches 48–49** don't come from Genesis and are unchanged. They build in order after Batch 47.
 
 End of Batches 41–47 source check.
+
+## Batches 41–49 build in a new module (Architect's ruling, 2026-11-10)
+
+**Why.** The readability gate (`code/test_apccs_readability_gate.py`, test `test_a705_03`) checks the whole of any Python file whose fingerprint differs from the pinned baseline in `audit/OPEN_STANDARDS_TODO.md`. `code/apccs_genesis.py` and `code/test_apccs_genesis.py` are older than that baseline, and their existing bytes may not be edited, so a pull request that adds to them can never pass. The Claude builder reported this on 2026-11-10 at 18:59 America/Vancouver (apccs #71). Its Batch 41 work is on branch `held/B41-readability-gate`.
+
+**Ruling.** This overrides the "Target" line in the "Batch 41 hold lifted" section above, and any Batch 41–49 wording that says to add to the end of a file older than the baseline.
+
+- New code for Batches 41–49 goes in a new file, `code/apccs_batches_41_49.py`. Each batch adds to the end of that file. It may import from `apccs_genesis` and any other existing module.
+- Tests for Batches 41–49 go in a new file, `code/test_apccs_batches_41_49.py`. It runs on its own, and its final `if __name__ == "__main__":` block stays last.
+- `code/apccs_genesis.py`, `code/test_apccs_genesis.py` and every other older file are not touched.
+- Both new files must pass every readability check from their first line: `Inputs:`, `Outputs:` and `Errors:` in every docstring, a return hint on every function, approved names, and open-format writes only.
+- Nothing else changes: the same instruction wording and corrections, the same canary lines, the same order, standard library only, made-up data only.
+
+Batches 41–49 are ready to build, in order, starting with Batch 41. The builder may reuse its work from `held/B41-readability-gate` by moving it into the two new files.
+
+End of the Batches 41–49 new-module ruling.
