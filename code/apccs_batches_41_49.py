@@ -1344,3 +1344,405 @@ def verify_genesis_json_roundtrip_integrity(db_path: object, project_id: str) ->
     return {"passed": True, "fields_compared": fields, "checksum": envelope["sha256"], "audit_recorded": True,
             "tamper_rejected": refused["tamper"], "enum_injection_rejected": refused["enum"],
             "database_unchanged": True}
+
+
+# ---------------------------------------------------------------------------
+# Batch 45 (INST-0221..0225): capability registry, engine interfaces, unavailable
+# stubs, JUnit converter, capability auditor. Q038: results are returned and kept
+# in the Genesis database; no file is written.
+# ---------------------------------------------------------------------------
+from abc import ABC, abstractmethod
+from xml.etree import ElementTree as element_tree
+
+BATCH45_CANARY_LINE = "Canary check: M = K -> submarine"
+CAPABILITY_STATUS_LABELS = ("VERIFIED_WORKING", "NEEDS_EXTERNAL_INTEGRATION", "PLANNED", "FAILED", "UNVERIFIED")
+ENGINE_INTERFACE_TYPES = ("PlannerInterface", "AiProviderInterface", "BuilderInterface",
+                          "BuildAdapterInterface", "TestAdapterInterface")
+_MODULE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,59}$")
+
+
+class CapabilityUnavailableError(GenesisError):
+    """Inputs: a plain-English reason. Outputs: an error value. Errors: raised when an unavailable module is called."""
+
+
+class ModuleInfo:
+    """Inputs: the seven metadata fields. Outputs: validated module metadata.
+
+    Errors: GenesisError (a ValueError) when a field is missing, of the wrong type or not allowed.
+    """
+
+    def __init__(self, module_id: str, display_name: str, interface_type: str, status_label: str,
+                 cost_usd: float, permissions_required: tuple, is_available: bool) -> None:
+        """Inputs: the seven fields. Outputs: nothing. Errors: GenesisError when any field fails validation."""
+        self.module_id = module_id
+        self.display_name = display_name
+        self.interface_type = interface_type
+        self.status_label = status_label
+        self.cost_usd = cost_usd
+        self.permissions_required = permissions_required
+        self.is_available = is_available
+        self._validate()
+
+    def _validate(self) -> None:
+        """Inputs: the fields. Outputs: nothing. Errors: GenesisError when any field fails validation."""
+        if not isinstance(self.module_id, str) or not _MODULE_ID_PATTERN.match(self.module_id):
+            raise GenesisError("module_id must be lowercase letters, digits and underscores")
+        if not isinstance(self.display_name, str) or not self.display_name.strip() or len(self.display_name) > 80:
+            raise GenesisError("display_name must be 1 to 80 characters")
+        if self.interface_type not in ENGINE_INTERFACE_TYPES:
+            raise GenesisError("Unknown interface type; use one of: " + ", ".join(ENGINE_INTERFACE_TYPES))
+        if self.status_label not in CAPABILITY_STATUS_LABELS:
+            raise GenesisError("Unknown status tier; use one of: " + ", ".join(CAPABILITY_STATUS_LABELS))
+        if isinstance(self.cost_usd, bool) or not isinstance(self.cost_usd, (int, float)) or self.cost_usd != 0:
+            raise GenesisError("cost_usd must be 0: Genesis modules cost nothing")
+        permissions = self.permissions_required
+        if not isinstance(permissions, tuple) or not all(isinstance(item, str) and item for item in permissions):
+            raise GenesisError("permissions_required must be a tuple of non-empty text")
+        if not isinstance(self.is_available, bool):
+            raise GenesisError("is_available must be True or False")
+        if self.is_available and self.status_label != "VERIFIED_WORKING":
+            raise GenesisError("Only a VERIFIED_WORKING module can be available")
+
+    def as_dict(self) -> dict:
+        """Inputs: none. Outputs: the metadata as a plain dictionary. Errors: none."""
+        return {"module_id": self.module_id, "display_name": self.display_name,
+                "interface_type": self.interface_type, "status_label": self.status_label,
+                "cost_usd": self.cost_usd, "permissions_required": list(self.permissions_required),
+                "is_available": self.is_available}
+
+
+class PlannerInterface(ABC):
+    """Inputs: a database path and project id. Outputs: a plan preview. Errors: GenesisError."""
+
+    @abstractmethod
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: this module's ModuleInfo. Errors: none."""
+
+    @abstractmethod
+    def plan(self, db_path: object, project_id: str) -> dict:
+        """Inputs: database path and project id. Outputs: a plan preview. Errors: GenesisError."""
+
+
+class AiProviderInterface(ABC):
+    """Inputs: a prompt. Outputs: generated text. Errors: GenesisError."""
+
+    @abstractmethod
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: this module's ModuleInfo. Errors: none."""
+
+    @abstractmethod
+    def complete(self, prompt: str) -> str:
+        """Inputs: a prompt. Outputs: generated text. Errors: GenesisError."""
+
+
+class BuilderInterface(ABC):
+    """Inputs: a database path and project id. Outputs: built content. Errors: GenesisError."""
+
+    @abstractmethod
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: this module's ModuleInfo. Errors: none."""
+
+    @abstractmethod
+    def build(self, db_path: object, project_id: str) -> str:
+        """Inputs: database path and project id. Outputs: built content as text. Errors: GenesisError."""
+
+
+class BuildAdapterInterface(ABC):
+    """Inputs: a project id. Outputs: a build result. Errors: GenesisError."""
+
+    @abstractmethod
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: this module's ModuleInfo. Errors: none."""
+
+    @abstractmethod
+    def build_package(self, project_id: str) -> dict:
+        """Inputs: a project id. Outputs: a build result. Errors: GenesisError."""
+
+
+class TestAdapterInterface(ABC):
+    """Inputs: a project id. Outputs: a test result. Errors: GenesisError."""
+
+    @abstractmethod
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: this module's ModuleInfo. Errors: none."""
+
+    @abstractmethod
+    def run_tests(self, project_id: str) -> dict:
+        """Inputs: a project id. Outputs: a test result. Errors: GenesisError."""
+
+
+class RuleBasedPlanner(PlannerInterface):
+    """Inputs: a database path and project id. Outputs: the rule-based plan preview (INST-0206..0210). Errors: GenesisError."""
+
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: this module's ModuleInfo. Errors: none."""
+        return ModuleInfo("rule_based_planner", "Rule-based planner", "PlannerInterface",
+                          "VERIFIED_WORKING", 0, (), True)
+
+    def plan(self, db_path: object, project_id: str) -> dict:
+        """Inputs: database path and project id. Outputs: a plan preview. Errors: GenesisError."""
+        return run_rule_based_planner_preview(db_path, project_id)
+
+
+class StaticWebsiteBuilder(BuilderInterface):
+    """Inputs: a database path and project id. Outputs: the static page text (INST-0211..0214). Errors: GenesisError."""
+
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: this module's ModuleInfo. Errors: none."""
+        return ModuleInfo("static_website_builder", "Static website builder", "BuilderInterface",
+                          "VERIFIED_WORKING", 0, (), True)
+
+    def build(self, db_path: object, project_id: str) -> str:
+        """Inputs: database path and project id. Outputs: the page as HTML text. Errors: GenesisError."""
+        return build_static_project_website_html(db_path, project_id)
+
+
+class UnavailableEngineStub:
+    """Inputs: stub metadata. Outputs: honest ModuleInfo; every call raises CapabilityUnavailableError.
+
+    Errors: CapabilityUnavailableError with a plain-English reason whenever the module is used.
+    """
+
+    MODULE_ID = "unavailable_engine"
+    DISPLAY_NAME = "Unavailable engine"
+    INTERFACE_TYPE = "AiProviderInterface"
+    STATUS_LABEL = "NEEDS_EXTERNAL_INTEGRATION"
+    REASON = "This module is not available."
+
+    def info(self) -> ModuleInfo:
+        """Inputs: none. Outputs: ModuleInfo with is_available=False. Errors: none."""
+        return ModuleInfo(self.MODULE_ID, self.DISPLAY_NAME, self.INTERFACE_TYPE, self.STATUS_LABEL, 0, (), False)
+
+    def _refuse(self) -> None:
+        """Inputs: none. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+        raise CapabilityUnavailableError(self.REASON)
+
+    def __call__(self, *args: object, **kwargs: object) -> None:
+        """Inputs: anything. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+        self._refuse()
+
+
+class AiProviderStub(UnavailableEngineStub, AiProviderInterface):
+    """Inputs: a prompt. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+
+    MODULE_ID = "ai_provider"
+    DISPLAY_NAME = "AI provider"
+    INTERFACE_TYPE = "AiProviderInterface"
+    STATUS_LABEL = "NEEDS_EXTERNAL_INTEGRATION"
+    REASON = "No AI provider is connected. Genesis has not generated any AI text."
+
+    def complete(self, prompt: str) -> str:
+        """Inputs: a prompt. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+        self._refuse()
+        return ""
+
+
+class RemoteBuildAdapterStub(UnavailableEngineStub, BuildAdapterInterface):
+    """Inputs: a project id. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+
+    MODULE_ID = "remote_build_adapter"
+    DISPLAY_NAME = "Remote build adapter"
+    INTERFACE_TYPE = "BuildAdapterInterface"
+    STATUS_LABEL = "NEEDS_EXTERNAL_INTEGRATION"
+    REASON = "No remote build service is connected, so no remote build was run."
+
+    def build_package(self, project_id: str) -> dict:
+        """Inputs: a project id. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+        self._refuse()
+        return {}
+
+
+class OnDeviceApkCompilerStub(UnavailableEngineStub, BuildAdapterInterface):
+    """Inputs: a project id. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+
+    MODULE_ID = "on_device_apk_compiler"
+    DISPLAY_NAME = "On-device APK compiler"
+    INTERFACE_TYPE = "BuildAdapterInterface"
+    STATUS_LABEL = "PLANNED"
+    REASON = "Compiling an app on the phone is planned but not built yet."
+
+    def build_package(self, project_id: str) -> dict:
+        """Inputs: a project id. Outputs: nothing. Errors: always CapabilityUnavailableError."""
+        self._refuse()
+        return {}
+
+
+def _batch45_builtin_modules() -> list:
+    """Inputs: none. Outputs: the built-in registry entries as dictionaries. Errors: none."""
+    entries = []
+    for module, explanation, permissions in (
+        (RuleBasedPlanner().info(), "Plans from rules and keywords; no AI is used.", ()),
+        (StaticWebsiteBuilder().info(), "Builds one safe page from a template; not AI-generated.", ()),
+        (AiProviderStub().info(), "Needs an AI provider to be connected first.", ("network",)),
+        (RemoteBuildAdapterStub().info(), "Needs a remote build service to be connected first.", ("network",)),
+        (OnDeviceApkCompilerStub().info(), "Planned; nothing is built yet.", ("storage",)),
+    ):
+        entry = module.as_dict()
+        entry["explanation"] = explanation
+        entry["permissions_required"] = list(permissions)
+        entries.append(entry)
+    return entries
+
+
+def _batch45_check_status(status: object) -> str:
+    """Inputs: a status label. Outputs: the same label. Errors: GenesisError for an unknown tier."""
+    if not isinstance(status, str) or status not in CAPABILITY_STATUS_LABELS:
+        raise GenesisError("Unknown status tier; use one of: " + ", ".join(CAPABILITY_STATUS_LABELS))
+    return status
+
+
+def _batch45_ensure_schema(db: sqlite3.Connection) -> None:
+    """Inputs: open database. Outputs: batch 45 tables exist. Errors: sqlite3.Error."""
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS genesis_capability_registry (
+            module_id TEXT PRIMARY KEY,
+            entry_json TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS genesis_verification_reports (
+            sha256 TEXT PRIMARY KEY,
+            stored_at TEXT NOT NULL,
+            report_json TEXT NOT NULL
+        );
+    """)
+
+
+def register_genesis_capability(db_path: object, module_id: str, display_name: str, interface_type: str,
+                                status_label: str, explanation: str, permissions_required: object = ()) -> dict:
+    """INST-0221 helper: add one module to the registry, refusing any status tier that is not one of the five.
+
+    Inputs: database path and the module's fields. Outputs: the stored entry. Errors: GenesisError for an
+    unknown status tier, bad field or built-in module id.
+    """
+    if not isinstance(permissions_required, (list, tuple)):
+        raise GenesisError("permissions_required must be a list")
+    _batch45_check_status(status_label)
+    info = ModuleInfo(module_id, display_name, interface_type, status_label, 0, tuple(permissions_required),
+                      status_label == "VERIFIED_WORKING")
+    if not isinstance(explanation, str) or not explanation.strip():
+        raise GenesisError("A plain-English explanation is required")
+    if any(entry["module_id"] == module_id for entry in _batch45_builtin_modules()):
+        raise GenesisError("That module id is built in")
+    entry = info.as_dict()
+    entry["explanation"] = explanation.strip()
+    with _batch41_db(db_path) as db:
+        _batch45_ensure_schema(db)
+        db.execute("INSERT OR REPLACE INTO genesis_capability_registry (module_id, entry_json) VALUES (?, ?)",
+                   (module_id, json.dumps(entry, sort_keys=True)))
+    return entry
+
+
+def get_genesis_capability_registry(db_path: object = None) -> list:
+    """INST-0221: every module under Genesis's five honest status labels.
+
+    Inputs: an optional database path whose registered modules are added to the built-in ones. Outputs: a list
+    of entries (module_id, display_name, interface_type, status_label, explanation, is_available, cost_usd 0,
+    permissions_required) sorted by module_id. Errors: GenesisError for a bad database or a stored unknown status.
+    """
+    entries = _batch45_builtin_modules()
+    if db_path is not None:
+        with _batch41_db(db_path) as db:
+            _batch45_ensure_schema(db)
+            rows = db.execute("SELECT entry_json FROM genesis_capability_registry ORDER BY module_id").fetchall()
+        for row in rows:
+            entry = json.loads(row["entry_json"])
+            _batch45_check_status(entry.get("status_label"))
+            entries.append(entry)
+    return sorted(entries, key=lambda entry: entry["module_id"])
+
+
+def _batch45_parse_junit(xml_text_or_path: object) -> str:
+    """Inputs: XML text or a path to read. Outputs: the XML text. Errors: GenesisError."""
+    if isinstance(xml_text_or_path, Path):
+        source = xml_text_or_path
+    elif isinstance(xml_text_or_path, str) and xml_text_or_path.strip():
+        if xml_text_or_path.lstrip().startswith("<"):
+            return xml_text_or_path
+        source = Path(xml_text_or_path)
+    else:
+        raise GenesisError("A JUnit XML report is required")
+    try:
+        return source.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise GenesisError("Could not read the JUnit XML report") from error
+
+
+def convert_junit_xml_to_verification_json(xml_text_or_path: object, db_path: object = None) -> dict:
+    """INST-0224: turn a JUnit XML report into Genesis's verification.json structure.
+
+    Inputs: XML text (or a path to read) and an optional database path where the result is kept (Q038: no file
+    is written). Outputs: tests_total, failures, errors, skipped, all_passed, test_cases and sha256 over the rest.
+    Errors: GenesisError for malformed XML, a DOCTYPE or ENTITY declaration, or no test cases.
+    """
+    text = _batch45_parse_junit(xml_text_or_path)
+    if "<!doctype" in text.lower() or "<!entity" in text.lower():
+        raise GenesisError("Refused: DOCTYPE and ENTITY declarations are not allowed")
+    try:
+        root = element_tree.fromstring(text)
+    except element_tree.ParseError as error:
+        raise GenesisError("The JUnit XML report is malformed") from error
+    cases = []
+    for node in root.iter("testcase"):
+        name = (node.get("name") or "").strip()
+        if not name:
+            raise GenesisError("A test case has no name")
+        status = "passed"
+        for child_tag, child_status in (("failure", "failed"), ("error", "error"), ("skipped", "skipped")):
+            if node.find(child_tag) is not None:
+                status = child_status
+                break
+        cases.append({"classname": (node.get("classname") or "").strip(), "name": name, "status": status})
+    if not cases:
+        raise GenesisError("The JUnit XML report has no test cases")
+    report = {"tests_total": len(cases),
+              "failures": sum(1 for case in cases if case["status"] == "failed"),
+              "errors": sum(1 for case in cases if case["status"] == "error"),
+              "skipped": sum(1 for case in cases if case["status"] == "skipped"),
+              "test_cases": cases}
+    report["all_passed"] = report["failures"] == 0 and report["errors"] == 0 and report["skipped"] < len(cases)
+    report["sha256"] = _batch44_checksum(report)
+    if db_path is not None:
+        with _batch41_db(db_path) as db:
+            _batch45_ensure_schema(db)
+            db.execute("INSERT OR REPLACE INTO genesis_verification_reports (sha256, stored_at, report_json) "
+                       "VALUES (?, ?, ?)", (report["sha256"], datetime.now(timezone.utc).isoformat(),
+                                            _batch44_canonical(report)))
+    return report
+
+
+def audit_capabilities_against_verification_report(capability_registry_list: object,
+                                                   verification_report_dict: object) -> dict:
+    """INST-0225: keep VERIFIED_WORKING only for modules whose tests passed.
+
+    Inputs: the registry list and a verification report. A module's evidence is every test case whose class
+    name or name contains its module_id. Outputs: modules (copies with corrected status_label, is_available and
+    audit_reason), downgraded (list of module ids) and all_ok. Failing tests give FAILED; no or only skipped
+    tests give UNVERIFIED. Errors: GenesisError for a malformed registry or report.
+    """
+    if not isinstance(capability_registry_list, list) or not all(isinstance(item, dict) for item in capability_registry_list):
+        raise GenesisError("The capability registry must be a list of entries")
+    if not isinstance(verification_report_dict, dict) or not isinstance(verification_report_dict.get("test_cases"), list):
+        raise GenesisError("The verification report must contain test_cases")
+    cases = verification_report_dict["test_cases"]
+    if not all(isinstance(case, dict) and case.get("status") in ("passed", "failed", "error", "skipped") for case in cases):
+        raise GenesisError("Every test case needs a status of passed, failed, error or skipped")
+    audited, downgraded = [], []
+    for entry in capability_registry_list:
+        _batch45_check_status(entry.get("status_label"))
+        result = dict(entry)
+        module_id = str(entry.get("module_id", "")).lower()
+        if entry["status_label"] == "VERIFIED_WORKING":
+            evidence = [case for case in cases if module_id and
+                        module_id in (str(case.get("classname", "")) + " " + str(case.get("name", ""))).lower()]
+            if any(case["status"] in ("failed", "error") for case in evidence):
+                new_status, reason = "FAILED", "A test for this module failed."
+            elif not any(case["status"] == "passed" for case in evidence):
+                new_status, reason = "UNVERIFIED", "No passing test was found for this module."
+            else:
+                new_status, reason = "VERIFIED_WORKING", "Passing tests found."
+            result["audit_reason"] = reason
+            if new_status != "VERIFIED_WORKING":
+                result["status_label"] = new_status
+                result["is_available"] = False
+                downgraded.append(entry.get("module_id"))
+        audited.append(result)
+    return {"modules": audited, "downgraded": downgraded, "all_ok": not downgraded}
