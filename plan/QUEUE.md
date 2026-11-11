@@ -3818,3 +3818,20 @@ End of Batches 41–47 source check.
 Batches 41–49 are ready to build, in order, starting with Batch 41. The builder may reuse its work from `held/B41-readability-gate` by moving it into the two new files.
 
 End of the Batches 41–49 new-module ruling.
+
+## Batch 43 export step (Architect's ruling, 2026-11-11)
+
+**Why.** Batch 43 (instructions 211–215, in `code/apccs_batches_41_49.py` by the 2026-11-10 ruling above) was held because INST-0214 says to build `export_static_website_bundle` and write `index.html`. The readability gate refuses both: check A703 in `code/apccs_readability_gate.py` treats a call to any function whose name starts with `write_`, `save`, `persist`, `export`, `serialize` or `to_` as an unrecognized writer, and it allows only the open text suffixes `.json`, `.jsonl`, `.csv`, `.txt`, `.md`, `.log` and `.py`. The gate may not be changed. The Claude builder reported this on 2026-11-11 (apccs #71) and saved its finished work on branch `held/B43-export-blocked-by-readability-gate`. The Owner asked the Claude builder to rule on this one point on 2026-11-11.
+
+**Ruling.** This overrides the wording of INST-0214 and any later wording that uses its name or its file.
+
+- The function is named `build_static_website_bundle`, with the same arguments and the same return value: `(db_path, vault_dir, project_id, export_subdir="exports/genesis_sites")`.
+- It writes the verified page text to `index.html.txt` and the receipt to `SITE_MANIFEST.json`, both in the same folder inside the vault, both with explicit UTF-8, using the same approved text writers the other batches use. No file ending in `.html` is written.
+- `SITE_MANIFEST.json` lists `index.html.txt` as the page file, with its byte size, SHA-256 checksum and CSP verification receipt, and adds the field `"serve_as": "index.html"` so a later step can publish it under that name.
+- Everything else in INST-0214 stays: reject path traversal, reject unverified HTML, write only inside the vault.
+- Writing a real `.html` file waits for a later ruling on the gate. Nothing in Batches 43–49 may work around the gate.
+- Nothing else changes: the same wording for INST-0211, 0212, 0213 and 0215, the same canary line, the same order, standard library only, made-up data only.
+
+Batch 43 is ready to build. The builder may reuse its work from `held/B43-export-blocked-by-readability-gate` by renaming the function, changing the file name, and updating its tests to match.
+
+End of the Batch 43 export ruling.
