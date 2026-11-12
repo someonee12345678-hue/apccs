@@ -515,5 +515,226 @@ class ApccsBatchRA2Tests(unittest.TestCase):
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM research_rounds").fetchone()[0], 2)
 
 
+def _helper(name: str, kind: str = "software", roles: tuple = ("Finder",), company: str = "Co", online: bool = False) -> dict:
+    """Inputs: helper fields. Outputs: a made-up helper dictionary. Errors: none."""
+    return {"name": name, "company": company, "kind": kind, "roles": list(roles), "online": online}
+
+
+def _helpers_json(*helpers: dict) -> str:
+    """Inputs: helpers. Outputs: the helpers as settings-file JSON text. Errors: none."""
+    return json.dumps(list(helpers))
+
+
+class ApccsBatchRA3Tests(unittest.TestCase):
+    """Inputs: in-memory helpers, settings, stub functions and databases. Outputs: RA3-01 to RA3-05 evidence. Errors: assertions."""
+
+    print("Canary check: RESEARCH = ROLES -> switchboard")
+
+    def _refused(self, code: str, function: object, *args: object) -> None:
+        """Inputs: an error code, a function and its arguments. Outputs: none. Errors: assertion if no matching refusal."""
+        with self.assertRaises(ValueError) as caught:
+            function(*args)
+        self.assertTrue(str(caught.exception).startswith(code), str(caught.exception))
+
+    def test_ra3_01_loads_helpers_by_role(self) -> None:
+        """Inputs: helpers settings text. Outputs: a dict of name to helper. Errors: assertions."""
+        loaded = ra.load_research_helpers(_helpers_json(
+            _helper("Ann", "person", ("Approver", "Finder")), _helper("Calc", "software", ("Fit Checker", "Fact Critic")),
+            _helper("Bot", "local_model", ("Finder", "Gap Critic"), company="Acme", online=True)))
+        self.assertEqual(list(loaded), ["Ann", "Calc", "Bot"])
+        self.assertEqual(loaded["Bot"]["company"], "Acme")
+        self.assertTrue(loaded["Bot"]["online"])
+        self.assertEqual(loaded["Calc"]["roles"], ["Fit Checker", "Fact Critic"])
+        self.assertEqual(ra.load_research_helpers("[]"), {})
+
+    def test_ra3_01_refuses_model_as_approver(self) -> None:
+        """Inputs: a model as Approver, a person as Fit Checker and malformed lists. Outputs: RA_ codes. Errors: assertions."""
+        self._refused("RA_ROLE_NOT_ALLOWED", ra.load_research_helpers, _helpers_json(_helper("Bot", "local_model", ("Approver",))))
+        self._refused("RA_ROLE_NOT_ALLOWED", ra.load_research_helpers, _helpers_json(_helper("Ann", "person", ("Fit Checker",))))
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, "not json")
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, "{}")
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, _helpers_json(_helper(" ")))
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, _helpers_json(_helper("A"), _helper("A")))
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, _helpers_json(_helper("A", "robot")))
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, _helpers_json(_helper("A", roles=("Judge",))))
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, _helpers_json(_helper("A", online="yes")))
+        self._refused("RA_BAD_HELPERS", ra.load_research_helpers, None)
+
+    def test_ra3_02_l2_needs_different_helpers(self) -> None:
+        """Inputs: helpers and roles for levels L0, L1 and L2. Outputs: ok, problems and warnings. Errors: assertions."""
+        helpers = ra.load_research_helpers(_helpers_json(
+            _helper("Ann", "person", ("Finder",), company="Me"),
+            _helper("Gem", "local_model", ("Finder", "Fact Critic"), company="Alpha"),
+            _helper("Cla", "local_model", ("Finder", "Gap Critic"), company="Beta"),
+            _helper("Dup", "local_model", ("Finder", "Fact Critic", "Gap Critic"), company="Alpha")))
+        l2 = {"roles": {"Finder": "Gem", "Fact Critic": "Dup", "Gap Critic": "Cla"}}
+        problems = ra.check_level_assignment(l2, helpers, "L2")
+        self.assertEqual(problems["level"], "L2")
+        self.assertFalse(problems["ok"])
+        self.assertEqual(problems["problems"], ["SAME_COMPANY: Fact Critic has the Finder's company"])
+        good = {"roles": {"Finder": "Gem", "Fact Critic": "Dup", "Gap Critic": "Cla"}}
+        good_helpers = dict(helpers, Dup=dict(helpers["Dup"], company="Gamma"))
+        self.assertEqual(ra.check_level_assignment(good, good_helpers, "L2"),
+                         {"level": "L2", "ok": True, "problems": [], "warnings": []})
+        same = {"roles": {"Finder": "Dup", "Fact Critic": "Dup", "Gap Critic": "Dup"}}
+        self.assertIn("HELPERS_NOT_DIFFERENT", " ".join(ra.check_level_assignment(same, helpers, "L2")["problems"]))
+        alone = ra.load_research_helpers(_helpers_json(
+            _helper("A", "local_model", ("Finder", "Fact Critic")), _helper("B", "local_model", ("Fact Critic", "Gap Critic"))))
+        warned = ra.check_level_assignment({"roles": {"Finder": "A", "Fact Critic": "B", "Gap Critic": "B"}}, alone, "L2")
+        self.assertEqual(warned["problems"], ["HELPERS_NOT_DIFFERENT: Finder, Fact Critic and Gap Critic must be three helpers"])
+        self.assertEqual(len(warned["warnings"]), 2)
+        self.assertIn("SAME_COMPANY", warned["warnings"][0])
+        l1 = ra.check_level_assignment({"roles": {"Finder": "Gem", "Fact Critic": "software", "Gap Critic": "software"}}, helpers, "L1")
+        self.assertTrue(l1["ok"])
+        l1_bad = ra.check_level_assignment({"roles": {"Finder": "Ann", "Fact Critic": "Dup", "Gap Critic": "software"}}, helpers, "L1")
+        self.assertEqual(l1_bad["problems"], ["FINDER_IS_PERSON: the Finder must be a non-person helper",
+                                              "CRITIC_NOT_SOFTWARE: Fact Critic"])
+        l0 = ra.check_level_assignment({"roles": {"Finder": "Ann", "Fact Critic": "software", "Gap Critic": "software"}}, helpers, "L0")
+        self.assertTrue(l0["ok"])
+        l0_bad = ra.check_level_assignment({"roles": {"Finder": "Gem", "Fact Critic": "software", "Gap Critic": "software"}}, helpers, "L0")
+        self.assertEqual(l0_bad["problems"], ["NOT_PERSON_OR_SOFTWARE: Finder"])
+        missing = ra.check_level_assignment({"roles": {"Finder": "Gem"}}, helpers, "L1")
+        self.assertEqual(missing["problems"], ["ROLE_MISSING: Fact Critic", "ROLE_MISSING: Gap Critic"])
+        self.assertFalse(missing["ok"])
+
+    def test_ra3_02_refuses_unknown_level(self) -> None:
+        """Inputs: a bad level and roles naming no helper. Outputs: RA_ codes. Errors: assertions."""
+        helpers = ra.load_research_helpers(_helpers_json(_helper("Gem", "local_model", ("Finder",))))
+        roles = {"roles": {"Finder": "Gem"}}
+        self._refused("RA_BAD_LEVEL", ra.check_level_assignment, roles, helpers, "L3")
+        self._refused("RA_BAD_LEVEL", ra.check_level_assignment, roles, helpers, None)
+        self._refused("RA_ROLE_UNFILLED", ra.check_level_assignment, {"roles": {"Finder": "Nobody"}}, helpers, "L0")
+        self._refused("RA_ROLE_UNFILLED", ra.check_level_assignment, {"roles": {"Fact Critic": "Gem"}}, helpers, "L0")
+        self._refused("RA_ROLE_UNFILLED", ra.check_level_assignment, {"roles": {"Finder": "software"}}, helpers, "L0")
+        self._refused("RA_BAD_SETTINGS", ra.check_level_assignment, {"mode": "crowd"}, helpers, "L0")
+        self._refused("RA_BAD_HELPERS", ra.check_level_assignment, roles, "helpers", "L0")
+
+    def test_ra3_03_paste_and_local_routes(self) -> None:
+        """Inputs: helpers of each kind and a stub send function. Outputs: PASTE_READY or REPLIED. Errors: assertions."""
+        sent: list = []
+
+        def send(payload: dict) -> str:
+            """Inputs: a payload. Outputs: a made-up reply; the payload is kept for the test. Errors: none."""
+            sent.append(payload)
+            return "reply to " + ",".join(sorted(payload))
+
+        payload = {"claims": [1], "findings": [2], "steps": [3], "reasoning": "private"}
+        person = _helper("Ann", "person", ("Fact Critic",))
+        pasted = ra.call_helper(person, "Fact Critic", payload, send, False)
+        self.assertEqual(pasted["status"], "PASTE_READY")
+        self.assertEqual(json.loads(pasted["text"]), {"claims": [1], "findings": [2], "steps": [3]})
+        self.assertEqual(sent, [])
+        copy_paste = _helper("Web", "account_copy_paste", ("Finder",))
+        finder_paste = ra.call_helper(copy_paste, "Finder", payload, None, False)
+        self.assertEqual(json.loads(finder_paste["text"])["reasoning"], "private")
+        local = _helper("Bot", "local_model", ("Gap Critic", "Finder"))
+        self.assertEqual(ra.call_helper(local, "Gap Critic", payload, send, False),
+                         {"status": "REPLIED", "reply": "reply to claims,findings,steps"})
+        self.assertEqual(sent[0], {"claims": [1], "findings": [2], "steps": [3]})
+        self.assertEqual(ra.call_helper(local, "Finder", payload, send, False)["reply"],
+                         "reply to claims,findings,reasoning,steps")
+        software = _helper("Calc", "software", ("Fit Checker",))
+        self.assertEqual(ra.call_helper(software, "Fit Checker", {"x": 1}, send, False)["status"], "REPLIED")
+        online = _helper("Cloud", "local_model", ("Finder",), online=True)
+        self.assertEqual(ra.call_helper(online, "Finder", payload, send, True)["status"], "REPLIED")
+        self.assertEqual(payload["reasoning"], "private")
+
+    def test_ra3_03_online_without_approval_sends_nothing(self) -> None:
+        """Inputs: online helpers without approval, a missing role and no send function. Outputs: NEEDS_APPROVAL and RA_ codes. Errors: assertions."""
+        sent: list = []
+
+        def send(payload: dict) -> str:
+            """Inputs: a payload. Outputs: a made-up reply; calls are recorded. Errors: none."""
+            sent.append(payload)
+            return "x"
+
+        for kind in ("person", "account_copy_paste", "local_model", "software"):
+            helper = _helper("H", kind, ("Finder",), online=True)
+            self.assertEqual(ra.call_helper(helper, "Finder", {"claims": []}, send, False), {"status": "NEEDS_APPROVAL"})
+            self.assertEqual(ra.call_helper(helper, "Finder", {"claims": []}, send, None), {"status": "NEEDS_APPROVAL"})
+        self.assertEqual(sent, [])
+        self._refused("RA_ROLE_NOT_HELD", ra.call_helper, _helper("H", "software", ("Finder",), online=True), "Auditor", {}, send, True)
+        self.assertEqual(sent, [])
+        self._refused("RA_NO_SEND_FN", ra.call_helper, _helper("H", "local_model", ("Finder",)), "Finder", {}, None, False)
+        self._refused("RA_BAD_HELPERS", ra.call_helper, "helper", "Finder", {}, send, False)
+        self._refused("RA_BAD_HELPERS", ra.call_helper, _helper("H"), "Finder", "payload", send, False)
+
+    def test_ra3_04_swarm_keeps_best_and_joins_proven(self) -> None:
+        """Inputs: three stub finders in swarm mode. Outputs: the best thread and the joined proven findings. Errors: assertions."""
+        def make_finder(findings: list, claim_proof: str) -> object:
+            """Inputs: findings and a claim proof link. Outputs: a stub finder that gives the same answer each round. Errors: none."""
+            def finder(brief: dict, last_objections: list) -> dict:
+                """Inputs: a brief and objections. Outputs: a fixed made-up answer. Errors: none."""
+                return {"answer": {"claims": [_item("Claim", proof_link=claim_proof)], "findings": list(findings),
+                                   "steps": [_item("Step")]}, "replies": [], "spent": 0}
+            return finder
+
+        weak = make_finder([_item("Shared find"), _item("Weak only", proof_link="")], "")
+        strong = make_finder([_item("shared FIND "), _item("Strong only")], PROOF_URL)
+        middle = make_finder([_item("Middle only")], PROOF_URL)
+        quiet = {"Fact Critic": lambda view: []}
+        settings = _settings(mode="swarm", swarm_threads=3, round_cap=1, budget_cap=5)
+        outcome = ra.run_research_swarm(_brief(), settings, _option(), [weak, strong, middle], quiet)
+        self.assertEqual(len(outcome["threads"]), 3)
+        self.assertEqual(outcome["best_thread"], 1)
+        self.assertEqual([each["text"] for each in outcome["joined_findings"]], ["Shared find", "Strong only", "Middle only"])
+        self.assertTrue(all(each["rounds"][-1]["action"] == "STOP" for each in outcome["threads"]))
+        tie = ra.run_research_swarm(_brief(), settings, _option(), [middle, strong], quiet)
+        self.assertEqual(tie["best_thread"], 0)
+        self.assertEqual(ra.run_research_swarm(_brief(), settings, _option(), [weak], quiet)["best_thread"], 0)
+        self.assertEqual(ra.run_research_swarm(_brief(), settings, _option(), [weak, middle], quiet)["best_thread"], 1)
+
+    def test_ra3_04_refuses_more_finders_than_threads(self) -> None:
+        """Inputs: too many finders, none, and a mode that is not swarm. Outputs: RA_ codes. Errors: assertions."""
+        def finder(brief: dict, last_objections: list) -> dict:
+            """Inputs: a brief and objections. Outputs: a made-up answer. Errors: none."""
+            return {"answer": {"claims": [], "findings": [], "steps": []}, "replies": [], "spent": 0}
+
+        quiet = {"Gap Critic": lambda view: []}
+        swarm = _settings(mode="swarm", swarm_threads=2, round_cap=1, budget_cap=5)
+        self._refused("RA_TOO_MANY_FINDERS", ra.run_research_swarm, _brief(), swarm, _option(), [finder, finder, finder], quiet)
+        self._refused("RA_NO_FINDERS", ra.run_research_swarm, _brief(), swarm, _option(), [], quiet)
+        self._refused("RA_NO_FINDERS", ra.run_research_swarm, _brief(), swarm, _option(), None, quiet)
+        self._refused("RA_BAD_MODE", ra.run_research_swarm, _brief(), _settings(mode="single"), _option(), [finder], quiet)
+        self._refused("RA_BAD_CRITICS", ra.run_research_swarm, _brief(), swarm, _option(), [finder], {})
+
+    def test_ra3_05_caught_trap_flags_later_answer(self) -> None:
+        """Inputs: an in-memory database, two traps and answers. Outputs: stored traps and PASS or FLAGGED. Errors: assertions."""
+        conn = sqlite3.connect(":memory:")
+        clean = {"claims": [_item("Tool A is free")], "findings": [_item("Finding one")], "steps": []}
+        self.assertEqual(ra.check_answer_against_traps(conn, clean), {"status": "PASS", "flags": []})
+        first = ra.record_caught_trap(conn, {"text": " Free forever ", "caught_by_role": "Fact Critic",
+                                            "source_ref": "round 2"}, "2026-11-12T10:00:00-08:00")
+        second = ra.record_caught_trap(conn, {"text": "ships with a key", "caught_by_role": "Gap Critic",
+                                             "source_ref": "round 3"}, "2026-11-12T11:00:00-08:00")
+        self.assertEqual((first["trap_id"], second["trap_id"]), (1, 2))
+        self.assertEqual(first["text"], "Free forever")
+        self.assertEqual(ra.check_answer_against_traps(conn, clean)["status"], "PASS")
+        later = {"claims": [_item("Tool B is FREE FOREVER for all")], "findings": [_item("It Ships With A Key.")], "steps": []}
+        flagged = ra.check_answer_against_traps(conn, later)
+        self.assertEqual(flagged["status"], "FLAGGED")
+        self.assertEqual(flagged["flags"], [{"trap_id": 1, "text": "Tool B is FREE FOREVER for all"},
+                                            {"trap_id": 2, "text": "It Ships With A Key."}])
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM research_traps").fetchone()[0], 2)
+
+    def test_ra3_05_refuses_trap_without_source(self) -> None:
+        """Inputs: traps with a blank source, a blank text, a bad time, a bad connection and a bad answer. Outputs: RA_ codes. Errors: assertions."""
+        conn = sqlite3.connect(":memory:")
+        stamp = "2026-11-12T10:00:00+00:00"
+        good = {"text": "a trap", "caught_by_role": "Fact Critic", "source_ref": "round 1"}
+        self._refused("RA_TRAP_NO_SOURCE", ra.record_caught_trap, conn, dict(good, source_ref="  "), stamp)
+        self._refused("RA_TRAP_NO_SOURCE", ra.record_caught_trap, conn, {"text": "a trap", "caught_by_role": "Fact Critic"}, stamp)
+        self._refused("RA_TRAP_SHAPE", ra.record_caught_trap, conn, dict(good, text=""), stamp)
+        self._refused("RA_TRAP_SHAPE", ra.record_caught_trap, conn, dict(good, caught_by_role=" "), stamp)
+        self._refused("RA_TRAP_SHAPE", ra.record_caught_trap, conn, "trap", stamp)
+        self._refused("RA_BAD_TIME", ra.record_caught_trap, conn, good, "2026-11-12T10:00:00")
+        self._refused("RA_BAD_TIME", ra.record_caught_trap, conn, good, None)
+        self._refused("RA_BAD_DB", ra.record_caught_trap, "db", good, stamp)
+        self._refused("RA_BAD_DB", ra.check_answer_against_traps, "db", {"claims": [], "findings": []})
+        self._refused("RA_ROUND_SHAPE", ra.check_answer_against_traps, conn, {"claims": []})
+        self._refused("RA_ROUND_SHAPE", ra.check_answer_against_traps, conn, "answer")
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM research_traps").fetchone()[0], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -618,3 +618,263 @@ def record_research_round(conn: sqlite3.Connection, run_id: str, round_result: d
              "OPEN: " + ("none" if result["action"] == "STOP" else "round " + str(result["round"] + 1)),
              "NEXT: " + result["action"] + " (" + result["reason"] + ")"]
     return {"row": row, "log_text": "\n".join(lines)}
+
+
+# ---- Batch RA3: research agent helpers (plug-ins by role, levels L1 and L2) ----
+
+HELPER_KINDS = ("person", "local_model", "account_copy_paste", "software")
+LEVELS = ("L0", "L1", "L2")
+_HELPER_KEYS = ("name", "company", "kind", "roles", "online")
+_BUILT_IN_SOFTWARE = {"name": "software", "company": "", "kind": "software",
+                      "roles": ["Fit Checker", "Fact Critic", "Gap Critic"], "online": False}
+
+
+def _checked_helper(helper: object) -> dict:
+    """Inputs: one helper from the settings file. Outputs: a checked copy. Errors: RA_BAD_HELPERS, RA_ROLE_NOT_ALLOWED."""
+    if not isinstance(helper, dict) or not set(helper) <= set(_HELPER_KEYS):
+        raise ValueError("RA_BAD_HELPERS: a helper is a dict of name, company, kind, roles and online")
+    if not _filled(helper.get("name")) or not isinstance(helper.get("company"), str):
+        raise ValueError("RA_BAD_HELPERS: a helper needs a name and a company (text)")
+    if helper.get("kind") not in HELPER_KINDS:
+        raise ValueError("RA_BAD_HELPERS: unknown helper kind")
+    roles = helper.get("roles")
+    if not isinstance(roles, list) or any(role not in ROLE_NAMES for role in roles) or len(set(roles)) != len(roles):
+        raise ValueError("RA_BAD_HELPERS: roles must be a list of known role names, each once")
+    if not isinstance(helper.get("online"), bool):
+        raise ValueError("RA_BAD_HELPERS: online must be true or false")
+    if "Fit Checker" in roles and helper["kind"] != "software":
+        raise ValueError("RA_ROLE_NOT_ALLOWED: only a software helper may be the Fit Checker")
+    if "Approver" in roles and helper["kind"] != "person":
+        raise ValueError("RA_ROLE_NOT_ALLOWED: only a person may be the Approver")
+    return {"name": helper["name"].strip(), "company": helper["company"].strip(), "kind": helper["kind"],
+            "roles": list(roles), "online": helper["online"]}
+
+
+def load_research_helpers(helpers_json: str) -> dict:
+    """Read the list of helpers, one line of settings per helper (RA3-01).
+
+    Inputs: helpers_json, JSON text holding a list of {name, company, kind, roles, online}; kind is person,
+    local_model, account_copy_paste or software; roles come from the RA1-01 role list; only a software helper
+    may hold Fit Checker and only a person may hold Approver. Company names appear only in this file.
+    Outputs: a dict of helper name to the checked helper.
+    Errors: RA_BAD_HELPERS (bad JSON, blank or duplicate name, unknown kind or role, online not true or false),
+    RA_ROLE_NOT_ALLOWED.
+    """
+    if not isinstance(helpers_json, str):
+        raise ValueError("RA_BAD_HELPERS: helpers_json must be text")
+    try:
+        listed = json.loads(helpers_json)
+    except json.JSONDecodeError as error:
+        raise ValueError("RA_BAD_HELPERS: not valid JSON") from error
+    if not isinstance(listed, list):
+        raise ValueError("RA_BAD_HELPERS: helpers must be a list")
+    loaded: dict = {}
+    for each in listed:
+        helper = _checked_helper(each)
+        if helper["name"] in loaded:
+            raise ValueError("RA_BAD_HELPERS: duplicate helper name " + helper["name"])
+        loaded[helper["name"]] = helper
+    return loaded
+
+
+def _filled_roles(roles: dict, helpers: object) -> dict:
+    """Inputs: settings roles and the helpers. Outputs: role to helper dict. Errors: RA_BAD_HELPERS, RA_ROLE_UNFILLED."""
+    if not isinstance(helpers, dict):
+        raise ValueError("RA_BAD_HELPERS: helpers must be a dict of name to helper")
+    filled = {}
+    for role, name in roles.items():
+        if name == "software" and role in _BUILT_IN_SOFTWARE["roles"]:
+            filled[role] = dict(_BUILT_IN_SOFTWARE)
+        elif isinstance(helpers.get(name), dict) and role in helpers[name].get("roles", []):
+            filled[role] = helpers[name]
+        else:
+            raise ValueError("RA_ROLE_UNFILLED: " + role + " names no helper that holds it")
+    return filled
+
+
+def check_level_assignment(settings: dict, helpers: dict, level: str) -> dict:
+    """Check that the helpers chosen for the roles fit one level, so checkers differ (RA3-02).
+
+    Inputs: settings as in load_research_settings (its roles say who fills each role; the text "software" is the
+    built-in software helper for Fit Checker, Fact Critic and Gap Critic); helpers from load_research_helpers;
+    level L0 (Finder and both Critics are person or software), L1 (the Finder is a non-person helper and both
+    Critics are software) or L2 (Finder, Fact Critic and Gap Critic are three different helpers and each
+    Critic's company differs from the Finder's).
+    Outputs: {level, ok, problems, warnings}. A missing Finder, Fact Critic or Gap Critic is the problem
+    "ROLE_MISSING: <role>". In L2, when no helper of another company exists, a shared company is a warning.
+    Errors: RA_BAD_LEVEL, RA_ROLE_UNFILLED, RA_BAD_SETTINGS, RA_BAD_HELPERS.
+    """
+    if level not in LEVELS:
+        raise ValueError("RA_BAD_LEVEL: level must be L0, L1 or L2")
+    filled = _filled_roles(_checked_settings(settings)["roles"], helpers)
+    problems, warnings = [], []
+    needed = ("Finder", "Fact Critic", "Gap Critic")
+    problems.extend("ROLE_MISSING: " + role for role in needed if role not in filled)
+    if not problems:
+        finder, fact, gap = (filled[role] for role in needed)
+        if level == "L0":
+            problems.extend("NOT_PERSON_OR_SOFTWARE: " + role for role in needed
+                            if filled[role]["kind"] not in ("person", "software"))
+        elif level == "L1":
+            if finder["kind"] == "person":
+                problems.append("FINDER_IS_PERSON: the Finder must be a non-person helper")
+            problems.extend("CRITIC_NOT_SOFTWARE: " + role for role in needed[1:] if filled[role]["kind"] != "software")
+        else:
+            if len({finder["name"], fact["name"], gap["name"]}) != 3:
+                problems.append("HELPERS_NOT_DIFFERENT: Finder, Fact Critic and Gap Critic must be three helpers")
+            other_company = any(each.get("company") != finder["company"] for each in helpers.values())
+            for role in needed[1:]:
+                if filled[role]["company"] == finder["company"]:
+                    if other_company:
+                        problems.append("SAME_COMPANY: " + role + " has the Finder's company")
+                    else:
+                        warnings.append("SAME_COMPANY: " + role + " has the Finder's company; no helper of another company exists")
+    return {"level": level, "ok": not problems, "problems": problems, "warnings": warnings}
+
+
+def call_helper(helper: dict, role: str, payload: dict, send_fn: Callable | None, approved_by_person: bool) -> dict:
+    """Route one payload to a helper; nothing goes out without a person's yes (RA3-03).
+
+    Inputs: helper from load_research_helpers; role, one of the helper's roles; payload, a dict; send_fn, a
+    function that takes the payload and returns the reply (needed for local_model and software helpers);
+    approved_by_person, True only when a person said yes. Checked in this order: the helper holds the role; for a
+    Fact Critic or Gap Critic every payload key except claims, findings and steps is removed (blind review); an
+    online helper without approval gives NEEDS_APPROVAL for every kind and nothing is called; then the route by kind.
+    Outputs: {status: "PASTE_READY", text: the payload as JSON} for person and account_copy_paste (no call is
+    made), {status: "REPLIED", reply} for local_model and software, or {status: "NEEDS_APPROVAL"}.
+    Errors: RA_ROLE_NOT_HELD, RA_NO_SEND_FN (a call is needed and send_fn is missing), RA_BAD_HELPERS.
+    """
+    if not isinstance(helper, dict) or helper.get("kind") not in HELPER_KINDS or not isinstance(helper.get("roles"), list):
+        raise ValueError("RA_BAD_HELPERS: give a helper from load_research_helpers")
+    if role not in helper["roles"]:
+        raise ValueError("RA_ROLE_NOT_HELD: " + str(helper.get("name")) + " does not hold " + str(role))
+    if not isinstance(payload, dict):
+        raise ValueError("RA_BAD_HELPERS: payload must be a dict")
+    sent = copy.deepcopy(payload)
+    if role in CRITIC_ROLES:
+        sent = {name: sent[name] for name in _ANSWER_LISTS if name in sent}
+    if helper.get("online") is True and approved_by_person is not True:
+        return {"status": "NEEDS_APPROVAL"}
+    if helper["kind"] in ("person", "account_copy_paste"):
+        return {"status": "PASTE_READY", "text": json.dumps(sent, sort_keys=True)}
+    if not callable(send_fn):
+        raise ValueError("RA_NO_SEND_FN: this helper needs a send function")
+    return {"status": "REPLIED", "reply": send_fn(sent)}
+
+
+def _beaten(thread: dict, others: list) -> bool:
+    """Inputs: a thread's last scores and the other threads' last scores. Outputs: True when one is higher on all four parts. Errors: none."""
+    return any(all(other[part] > thread[part] for part in SCORE_PARTS) for other in others)
+
+
+def run_research_swarm(brief: dict, settings: dict, option: dict, finder_fns: list, critic_fns: dict) -> dict:
+    """Let several finders work one brief in turn and let software pick the best (RA3-04).
+
+    Inputs: brief, option and critic_fns as in run_research_loop; settings with mode "swarm"; finder_fns, a list of
+    finder functions, at most swarm_threads of them. Each runs run_research_loop once, one after another, on a copy
+    of settings whose mode is "single".
+    Outputs: {best_thread, joined_findings, threads}. threads holds each run_research_loop result in list order;
+    best_thread is the 0-based place of the thread that no other thread beats (a higher value on all four parts of
+    the last-round scores); ties go to higher PROOF, then fewer rounds, then list order; joined_findings is every
+    finding with trusted https:// proof from any round of any thread, kept once by lower-cased text.
+    Errors: RA_BAD_MODE (mode is not swarm), RA_TOO_MANY_FINDERS, RA_NO_FINDERS, and the refusals of
+    run_research_loop.
+    """
+    clean = _checked_settings(settings)
+    if clean["mode"] != "swarm":
+        raise ValueError("RA_BAD_MODE: the swarm needs mode swarm")
+    if not isinstance(finder_fns, list) or not finder_fns:
+        raise ValueError("RA_NO_FINDERS: give at least one finder function")
+    if len(finder_fns) > clean["swarm_threads"]:
+        raise ValueError("RA_TOO_MANY_FINDERS: " + str(len(finder_fns)) + " finders for " + str(clean["swarm_threads"]) + " threads")
+    single = dict(clean, mode="single")
+    threads, findings = [], []
+    for finder in finder_fns:
+        seen: list = []
+
+        def watched(brief_copy: dict, last_objections: list, finder: Callable = finder, seen: list = seen) -> dict:
+            """Inputs: a brief copy and the last objections. Outputs: the finder's reply, its findings noted. Errors: none."""
+            found = finder(brief_copy, last_objections)
+            if isinstance(found, dict) and isinstance(found.get("answer"), dict):
+                seen.append(copy.deepcopy(found["answer"].get("findings")))
+            return found
+
+        threads.append(run_research_loop(brief, single, option, watched, critic_fns))
+        findings.append(seen)
+    lasts = [each["rounds"][-1]["scores"] for each in threads]
+    open_threads = [place for place in range(len(threads))
+                    if not _beaten(lasts[place], lasts[:place] + lasts[place + 1:])]
+    best = min(open_threads, key=lambda place: (-lasts[place]["PROOF"], len(threads[place]["rounds"]), place))
+    joined, keys = [], set()
+    for seen in findings:
+        for round_findings in seen:
+            for item in round_findings if isinstance(round_findings, list) else []:
+                key = _normal_text(item["text"])
+                if _proven(item, clean["trusted_proof_kinds"]) and key not in keys:
+                    keys.add(key)
+                    joined.append(item)
+    return {"best_thread": best, "joined_findings": joined, "threads": threads}
+
+
+def _checked_time(recorded_at: object) -> str:
+    """Inputs: a time. Outputs: the same text when it is ISO 8601 with an offset. Errors: RA_BAD_TIME."""
+    if isinstance(recorded_at, str) and _TIME_START.match(recorded_at) is not None:
+        try:
+            if datetime.fromisoformat(recorded_at).tzinfo is not None:
+                return recorded_at
+        except ValueError:
+            pass
+    raise ValueError("RA_BAD_TIME: recorded_at must be ISO 8601 with a time-zone offset")
+
+
+def _open_traps(conn: object) -> sqlite3.Connection:
+    """Inputs: a connection. Outputs: it, with the table research_traps ready. Errors: RA_BAD_DB."""
+    if not isinstance(conn, sqlite3.Connection):
+        raise ValueError("RA_BAD_DB: conn must be an open sqlite3 connection")
+    conn.execute("CREATE TABLE IF NOT EXISTS research_traps (trap_id INTEGER PRIMARY KEY, text TEXT NOT NULL, "
+                 "caught_by_role TEXT NOT NULL, source_ref TEXT NOT NULL, recorded_at TEXT NOT NULL)")
+    return conn
+
+
+def record_caught_trap(conn: sqlite3.Connection, trap: dict, recorded_at: str) -> dict:
+    """Add one caught trap to the table research_traps (RA3-05).
+
+    Inputs: conn, an open sqlite3 connection (never opened or closed here); trap {text, caught_by_role, source_ref},
+    all non-blank text; recorded_at, ISO 8601 text with a time-zone offset.
+    Outputs: the stored trap {trap_id, text, caught_by_role, source_ref, recorded_at}. Rows are never changed or deleted.
+    Errors: RA_BAD_DB, RA_TRAP_SHAPE (not a dict, or a blank text or role), RA_TRAP_NO_SOURCE (blank source_ref),
+    RA_BAD_TIME.
+    """
+    if not isinstance(conn, sqlite3.Connection):
+        raise ValueError("RA_BAD_DB: conn must be an open sqlite3 connection")
+    if not isinstance(trap, dict) or not _filled(trap.get("text")) or not _filled(trap.get("caught_by_role")):
+        raise ValueError("RA_TRAP_SHAPE: a trap needs text, caught_by_role and source_ref")
+    if trap.get("source_ref") is None or (isinstance(trap["source_ref"], str) and not trap["source_ref"].strip()):
+        raise ValueError("RA_TRAP_NO_SOURCE: a trap needs a source_ref")
+    if not isinstance(trap["source_ref"], str):
+        raise ValueError("RA_TRAP_SHAPE: source_ref must be text")
+    stamp = _checked_time(recorded_at)
+    stored = {"text": trap["text"].strip(), "caught_by_role": trap["caught_by_role"].strip(),
+              "source_ref": trap["source_ref"].strip(), "recorded_at": stamp}
+    cursor = _open_traps(conn).execute(
+        "INSERT INTO research_traps (text, caught_by_role, source_ref, recorded_at) VALUES (?, ?, ?, ?)",
+        (stored["text"], stored["caught_by_role"], stored["source_ref"], stored["recorded_at"]))
+    conn.commit()
+    return dict(stored, trap_id=cursor.lastrowid)
+
+
+def check_answer_against_traps(conn: sqlite3.Connection, answer: dict) -> dict:
+    """Flag every claim or finding that contains the text of a trap caught earlier (RA3-05).
+
+    Inputs: conn, an open sqlite3 connection; answer, the RA2-01 answer shape {claims, findings, steps}.
+    Matching ignores letter case. A trap worded differently is missed.
+    Outputs: {status: "PASS" or "FLAGGED", flags: [{trap_id, text}]}; text is the claim or finding that matched.
+    Errors: RA_BAD_DB, RA_ROUND_SHAPE (claims or findings missing or malformed).
+    """
+    traps = _open_traps(conn).execute("SELECT trap_id, text FROM research_traps ORDER BY trap_id").fetchall()
+    if not isinstance(answer, dict):
+        raise ValueError("RA_ROUND_SHAPE: an answer needs claims and findings")
+    items = _checked_items(answer.get("claims"), "claims", False) + _checked_items(answer.get("findings"), "findings", False)
+    flags = [{"trap_id": trap_id, "text": item["text"]}
+             for item in items for trap_id, trap_text in traps if trap_text.lower() in item["text"].lower()]
+    return {"status": "FLAGGED" if flags else "PASS", "flags": flags}
