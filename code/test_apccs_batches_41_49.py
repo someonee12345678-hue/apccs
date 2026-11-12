@@ -1426,5 +1426,230 @@ class Batch47Tests(unittest.TestCase):
                 batch.run_genesis_full_vertical_smoke_test(bad)
 
 
+class Batch48Tests(unittest.TestCase):
+    """Inputs: Batch 48 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH48_CANARY_LINE, flush=True)
+
+    def manifest(self) -> dict:
+        """Inputs: none. Outputs: a made-up valid plugin manifest. Errors: none."""
+        rules = "Synthetic rule one.\nSynthetic rule two."
+        return {"engine_id": "synthetic_legal", "name": "Synthetic Legal Engine", "version": "1.0.0",
+                "rules_text": rules, "schema_version": 1, "entry_point": "synthetic_legal:handle",
+                "rules_sha256": hashlib.sha256(rules.encode("utf-8")).hexdigest()}
+
+    def mount_count(self, db: Path) -> int:
+        """Inputs: a database path. Outputs: how many plugin mounts it holds. Errors: sqlite3.Error."""
+        connection = genesis._connect(db)
+        try:
+            return connection.execute("SELECT COUNT(*) FROM optional_plugin_mounts").fetchone()[0]
+        except sqlite3.OperationalError:
+            return 0
+        finally:
+            connection.close()
+
+    # INST-0236
+    def test_236_absent_plugin_is_healthy_and_clean(self) -> None:
+        """Inputs: no manifest, and a missing manifest file. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        vault = new_db(self).parent.parent
+        expected = {"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED", "apccs_healthy": True}
+        self.assertEqual(batch.probe_optional_uclrcde_plugin(vault), expected)
+        self.assertEqual(batch.probe_optional_uclrcde_plugin(vault, "plugins/missing.json"), expected)
+
+    def test_236_manifest_schema_and_checksum_are_checked(self) -> None:
+        """Inputs: good and damaged manifests. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        good = batch.check_optional_plugin_manifest(self.manifest())
+        self.assertEqual(good["engine_id"], "synthetic_legal")
+        self.assertEqual(good["namespace"], "uclrcde:synthetic_legal")
+        self.assertEqual(len(good["manifest_sha256"]), 64)
+        bad_checksum = dict(self.manifest(), rules_sha256="0" * 64)
+        missing_checksum = {k: v for k, v in self.manifest().items() if k != "rules_sha256"}
+        bad_entry = dict(self.manifest(), entry_point="not a reference")
+        for bad in (bad_checksum, missing_checksum, bad_entry, {}, [], None, "text",
+                    dict(self.manifest(), rules_sha256="ABC")):
+            with self.subTest(manifest=bad), self.assertRaises(genesis.GenesisError):
+                batch.check_optional_plugin_manifest(bad)
+
+    def test_236_unsafe_paths_and_bad_vaults_are_refused(self) -> None:
+        """Inputs: unsafe paths and vaults. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        vault = new_db(self).parent.parent
+        for bad in ("../plugin.json", "state", "state/genesis.sqlite3", "", "  ", 5, True):
+            with self.subTest(path=bad), self.assertRaises(genesis.GenesisError):
+                batch.probe_optional_uclrcde_plugin(vault, bad)
+        for bad in (None, 5, True, "", "/does/not/exist/anywhere"):
+            with self.subTest(vault=bad), self.assertRaises(genesis.GenesisError):
+                batch.probe_optional_uclrcde_plugin(bad)
+
+    def test_236_manifest_outside_the_vault_is_refused(self) -> None:
+        """Inputs: a real JSON file outside a vault. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        vault = new_db(self).parent.parent
+        outside = Path(__file__).resolve().parents[1] / "plan" / "shapes" / "catalog.json"
+        with self.assertRaises(genesis.GenesisError):
+            batch.probe_optional_uclrcde_plugin(vault, outside)
+
+    def test_236_malformed_manifest_file_is_refused(self) -> None:
+        """Inputs: a real JSON file that is not a plugin manifest. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        root = Path(__file__).resolve().parents[1]
+        with self.assertRaises(genesis.GenesisError):
+            batch.probe_optional_uclrcde_plugin(root, "plan/shapes/catalog.json")
+
+    # INST-0237
+    def test_237_mount_then_unmount_keeps_every_project(self) -> None:
+        """Inputs: a valid manifest, then none. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        vault = db.parent.parent
+        before = batch._batch48_project_ids(db)
+        mounted = batch.mount_or_unmount_optional_uclrcde(vault, db, "session-1", self.manifest())
+        self.assertEqual(mounted, {"mounted": True, "status": "MOUNTED", "engine_id": "synthetic_legal",
+                                   "namespace": "uclrcde:synthetic_legal"})
+        self.assertEqual(self.mount_count(db), 1)
+        self.assertEqual(batch._batch48_project_ids(db), before)
+        again = batch.mount_or_unmount_optional_uclrcde(vault, db, "session-1", self.manifest())
+        self.assertTrue(again["mounted"])
+        self.assertEqual(self.mount_count(db), 1)
+        gone = batch.mount_or_unmount_optional_uclrcde(vault, db, "session-1")
+        self.assertEqual((gone["mounted"], gone["status"]), (False, "UNMOUNTED"))
+        self.assertEqual(self.mount_count(db), 0)
+        self.assertEqual(batch._batch48_project_ids(db), before)
+
+    def test_237_absent_plugin_gives_the_clean_status(self) -> None:
+        """Inputs: no manifest and nothing mounted. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        result = batch.mount_or_unmount_optional_uclrcde(db.parent.parent, db, "session-2")
+        self.assertEqual(result, {"mounted": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED",
+                                  "message": "UCLRCDE plugin not installed — APCCS running in standard mode"})
+
+    def test_237_bad_session_manifest_or_database_is_refused(self) -> None:
+        """Inputs: bad arguments. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        vault = db.parent.parent
+        for session in (None, 5, "", " ", "has space", "x" * 101, "../up"):
+            with self.subTest(session=session), self.assertRaises(genesis.GenesisError):
+                batch.mount_or_unmount_optional_uclrcde(vault, db, session, self.manifest())
+        with self.assertRaises(genesis.GenesisError):
+            batch.mount_or_unmount_optional_uclrcde(vault, db, "ok", dict(self.manifest(), rules_sha256="0" * 64))
+        with self.assertRaises(genesis.GenesisError):
+            batch.mount_or_unmount_optional_uclrcde(vault, vault / "missing.sqlite3", "ok")
+        with self.assertRaises(genesis.GenesisError):
+            batch.mount_or_unmount_optional_uclrcde("/does/not/exist/anywhere", db, "ok")
+        self.assertEqual(self.mount_count(db), 0)
+
+    # INST-0238
+    def test_238_absent_plugin_answers_with_the_fallback(self) -> None:
+        """Inputs: legal requests with no handler. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        vault = db.parent.parent
+        expected = {"installed": False, "status": "OPTIONAL_PLUGIN_NOT_INSTALLED",
+                    "message": "Optional plugin uclrcde is not installed. All APCCS and Genesis features remain active."}
+        for path in ("/api/legal/status", "legal/status", "/legal/cases/one"):
+            self.assertEqual(batch.handle_optional_legal_proxy_api(vault, db, path, "GET", b""), expected)
+        self.assertEqual(batch.handle_optional_legal_proxy_api(vault, db, "legal", "POST", b'{"a": 1}'), expected)
+        with urllib.request.urlopen(self.serve(db), timeout=10) as response:
+            self.assertEqual(json.loads(response.read().decode("utf-8"))["ok"], True)
+
+    def serve(self, db: Path) -> str:
+        """Inputs: a database. Outputs: the URL of a running Genesis route. Errors: GenesisError."""
+        server = batch.create_genesis_ui_control_server(db.parent.parent, db, "127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        def stop() -> None:
+            """Inputs: none. Outputs: none; the server stops. Errors: none."""
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+
+        self.addCleanup(stop)
+        return "http://127.0.0.1:%d/api/genesis/capabilities" % server.server_address[1]
+
+    def test_238_mounted_handler_is_routed_and_failures_stay_inside(self) -> None:
+        """Inputs: a mounted mock handler, a failing one and a bad one. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        vault = db.parent.parent
+        mirror = lambda route, verb, data: {"route": route, "method": verb, "echo": data}
+        unmounted = batch.handle_optional_legal_proxy_api(vault, db, "legal/status", "GET", b"", mirror)
+        self.assertEqual((unmounted["installed"], unmounted["status"]), (False, "OPTIONAL_PLUGIN_NOT_MOUNTED"))
+        batch.mount_or_unmount_optional_uclrcde(vault, db, "s", self.manifest())
+        routed = batch.handle_optional_legal_proxy_api(vault, db, "/api/legal/cases", "POST", b'{"x": 2}', mirror)
+        self.assertEqual(routed, {"installed": True, "status": "OK",
+                                  "result": {"route": "legal/cases", "method": "POST", "echo": {"x": 2}}})
+
+        def failing(route: str, verb: str, data: dict) -> dict:
+            """Inputs: a request. Outputs: never returns. Errors: always raises RuntimeError."""
+            raise RuntimeError("boom")
+
+        broken = batch.handle_optional_legal_proxy_api(vault, db, "legal/x", "GET", b"", failing)
+        self.assertEqual(broken["status"], "PLUGIN_ERROR")
+        self.assertEqual(batch.handle_optional_legal_proxy_api(vault, db, "legal/x", "GET", b"",
+                                                               lambda route, verb, data: "no")["status"], "PLUGIN_ERROR")
+
+    def test_238_malformed_requests_are_refused(self) -> None:
+        """Inputs: bad paths, methods and bodies. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        vault = db.parent.parent
+        for path in ("/api/genesis/projects", "legal/../x", "legal//x", "/api/legal/a b", "", None, 5, "legal/\x00"):
+            with self.subTest(path=path), self.assertRaises(genesis.GenesisError):
+                batch.handle_optional_legal_proxy_api(vault, db, path, "GET", b"")
+        for method in ("DELETE", None, "get"):
+            with self.subTest(method=method), self.assertRaises(genesis.GenesisError):
+                batch.handle_optional_legal_proxy_api(vault, db, "legal/status", method, b"")
+        for body in ("text", b"{not json", b"[1]", b"x" * 1048577):
+            with self.subTest(body=body), self.assertRaises(genesis.GenesisError):
+                batch.handle_optional_legal_proxy_api(vault, db, "legal/status", "POST", body)
+        with self.assertRaises(genesis.GenesisError):
+            batch.handle_optional_legal_proxy_api(vault, db, "legal/status", "GET", b"", "not callable")
+
+    # INST-0239
+    def test_239_slot_shows_both_states_and_keeps_every_panel(self) -> None:
+        """Inputs: the slot in both states. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        absent = batch.render_optional_plugin_slot_html()
+        self.assertEqual(absent, batch.render_optional_plugin_slot_html(False))
+        for part in ("UCLRCDE Legal Engine", "Optional Plugin Slot", "Not Installed (Optional — APCCS &amp; Genesis Active)"):
+            self.assertIn(part, absent)
+        self.assertNotIn("Mounted / Ready", absent)
+        mounted = batch.render_optional_plugin_slot_html(True)
+        self.assertIn("Mounted / Ready", mounted)
+        self.assertNotIn("Not Installed", mounted)
+        base = batch.build_genesis_ui_page_html()
+        for state, slot in ((False, absent), (True, mounted)):
+            page = batch.build_genesis_ui_page_with_plugin_slot_html(state)
+            self.assertIn(slot, page)
+            self.assertEqual(page.replace(slot, ""), base)
+            for panel in ("genesis-home", "genesis-records", "genesis-planner", "genesis-site-builder",
+                          "genesis-capabilities", "genesis-settings"):
+                self.assertIn('id="%s"' % panel, page)
+
+    def test_239_slot_refuses_a_non_boolean_state(self) -> None:
+        """Inputs: bad states. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for bad in (None, 1, "yes", [], 0):
+            with self.subTest(state=bad):
+                with self.assertRaises(genesis.GenesisError):
+                    batch.render_optional_plugin_slot_html(bad)
+                with self.assertRaises(genesis.GenesisError):
+                    batch.build_genesis_ui_page_with_plugin_slot_html(bad)
+
+    # INST-0240
+    def test_240_both_modes_pass_and_nothing_is_written_to_the_vault(self) -> None:
+        """Inputs: a vault folder. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        vault = new_db(self).parent.parent
+        names_before = sorted(path.name for path in vault.rglob("*"))
+        result = batch.verify_optional_legal_plugin_decoupling(vault)
+        self.assertIs(result["passed"], True)
+        self.assertEqual(result["absent_mode"]["probe"], "OPTIONAL_PLUGIN_NOT_INSTALLED")
+        self.assertEqual(result["absent_mode"]["proxy"], "OPTIONAL_PLUGIN_NOT_INSTALLED")
+        self.assertEqual(len(result["absent_mode"]["panels"]), 6)
+        self.assertEqual(result["mounted_mode"]["mount"], "MOUNTED")
+        self.assertEqual(result["mounted_mode"]["proxy"], "OK")
+        self.assertEqual(result["mounted_mode"]["unmount"], "UNMOUNTED")
+        self.assertEqual(result["mounted_mode"]["projects_before"], result["mounted_mode"]["projects_after"])
+        self.assertEqual(sorted(path.name for path in vault.rglob("*")), names_before)
+
+    def test_240_bad_vault_is_refused(self) -> None:
+        """Inputs: bad vault arguments. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for bad in (None, 5, True, "", "/does/not/exist/anywhere"):
+            with self.subTest(vault=bad), self.assertRaises(genesis.GenesisError):
+                batch.verify_optional_legal_plugin_decoupling(bad)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
