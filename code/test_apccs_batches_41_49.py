@@ -1651,5 +1651,191 @@ class Batch48Tests(unittest.TestCase):
                 batch.verify_optional_legal_plugin_decoupling(bad)
 
 
+import sys
+
+
+class Batch49Tests(unittest.TestCase):
+    """Inputs: Batch 49 behaviour. Outputs: pass or fail. Errors: assertion failures."""
+
+    print(batch.BATCH49_CANARY_LINE, flush=True)
+
+    def good_reports(self) -> list:
+        """Inputs: none. Outputs: made-up passing evidence for all 230 APCCS instructions. Errors: none."""
+        numbers = batch._batch49_numbers(batch.CP245_APCCS_RANGES)
+        return [{"passed": True, "failed_assertions": [], "instruction_coverage": numbers[:100]},
+                {"status": "PASS", "apccs_instruction_ranges": ["101-140", "146-170", "181-245"]}]
+
+    def vault(self) -> Path:
+        """Inputs: none. Outputs: a made-up vault folder. Errors: none."""
+        return new_db(self).parent.parent
+
+    # INST-0241
+    def test_241_real_source_passes_and_counts_fifty_markers(self) -> None:
+        """Inputs: the real Genesis source. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        result = batch.verify_196_to_245_continuity(batch._batch49_genesis_source())
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["marker_count"], 50)
+        self.assertEqual(result["duplicates"], [])
+
+    def test_241_bad_source_is_refused(self) -> None:
+        """Inputs: damaged source texts. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        source = batch._batch49_genesis_source()
+        damaged = {
+            "missing marker": source.replace("INST-0230", "INST-XXXX"),
+            "missing symbol": source.replace("def manage_genesis_task(", "def manage_genesis_task_renamed("),
+            "syntax error": source + "\ndef broken(:\n",
+            "duplicate": source + "\ndef manage_genesis_task(a: int) -> int:\n    return a\n",
+            "stub": source.replace("def lock_checkpoint_cp245(vault_dir: object, db_path: object = None, reports: object = None) -> dict:",
+                                   "def lock_checkpoint_cp245(vault_dir: object, db_path: object = None, reports: object = None) -> dict:\n    pass\n    return {}\n\n\ndef empty_stub() -> None:\n    pass\n\n\ndef _old() -> dict:"),
+            "empty": "",
+            "not text": None,
+            "number": 5,
+        }
+        for label, bad in damaged.items():
+            with self.subTest(case=label), self.assertRaises(genesis.GenesisError):
+                batch.verify_196_to_245_continuity(bad)
+
+    # INST-0242
+    def test_242_four_modules_cohere_and_uclrcde_is_only_recorded(self) -> None:
+        """Inputs: the real code folder. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        result = batch.verify_cp245_four_module_coherence(self.vault())
+        self.assertTrue(result["passed"])
+        self.assertEqual(sorted(result["modules"]), ["code/apccs_core.py", "code/apccs_genesis.py",
+                                                      "code/apccs_q1_part2.py", "code/apccs_q1_part3.py"])
+        self.assertTrue(result["modules"]["code/apccs_core.py"]["frozen"])
+        self.assertEqual(result["external"], {"INST-0141..0145": "built in uclrcde", "INST-0171..0180": "built in uclrcde"})
+        self.assertFalse(result["uclrcde_imported_or_read"])
+        self.assertFalse(any(name.split(".")[0] == "uclrcde" for name in sys.modules))
+
+    def test_242_bad_vault_is_refused(self) -> None:
+        """Inputs: bad vault arguments. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        for bad in (None, 5, True, "", "/does/not/exist/anywhere"):
+            with self.subTest(vault=bad), self.assertRaises(genesis.GenesisError):
+                batch.verify_cp245_four_module_coherence(bad)
+
+    # INST-0243
+    def test_243_scorecard_counts_only_the_230_apccs_instructions(self) -> None:
+        """Inputs: made-up passing evidence. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        result = batch.generate_cp245_scorecard(db.parent.parent, db, self.good_reports())
+        self.assertEqual((result["passing"], result["failing"], result["apccs_count"], result["external_count"]), (230, 0, 230, 15))
+        self.assertEqual(result["relative_path"], "audit/OWNER_SCORECARD_CP245.txt")
+        self.assertEqual(result["text"].count("GREEN"), 230)
+        self.assertEqual(result["text"].count("built in uclrcde (15 instructions in someonee12345678-hue/uclrcde)"), 2)
+        for external in ("141 |", "145 |", "171 |", "180 |"):
+            self.assertNotIn("\n0" + external, "\n" + result["text"])
+        self.assertTrue(result["stored"])
+        connection = genesis._connect(db)
+        try:
+            row = connection.execute("SELECT content FROM cp245_records WHERE name=?", (result["relative_path"],)).fetchone()
+        finally:
+            connection.close()
+        self.assertEqual(row[0], result["text"])
+        self.assertFalse(any(path.name.endswith("CP245.txt") for path in db.parent.parent.rglob("*")))
+
+    def test_243_missing_and_failing_evidence_shows_gray_and_red(self) -> None:
+        """Inputs: partial and failing evidence. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        partial = [{"passed": True, "instruction_coverage": [1, 2, 3]},
+                   {"passed": False, "instruction_coverage": [4], "failed_assertions": ["x"]}]
+        result = batch.generate_cp245_scorecard(self.vault(), None, partial)
+        self.assertEqual((result["passing"], result["failing"], result["stored"]), (3, 1, False))
+        self.assertIn("004 | RED", result["text"])
+        self.assertIn("005 | GRAY", result["text"])
+        with self.assertRaises(genesis.GenesisError):
+            batch.generate_cp245_scorecard(self.vault(), None, "not a list")
+        with self.assertRaises(genesis.GenesisError):
+            batch.generate_cp245_scorecard(self.vault(), None, [5])
+        with self.assertRaises(genesis.GenesisError):
+            batch.generate_cp245_scorecard("/does/not/exist/anywhere")
+
+    def test_243_empty_vault_reads_no_files_and_is_all_gray(self) -> None:
+        """Inputs: a vault with no evidence files. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        result = batch.generate_cp245_scorecard(self.vault())
+        self.assertEqual((result["passing"], result["failing"]), (0, 0))
+        self.assertEqual(result["text"].count("GRAY"), 230)
+
+    # INST-0244
+    def test_244_records_230_with_no_pending_labels(self) -> None:
+        """Inputs: passing evidence and an old RECOVER.md. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        old = "# APCCS Recovery\nLAST_COMPLETED_INSTRUCTION: 200 of 1,000\nMUSE_VERIFICATION: PENDING for this revision\nPENDING loose line\nNEXT_BATCH: held\n"
+        result = batch.synchronize_cp245_pass_tests_and_recover(
+            db.parent.parent, db_path=db, reports=self.good_reports(), old_recover_text=old)
+        self.assertEqual((result["apccs_recorded"], result["external_recorded"], result["pending_labels"]), (230, 15, 0))
+        record = json.loads(result["pass_tests_text"])
+        self.assertEqual(len(record["instruction_coverage"]), 230)
+        self.assertEqual(record["external_instruction_ranges"], ["141-145", "171-180"])
+        self.assertEqual(record["external_ranges_status"], "built in uclrcde")
+        text = result["recover_text"]
+        self.assertNotIn("PENDING", text)
+        self.assertEqual(text.count("LAST_COMPLETED_INSTRUCTION:"), 1)
+        self.assertIn("LAST_COMPLETED_INSTRUCTION: 245 of 1,000", text)
+        self.assertIn("ACCEPTED_INSTRUCTION: 240 of 1,000", text)
+        self.assertIn("MUSE_VERIFICATION: SETTLED at CP-245", text)
+        self.assertIn("NEXT_BATCH: held", text)
+        self.assertIn("BUILT_IN_UCLRCDE: built in uclrcde (15 instructions: 141-145, 171-180)", text)
+        self.assertTrue(result["stored"])
+
+    def test_244_bad_input_is_refused(self) -> None:
+        """Inputs: bad numbers, canary, evidence and RECOVER text. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        vault, good = self.vault(), self.good_reports()
+        refused = [
+            dict(completed_num=244), dict(completed_num=True), dict(completed_num="245"),
+            dict(accepted_num=0), dict(accepted_num=246), dict(accepted_num=2.5),
+            dict(canary_line="Canary check: wrong"), dict(canary_line=None),
+            dict(reports=good[:1]), dict(reports=[]),
+            dict(reports=good + [{"passed": False, "instruction_coverage": [7], "failed_assertions": ["y"]}]),
+            dict(old_recover_text=5),
+        ]
+        for arguments in refused:
+            arguments = dict({"reports": good}, **arguments)
+            with self.subTest(arguments=sorted(arguments)), self.assertRaises(genesis.GenesisError):
+                batch.synchronize_cp245_pass_tests_and_recover(vault, **arguments)
+
+    def test_244_fresh_vault_gets_a_new_recover_text(self) -> None:
+        """Inputs: a vault with no RECOVER.md. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        result = batch.synchronize_cp245_pass_tests_and_recover(self.vault(), reports=self.good_reports())
+        self.assertTrue(result["recover_text"].startswith("# APCCS Recovery"))
+        self.assertFalse(result["stored"])
+
+    # INST-0245
+    def test_245_lock_lists_members_and_writes_nothing(self) -> None:
+        """Inputs: passing evidence. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        db = new_db(self)
+        vault = db.parent.parent
+        before = sorted(path.name for path in vault.rglob("*"))
+        result = batch.lock_checkpoint_cp245(vault, db, self.good_reports())
+        lock = result["lock"]
+        self.assertEqual((lock["checkpoint"], lock["apccs_built_count"], lock["external_uclrcde_count"]), ("CP-245", 230, 15))
+        self.assertEqual(lock["external_ranges_status"], "built in uclrcde")
+        self.assertFalse(lock["uclrcde_imported_or_read"])
+        self.assertEqual(sorted(result["archives"]), ["APCCS_MASTER_BUILD.zip", "APPCS_MASTER_BUILD.zip"])
+        for members in result["archives"].values():
+            self.assertEqual(members["audit/CP-245_LOCK.json"], hashlib.sha256(result["lock_text"].encode("utf-8")).hexdigest())
+            self.assertEqual(members["code/apccs_core.py"], lock["files_sha256"]["code/apccs_core.py"])
+        self.assertFalse(result["written"])
+        self.assertTrue(result["stored"])
+        self.assertEqual(sorted(path.name for path in vault.rglob("*")), before)
+        connection = genesis._connect(db)
+        try:
+            names = sorted(row[0] for row in connection.execute("SELECT name FROM cp245_records"))
+        finally:
+            connection.close()
+        self.assertEqual(names, ["archives_cp245", "audit/CP-245_LOCK.json"])
+
+    def test_245_missing_or_failing_instruction_blocks_the_lock(self) -> None:
+        """Inputs: evidence with one gap and one failure. Outputs: a checked behaviour. Errors: a failed assertion fails the test."""
+        vault, good = self.vault(), self.good_reports()
+        gap = [{"passed": True, "instruction_coverage": [n for n in batch._batch49_numbers(batch.CP245_APCCS_RANGES) if n != 200]}]
+        failing = good + [{"passed": False, "instruction_coverage": [245], "failed_assertions": ["z"]}]
+        for label, reports in (("gap", gap), ("failing", failing), ("none", []), ("bad", ["x"])):
+            with self.subTest(case=label), self.assertRaises(genesis.GenesisError):
+                batch.lock_checkpoint_cp245(vault, None, reports)
+        with self.assertRaises(genesis.GenesisError):
+            batch.lock_checkpoint_cp245(None, None, good)
+        with self.assertRaises(genesis.GenesisError):
+            batch.lock_checkpoint_cp245(vault, "/does/not/exist.sqlite3", good)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
