@@ -2751,3 +2751,454 @@ def verify_optional_legal_plugin_decoupling(vault_dir: object) -> dict:
         mounted_mode = {"mount": mounted["status"], "namespace": mounted["namespace"], "proxy": routed["status"],
                         "unmount": gone["status"], "projects_before": before, "projects_after": after}
     return {"passed": True, "absent_mode": absent_mode, "mounted_mode": mounted_mode}
+
+
+# ---------------------------------------------------------------------------
+# Batch 49 (INST-0241..0245): CP-245 continuity, coherence, scorecard, recovery
+# synchronizer and checkpoint lock. Under the 2026-11-11 gate ruling no file is
+# written: each result is built as text or a dictionary and, when a Genesis
+# database path is given, kept in table cp245_records.
+# ---------------------------------------------------------------------------
+import ast
+
+from apccs_genesis import CODE_DIR, CORE_SHA256, PART2_SHA256, PART3, PART3_SHA256
+
+BATCH49_CANARY_LINE = "Canary check: T = W -> compass"
+CP245_APCCS_RANGES = ((1, 140), (146, 170), (181, 245))
+CP245_EXTERNAL_RANGES = ((141, 145), (171, 180))
+CP245_APCCS_COUNT = 230
+CP245_EXTERNAL_COUNT = 15
+CP245_EXTERNAL_LABEL = "built in uclrcde"
+CP245_EXTERNAL_LONG_LABEL = "built in uclrcde (15 instructions in someonee12345678-hue/uclrcde)"
+CP245_SCORECARD_PATH = "audit/OWNER_SCORECARD_CP245.txt"
+CP245_PASS_TESTS_PATH = "audit/pass_tests_genesis.json"
+CP245_RECOVER_PATH = "RECOVER.md"
+CP245_LOCK_PATH = "audit/CP-245_LOCK.json"
+CP245_ARCHIVE_NAMES = ("APPCS_MASTER_BUILD.zip", "APCCS_MASTER_BUILD.zip")
+CP245_EVIDENCE_MAX_BYTES = 5242880
+CP245_LOCK_FILES = ("code/apccs_core.py", "code/apccs_q1_part2.py", "code/apccs_q1_part3.py",
+                    "code/apccs_genesis.py", "code/apccs_batches_41_49.py")
+# INST-0222 and INST-0223 were built as classes whose docstrings carry no marker, so
+# for those two the required classes stand in for the marker text.
+CP245_SYMBOL_ONLY_MARKERS = (222, 223)
+CP245_REQUIRED_SYMBOLS = {
+    196: ("verify_and_init_genesis_module",),
+    197: ("create_or_update_genesis_project",),
+    198: ("list_and_filter_genesis_projects",),
+    199: ("seed_sample_personal_task_manager_once",),
+    200: ("verify_cp200_apccs_only_checkpoint",),
+    201: ("manage_genesis_requirement",),
+    202: ("manage_genesis_task",),
+    203: ("manage_genesis_criteria_and_decisions",),
+    204: ("manage_genesis_defects_and_record_history",),
+    205: ("checkpoint_and_restore_genesis_project",),
+    206: ("infer_requirements_from_description",),
+    207: ("generate_proposed_category_requirements",),
+    208: ("generate_category_starter_tasks",),
+    209: ("apply_selected_plan_items_to_project",),
+    210: ("run_rule_based_planner_preview",),
+    211: ("build_static_project_website_html",),
+    212: ("verify_static_website_csp_and_safety",),
+    213: ("create_sandboxed_preview_descriptor",),
+    214: ("build_static_website_bundle",),
+    215: ("audit_static_website_against_xss_vectors",),
+    216: ("build_genesis_project_checksum_json",),
+    217: ("validate_and_parse_genesis_import_json",),
+    218: ("execute_audited_genesis_state_action",),
+    219: ("evaluate_genesis_execution_mode",),
+    220: ("verify_genesis_json_roundtrip_integrity",),
+    221: ("register_genesis_capability", "get_genesis_capability_registry"),
+    222: ("ModuleInfo", "PlannerInterface", "AiProviderInterface", "BuilderInterface",
+          "BuildAdapterInterface", "TestAdapterInterface"),
+    223: ("UnavailableEngineStub", "AiProviderStub", "RemoteBuildAdapterStub", "OnDeviceApkCompilerStub"),
+    224: ("convert_junit_xml_to_verification_json",),
+    225: ("audit_capabilities_against_verification_report",),
+    226: ("get_or_update_genesis_settings",),
+    227: ("handle_genesis_projects_api",),
+    228: ("handle_genesis_planner_and_site_api",),
+    229: ("handle_genesis_admin_api",),
+    230: ("create_genesis_enabled_control_server",),
+    231: ("render_genesis_home_and_project_modal_html", "build_genesis_ui_page_html"),
+    232: ("render_genesis_project_records_panel_html",),
+    233: ("render_genesis_planner_and_site_builder_html",),
+    234: ("render_genesis_capabilities_and_settings_html",),
+    235: ("create_genesis_ui_control_server", "run_genesis_full_vertical_smoke_test"),
+    236: ("check_optional_plugin_manifest", "probe_optional_uclrcde_plugin"),
+    237: ("mount_or_unmount_optional_uclrcde",),
+    238: ("handle_optional_legal_proxy_api",),
+    239: ("render_optional_plugin_slot_html", "build_genesis_ui_page_with_plugin_slot_html"),
+    240: ("verify_optional_legal_plugin_decoupling",),
+    241: ("verify_196_to_245_continuity",),
+    242: ("verify_cp245_four_module_coherence",),
+    243: ("generate_cp245_scorecard",),
+    244: ("synchronize_cp245_pass_tests_and_recover",),
+    245: ("lock_checkpoint_cp245",),
+}
+_BATCH49_MARKER = re.compile(r"INST-(\d{4})")
+_BATCH49_RANGE_TEXT = re.compile(r"(\d{1,4})-(\d{1,4})\Z")
+
+
+def _batch49_numbers(ranges: tuple) -> list:
+    """Inputs: (first, last) pairs. Outputs: every instruction number in them. Errors: none."""
+    return [number for first, last in ranges for number in range(first, last + 1)]
+
+
+def _batch49_range_texts(ranges: tuple) -> list:
+    """Inputs: (first, last) pairs. Outputs: texts such as "1-140". Errors: none."""
+    return ["%d-%d" % pair for pair in ranges]
+
+
+def _batch49_is_stub(node: ast.AST) -> bool:
+    """Inputs: a function node. Outputs: True if its body does nothing real. Errors: none."""
+    for decorator in node.decorator_list:
+        label = decorator.attr if isinstance(decorator, ast.Attribute) else (
+            decorator.id if isinstance(decorator, ast.Name) else "")
+        if label == "abstractmethod":
+            return False
+    body = list(node.body)
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
+            and isinstance(body[0].value.value, str):
+        body = body[1:]
+    if not body:
+        return True
+    for statement in body:
+        if isinstance(statement, ast.Pass):
+            continue
+        if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) \
+                and statement.value.value is Ellipsis:
+            continue
+        if isinstance(statement, ast.Raise) and statement.exc is not None:
+            target = statement.exc.func if isinstance(statement.exc, ast.Call) else statement.exc
+            if isinstance(target, ast.Name) and target.id == "NotImplementedError":
+                continue
+        return False
+    return True
+
+
+def verify_196_to_245_continuity(genesis_source_text: object) -> dict:
+    """INST-0241: check that every Genesis instruction from INST-0196 to INST-0245 is still in the source.
+
+    Inputs: the Python source text that holds the Genesis code (the Genesis module and the Batch 41-49
+    module together). Outputs: {"passed": True, "marker_count": 50, "symbol_count", "duplicates": []}.
+    Python's ast reads the text without running it. Each of the 50 markers must appear (INST-0222 and
+    INST-0223 are found by their classes), every required top-level function or class must exist
+    exactly once, and no function may be an empty stub. Errors: GenesisError for empty or
+    non-text input, a syntax error, a missing marker or symbol, a duplicate definition or a stub.
+    """
+    if not isinstance(genesis_source_text, str) or not genesis_source_text.strip():
+        raise GenesisError("Genesis source text must be non-empty text")
+    try:
+        tree = ast.parse(genesis_source_text)
+    except (SyntaxError, ValueError) as error:
+        raise GenesisError("Genesis source does not parse: %s" % error) from error
+    found_markers = {int(text) for text in _BATCH49_MARKER.findall(genesis_source_text)}
+    counts = {}
+    stubs = []
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            counts[node.name] = counts.get(node.name, 0) + 1
+        for item in ([node] if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                     else node.body if isinstance(node, ast.ClassDef) else []):
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and _batch49_is_stub(item):
+                stubs.append(item.name)
+    missing_markers = [number for number in sorted(CP245_REQUIRED_SYMBOLS)
+                       if number not in found_markers and number not in CP245_SYMBOL_ONLY_MARKERS]
+    missing_symbols = ["INST-%04d %s" % (number, name) for number in sorted(CP245_REQUIRED_SYMBOLS)
+                       for name in CP245_REQUIRED_SYMBOLS[number] if name not in counts]
+    duplicates = sorted(name for name, count in counts.items() if count > 1)
+    problems = []
+    if missing_markers:
+        problems.append("missing markers: " + ", ".join("INST-%04d" % number for number in missing_markers))
+    if missing_symbols:
+        problems.append("missing symbols: " + ", ".join(missing_symbols))
+    if duplicates:
+        problems.append("duplicate definitions: " + ", ".join(duplicates))
+    if stubs:
+        problems.append("stub functions: " + ", ".join(sorted(set(stubs))))
+    if problems:
+        raise GenesisError("Genesis INST-0196..0245 continuity failed; " + "; ".join(problems))
+    return {"passed": True, "marker_count": len(CP245_REQUIRED_SYMBOLS),
+            "symbol_count": sum(len(names) for names in CP245_REQUIRED_SYMBOLS.values()),
+            "duplicates": [], "stubs": []}
+
+
+def _batch49_file_digest(relative: str) -> str:
+    """Inputs: a code file name such as "code/apccs_core.py". Outputs: its SHA-256. Errors: GenesisError."""
+    path = CODE_DIR / relative.split("/", 1)[1]
+    if path.is_symlink() or not path.is_file():
+        raise GenesisError("Required APCCS file missing: " + relative)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _batch49_genesis_source() -> str:
+    """Inputs: none. Outputs: the Genesis module and the Batch 41-49 module as one text. Errors: GenesisError."""
+    parts = []
+    for name in ("apccs_genesis.py", "apccs_batches_41_49.py"):
+        path = CODE_DIR / name
+        if path.is_symlink() or not path.is_file():
+            raise GenesisError("Required APCCS file missing: code/" + name)
+        parts.append(path.read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
+def verify_cp245_four_module_coherence(vault_dir: object) -> dict:
+    """INST-0242: check the four APCCS modules still fit together at CP-245.
+
+    Inputs: an existing vault folder. Outputs: {"passed": True, "modules": {...}, "external": {...},
+    "uclrcde_imported_or_read": False}. The frozen core (INST-0001..0100), the frozen Part 2
+    (INST-0101..0140 and 0146..0150) and the frozen Part 3 (INST-0151..0170 and 0181..0195) must match
+    their recorded fingerprints and pass their own continuity checks; the Genesis code
+    (INST-0196..0245) must pass INST-0241. INST-0141..0145 and INST-0171..0180 are only recorded as
+    "built in uclrcde"; no uclrcde code is imported or read. Errors: GenesisError for a bad vault or any failed check.
+    """
+    _batch48_vault(vault_dir)
+    try:
+        from apccs_q1_part2 import verify_101_to_150_continuity
+        from apccs_q1_part3 import verify_151_to_195_continuity
+    except ImportError as error:
+        raise GenesisError("APCCS continuity validators are unavailable") from error
+    modules = {}
+    for relative, expected, ranges in (("code/apccs_core.py", CORE_SHA256, "INST-0001..0100"),
+                                       ("code/apccs_q1_part2.py", PART2_SHA256, "INST-0101..0140, 0146..0150"),
+                                       ("code/apccs_q1_part3.py", PART3_SHA256, "INST-0151..0170, 0181..0195")):
+        digest = _batch49_file_digest(relative)
+        if digest != expected:
+            raise GenesisError("Frozen APCCS file fingerprint changed: " + relative)
+        modules[relative] = {"instructions": ranges, "sha256": digest, "frozen": True, "passed": True}
+    try:
+        part2 = verify_101_to_150_continuity((CODE_DIR / "apccs_q1_part2.py").read_text(encoding="utf-8"))
+        part3 = verify_151_to_195_continuity(PART3.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise GenesisError("Frozen module continuity check failed: %s" % error) from error
+    if not part2.get("passed") or not part3.get("passed"):
+        raise GenesisError("Frozen module continuity check failed")
+    genesis = verify_196_to_245_continuity(_batch49_genesis_source())
+    modules["code/apccs_genesis.py"] = {"instructions": "INST-0196..0245", "frozen": False, "passed": True,
+                                        "continuity": genesis,
+                                        "also_in": "code/apccs_batches_41_49.py (2026-11-10 ruling)"}
+    external = {"INST-0141..0145": CP245_EXTERNAL_LABEL, "INST-0171..0180": CP245_EXTERNAL_LABEL}
+    return {"passed": True, "modules": modules, "external": external, "uclrcde_imported_or_read": False}
+
+
+def _batch49_report_numbers(report: object) -> tuple:
+    """Inputs: one parsed pass_tests file. Outputs: (passing flag, instruction numbers it covers). Errors: GenesisError."""
+    if not isinstance(report, dict):
+        raise GenesisError("A pass_tests file must hold a JSON object")
+    failed = report.get("failed_assertions", [])
+    passing = (report.get("passed") is True or report.get("status") == "PASS") and failed in ([], None)
+    numbers = set()
+    for item in report.get("instruction_coverage", []) or []:
+        if isinstance(item, int) and not isinstance(item, bool) and 1 <= item <= 1000:
+            numbers.add(item)
+    for item in report.get("apccs_instruction_ranges", []) or []:
+        match = _BATCH49_RANGE_TEXT.match(item) if isinstance(item, str) else None
+        if match is not None and 1 <= int(match.group(1)) <= int(match.group(2)) <= 1000:
+            numbers.update(range(int(match.group(1)), int(match.group(2)) + 1))
+    return passing, numbers
+
+
+def _batch49_evidence(vault_dir: object, reports: object = None) -> dict:
+    """Inputs: a vault folder and optional parsed reports. Outputs: {"passing", "failing", "files"}. Errors: GenesisError.
+
+    Reads audit/pass_tests*.json inside the vault, or uses the parsed reports (a list of dictionaries)
+    when they are given. Only the 230 instructions APCCS builds are counted.
+    """
+    vault = _batch48_vault(vault_dir)
+    audit = vault / "audit"
+    passing, failing, names = set(), set(), []
+    if reports is not None:
+        if not isinstance(reports, (list, tuple)):
+            raise GenesisError("Evidence reports must be a list of pass_tests dictionaries")
+        for index, report in enumerate(reports):
+            ok, numbers = _batch49_report_numbers(report)
+            (passing if ok else failing).update(numbers)
+            names.append("report-%d" % (index + 1))
+    elif audit.is_dir() and not audit.is_symlink():
+        for path in sorted(audit.glob("pass_tests*.json")):
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > CP245_EVIDENCE_MAX_BYTES:
+                raise GenesisError("Unsafe or oversized evidence file: " + path.name)
+            try:
+                report = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise GenesisError("Evidence file is unreadable: " + path.name) from error
+            ok, numbers = _batch49_report_numbers(report)
+            (passing if ok else failing).update(numbers)
+            names.append(path.name)
+    wanted = set(_batch49_numbers(CP245_APCCS_RANGES))
+    failing &= wanted
+    return {"passing": (passing & wanted) - failing, "failing": failing, "files": names}
+
+
+def _batch49_ensure_schema(db: sqlite3.Connection) -> None:
+    """Inputs: open database. Outputs: the CP-245 record table exists. Errors: sqlite3.Error."""
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS cp245_records (
+            name TEXT PRIMARY KEY,
+            content TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            recorded_at TEXT NOT NULL
+        );
+    """)
+
+
+def _batch49_keep(db_path: object, records: dict) -> bool:
+    """Inputs: a database path or None, and {name: text}. Outputs: True if kept. Errors: GenesisError."""
+    if db_path is None:
+        return False
+    with _batch48_db(db_path) as db:
+        _batch49_ensure_schema(db)
+        for name, content in records.items():
+            db.execute("INSERT OR REPLACE INTO cp245_records (name, content, sha256, recorded_at) VALUES (?, ?, ?, ?)",
+                       (name, content, hashlib.sha256(content.encode("utf-8")).hexdigest(), _batch41_now()))
+    return True
+
+
+def generate_cp245_scorecard(vault_dir: object, db_path: object = None, reports: object = None) -> dict:
+    """INST-0243: build the plain-English CP-245 owner scorecard for instructions 1..245.
+
+    Inputs: an existing vault folder holding audit/pass_tests*.json files (or, instead, a list of parsed
+    pass_tests dictionaries in reports), and an optional Genesis database path. Outputs: {"relative_path", "text", "sha256", "passing", "failing", "apccs_count": 230,
+    "external_count": 15, "stored"}. Only the 230 instructions built in APCCS are checked and counted;
+    INST-0141..0145 and INST-0171..0180 are listed as built in uclrcde. The text for
+    audit/OWNER_SCORECARD_CP245.txt is returned, and kept in the database when a path is given; no
+    file is written. Errors: GenesisError for a bad vault, unreadable evidence or a bad database.
+    """
+    evidence = _batch49_evidence(vault_dir, reports)
+    rows = ["INSTRUCTIONS 1-245 | CP-245 scorecard",
+            "APCCS-built instructions checked: %d (%s)" % (CP245_APCCS_COUNT, ", ".join(_batch49_range_texts(CP245_APCCS_RANGES))),
+            "Instruction | Result"]
+    for number in _batch49_numbers(CP245_APCCS_RANGES):
+        if number in evidence["passing"]:
+            result = "GREEN - passing evidence"
+        elif number in evidence["failing"]:
+            result = "RED - failing evidence"
+        else:
+            result = "GRAY - not verified"
+        rows.append("%03d | %s" % (number, result))
+    rows.append("INST-0141..0145 (Batch 29) | " + CP245_EXTERNAL_LONG_LABEL)
+    rows.append("INST-0171..0180 (Batches 35-36) | " + CP245_EXTERNAL_LONG_LABEL)
+    rows.append("Passing: %d of %d" % (len(evidence["passing"]), CP245_APCCS_COUNT))
+    rows.append("Failing: %d" % len(evidence["failing"]))
+    text = "\n".join(rows) + "\n"
+    stored = _batch49_keep(db_path, {CP245_SCORECARD_PATH: text})
+    return {"relative_path": CP245_SCORECARD_PATH, "text": text, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "passing": len(evidence["passing"]), "failing": len(evidence["failing"]),
+            "apccs_count": CP245_APCCS_COUNT, "external_count": CP245_EXTERNAL_COUNT, "stored": stored}
+
+
+def _batch49_require_all_passing(vault_dir: object, reports: object = None) -> list:
+    """Inputs: a vault folder. Outputs: the 230 passing numbers. Errors: GenesisError if any is missing or failing."""
+    evidence = _batch49_evidence(vault_dir, reports)
+    wanted = _batch49_numbers(CP245_APCCS_RANGES)
+    bad = [number for number in wanted if number not in evidence["passing"]]
+    if bad:
+        raise GenesisError("All %d APCCS instructions need passing evidence; missing or failing: %s%s" % (
+            CP245_APCCS_COUNT, ", ".join(str(number) for number in bad[:10]), " ..." if len(bad) > 10 else ""))
+    return wanted
+
+
+def _batch49_vault_recover_text(vault_dir: object) -> str:
+    """Inputs: a vault folder. Outputs: its RECOVER.md text, or a fresh heading. Errors: GenesisError."""
+    path = _batch48_vault(vault_dir) / CP245_RECOVER_PATH
+    if not path.exists():
+        return "# APCCS Recovery\n"
+    if path.is_symlink() or not path.is_file():
+        raise GenesisError("RECOVER.md must be a regular file")
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise GenesisError("RECOVER.md is unreadable") from error
+
+
+def synchronize_cp245_pass_tests_and_recover(vault_dir: object, completed_num: object = 245,
+                                             accepted_num: object = 240,
+                                             canary_line: object = "Canary check: T = W -> compass",
+                                             db_path: object = None, reports: object = None,
+                                             old_recover_text: object = None) -> dict:
+    """INST-0244: build the CP-245 pass_tests_genesis record and the matching RECOVER.md text.
+
+    Inputs: an existing vault folder with passing evidence, completed_num (must be 245), accepted_num
+    (1 to completed_num), the Batch 49 canary line, an optional Genesis database path, optional parsed
+    pass_tests dictionaries in reports, and optional old RECOVER.md text (read from the vault when None). Outputs:
+    {"pass_tests_path", "pass_tests_text", "recover_path", "recover_text", "apccs_recorded": 230,
+    "external_recorded": 15, "pending_labels": 0, "stored"}. All 230 APCCS instructions are recorded as
+    passing, INST-0141..0145 and INST-0171..0180 as "built in uclrcde", and every stale PENDING label in
+    the old RECOVER.md is settled. The two texts are returned and kept in the database; no file is written.
+    Errors: GenesisError for a bad vault, bad numbers, a wrong canary line, or any APCCS instruction without passing evidence.
+    """
+    for value in (completed_num, accepted_num):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise GenesisError("Checkpoint numbers must be whole numbers")
+    if completed_num != 245 or not 1 <= accepted_num <= completed_num:
+        raise GenesisError("CP-245 needs completed_num 245 and an accepted_num from 1 to 245")
+    if canary_line != BATCH49_CANARY_LINE:
+        raise GenesisError("Canary line does not match Batch 49")
+    covered = _batch49_require_all_passing(vault_dir, reports)
+    report = {"checkpoint": "CP-245", "passed": True, "failed_assertions": [], "completed_instruction": completed_num,
+              "accepted_instruction": accepted_num, "canary": canary_line, "apccs_built_count": CP245_APCCS_COUNT,
+              "apccs_instruction_ranges": _batch49_range_texts(CP245_APCCS_RANGES), "instruction_coverage": covered,
+              "pending_labels": 0, "external_uclrcde_count": CP245_EXTERNAL_COUNT,
+              "external_instruction_ranges": _batch49_range_texts(CP245_EXTERNAL_RANGES),
+              "external_ranges_status": CP245_EXTERNAL_LABEL, "uclrcde_imported_or_read": False}
+    report_text = json.dumps(report, sort_keys=True, indent=2) + "\n"
+    kept = []
+    if old_recover_text is not None and not isinstance(old_recover_text, str):
+        raise GenesisError("Old RECOVER.md text must be text")
+    old_text = old_recover_text if old_recover_text is not None else _batch49_vault_recover_text(vault_dir)
+    for line in old_text.splitlines():
+        if "PENDING" in line:
+            if ":" not in line:
+                continue
+            line = line.split(":", 1)[0] + ": SETTLED at CP-245"
+        kept.append(line)
+    text = "\n".join(kept).rstrip("\n") + "\n"
+    fields = {"LAST_COMPLETED_INSTRUCTION": "%d of 1,000" % completed_num,
+              "ACCEPTED_INSTRUCTION": "%d of 1,000" % accepted_num,
+              "ACTIVE_CANARY": canary_line,
+              "APCCS_BUILT_INSTRUCTIONS": "%d (%s)" % (CP245_APCCS_COUNT, ", ".join(_batch49_range_texts(CP245_APCCS_RANGES))),
+              "BUILT_IN_UCLRCDE": "%s (%d instructions: %s)" % (
+                  CP245_EXTERNAL_LABEL, CP245_EXTERNAL_COUNT, ", ".join(_batch49_range_texts(CP245_EXTERNAL_RANGES)))}
+    for key, value in fields.items():
+        if re.search("^" + key + ":", text, re.MULTILINE):
+            text = re.sub("^" + key + ":.*$", lambda _match, key=key, value=value: key + ": " + value, text,
+                          flags=re.MULTILINE)
+        else:
+            text += key + ": " + value + "\n"
+    if "PENDING" in text or "PENDING" in report_text:
+        raise GenesisError("A stale PENDING label is left")
+    stored = _batch49_keep(db_path, {CP245_PASS_TESTS_PATH: report_text, CP245_RECOVER_PATH: text})
+    return {"pass_tests_path": CP245_PASS_TESTS_PATH, "pass_tests_text": report_text,
+            "recover_path": CP245_RECOVER_PATH, "recover_text": text,
+            "apccs_recorded": CP245_APCCS_COUNT, "external_recorded": CP245_EXTERNAL_COUNT,
+            "pending_labels": 0, "stored": stored}
+
+
+def lock_checkpoint_cp245(vault_dir: object, db_path: object = None, reports: object = None) -> dict:
+    """INST-0245: build the CP-245 checkpoint lock after proving all 230 APCCS instructions pass.
+
+    Inputs: an existing vault folder with passing evidence (or parsed pass_tests dictionaries in
+    reports), and an optional Genesis database path. Outputs: {"lock_path", "lock", "lock_text", "archives", "stored", "written": False}. The lock lists
+    the 230 APCCS instructions, records INST-0141..0145 and INST-0171..0180 (15 instructions) as
+    "built in uclrcde" without reading uclrcde, and carries each code file's SHA-256. "archives" lists, for
+    APPCS_MASTER_BUILD.zip and APCCS_MASTER_BUILD.zip, each member name with its SHA-256; no archive and no
+    file is written, and the lock text is kept in the database when a path is given. Errors: GenesisError
+    if the four modules do not fit together, or any of the 230 instructions is missing or failing.
+    """
+    coherence = verify_cp245_four_module_coherence(vault_dir)
+    covered = _batch49_require_all_passing(vault_dir, reports)
+    files = {relative: _batch49_file_digest(relative) for relative in CP245_LOCK_FILES}
+    lock = {"checkpoint": "CP-245", "status": "LOCKED", "apccs_built_count": len(covered),
+            "apccs_instruction_ranges": _batch49_range_texts(CP245_APCCS_RANGES),
+            "external_uclrcde_count": CP245_EXTERNAL_COUNT,
+            "external_instruction_ranges": _batch49_range_texts(CP245_EXTERNAL_RANGES),
+            "external_ranges_status": CP245_EXTERNAL_LABEL, "files_sha256": files,
+            "modules_checked": sorted(coherence["modules"]), "uclrcde_imported_or_read": False,
+            "canary": BATCH49_CANARY_LINE}
+    lock_text = json.dumps(lock, sort_keys=True, indent=2) + "\n"
+    members = dict(files)
+    members[CP245_LOCK_PATH] = hashlib.sha256(lock_text.encode("utf-8")).hexdigest()
+    archives = {name: dict(members) for name in CP245_ARCHIVE_NAMES}
+    stored = _batch49_keep(db_path, {CP245_LOCK_PATH: lock_text,
+                                     "archives_cp245": json.dumps(archives, sort_keys=True, indent=2) + "\n"})
+    return {"lock_path": CP245_LOCK_PATH, "lock": lock, "lock_text": lock_text, "archives": archives,
+            "stored": stored, "written": False}
