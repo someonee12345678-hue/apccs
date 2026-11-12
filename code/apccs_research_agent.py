@@ -309,3 +309,312 @@ def run_research_l0(brief: dict, options: list, settings: dict) -> dict:
             "ROUTE": [], "NEW_TO_YOU": new_to_you,
             "WINNERS": sorted(candidates, key=lambda each: each["name"])[:3],
             "RISKS": [], "ASK_NEXT": [], "REJECTS": rejects, "UNKNOWN": unknown, "ROUNDS": []}
+
+
+# ---- Batch RA2: research agent loop (runner, 4-part score and stop rules) ----
+
+import copy  # noqa: E402
+import re  # noqa: E402
+import sqlite3  # noqa: E402
+from datetime import datetime  # noqa: E402
+from typing import Callable  # noqa: E402
+
+CRITIC_ROLES = ("Fact Critic", "Gap Critic")
+REPLY_STATUSES = ("fixed", "answered", "not_answered")
+SCORE_PARTS = ("PROOF", "NEW", "FIT", "ROUTE")
+ACTIONS = ("CONTINUE", "CHANGE_ANGLE", "STOP")
+AGENT_CODES = ("GE", "MU", "CG", "CL", "MI")
+_ANSWER_LISTS = ("claims", "findings", "steps")
+_TIME_START = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+
+
+def _checked_items(items: object, name: str, needs_way: bool) -> list[dict]:
+    """Inputs: a list of claims, findings or steps, its name and whether a way is needed. Outputs: stripped copies. Errors: RA_ROUND_SHAPE."""
+    if not isinstance(items, list):
+        raise ValueError("RA_ROUND_SHAPE: answer " + name + " must be a list")
+    fields = ("text", "way", "proof_link", "proof_kind") if needs_way else ("text", "proof_link", "proof_kind")
+    kept = []
+    for item in items:
+        if not isinstance(item, dict) or any(not isinstance(item.get(field), str) for field in fields):
+            raise ValueError("RA_ROUND_SHAPE: each item in " + name + " needs " + ", ".join(fields) + " as text")
+        copied = dict(item)
+        for field in fields:
+            copied[field] = item[field].strip()
+        kept.append(copied)
+    return kept
+
+
+def _checked_objection(objection: object) -> dict:
+    """Inputs: one objection. Outputs: a stripped copy. Errors: RA_OBJECTION_SHAPE."""
+    if not isinstance(objection, dict) or objection.get("critic_role") not in CRITIC_ROLES:
+        raise ValueError("RA_OBJECTION_SHAPE: critic_role must be Fact Critic or Gap Critic")
+    copied = dict(objection)
+    for field in ("claim", "problem", "proof"):
+        if not _filled(objection.get(field)):
+            raise ValueError("RA_OBJECTION_SHAPE: an objection needs a CLAIM, a PROBLEM and a PROOF")
+        copied[field] = objection[field].strip()
+    return copied
+
+
+def _checked_reply(reply: object) -> dict:
+    """Inputs: one reply. Outputs: a stripped copy. Errors: RA_REPLY_SHAPE."""
+    if not isinstance(reply, dict) or reply.get("status") not in REPLY_STATUSES:
+        raise ValueError("RA_REPLY_SHAPE: status must be fixed, answered or not_answered")
+    if not _is_int(reply.get("objection_index")) or reply["objection_index"] < 0:
+        raise ValueError("RA_REPLY_SHAPE: objection_index must be a whole number of 0 or more")
+    if not isinstance(reply.get("text"), str):
+        raise ValueError("RA_REPLY_SHAPE: a reply needs text")
+    copied = dict(reply)
+    copied["text"] = reply["text"].strip()
+    return copied
+
+
+def check_round(round_dict: dict) -> dict:
+    """Check that one research round has the fixed shape software can score (RA2-01).
+
+    Inputs: round_dict {round (whole number of 1 or more), answer {claims, findings, steps}, objections
+    [{critic_role, claim, problem, proof}], replies [{objection_index, status, text}], spent (number of 0 or more)};
+    claims and findings hold {text, proof_link, proof_kind}, steps hold {text, way, proof_link, proof_kind}.
+    Outputs: a copy of the round with every text field stripped; any other key (such as scores) is kept as it is.
+    Errors: RA_ROUND_SHAPE (missing or wrong-type field), RA_OBJECTION_SHAPE (blank CLAIM, PROBLEM or PROOF,
+    unknown role), RA_REPLY_SHAPE (unknown status, or a negative index).
+    """
+    if not isinstance(round_dict, dict) or not _is_int(round_dict.get("round")) or round_dict["round"] < 1:
+        raise ValueError("RA_ROUND_SHAPE: a round needs a whole round number of 1 or more")
+    answer = round_dict.get("answer")
+    if not isinstance(answer, dict):
+        raise ValueError("RA_ROUND_SHAPE: a round needs an answer")
+    if not isinstance(round_dict.get("objections"), list) or not isinstance(round_dict.get("replies"), list):
+        raise ValueError("RA_ROUND_SHAPE: a round needs objections and replies lists")
+    if not _is_number(round_dict.get("spent")) or round_dict["spent"] < 0:
+        raise ValueError("RA_ROUND_SHAPE: spent must be a number of 0 or more")
+    checked = dict(round_dict)
+    checked["answer"] = dict(answer)
+    for name in _ANSWER_LISTS:
+        checked["answer"][name] = _checked_items(answer.get(name), name, name == "steps")
+    checked["objections"] = [_checked_objection(each) for each in round_dict["objections"]]
+    checked["replies"] = [_checked_reply(each) for each in round_dict["replies"]]
+    return checked
+
+
+def _proven(item: dict, trusted: list) -> bool:
+    """Inputs: a claim, finding or step and the trusted proof kinds. Outputs: True for trusted https:// proof. Errors: none."""
+    link = item["proof_link"]
+    return link.startswith("https://") and len(link) > len("https://") and item["proof_kind"] in trusted
+
+
+def _ratio(count: int, total: int) -> float:
+    """Inputs: a count and a total. Outputs: count divided by total rounded to 4 places, 0.0 for no total. Errors: none."""
+    return round(count / total, 4) if total else 0.0
+
+
+def score_round(round_dict: dict, brief: dict, settings: dict, option: dict) -> dict:
+    """Count the four-part score of one round; software only, nothing is judged (RA2-02).
+
+    Inputs: round_dict as in check_round; brief from build_research_brief (its KNOWN list is used); settings as in
+    load_research_settings; option as in check_fit.
+    Outputs: {PROOF, NEW, FIT, ROUTE}: PROOF is claims with trusted https:// proof divided by all claims; NEW is
+    the count of findings with that proof that are not in KNOWN; FIT is check_fit's fit; ROUTE is steps with a
+    non-blank way and that proof divided by all steps. A part with nothing to count is 0.0 (NEW is 0).
+    Errors: everything check_round refuses, RA_BRIEF_FIELD_MISSING, RA_OPTION_INCOMPLETE, RA_BAD_SETTINGS.
+    """
+    checked = check_round(round_dict)
+    if not isinstance(brief, dict):
+        raise ValueError("RA_BRIEF_FIELD_MISSING: the brief must be a dict")
+    known = _checked_known(brief.get("KNOWN"))
+    clean = _checked_settings(settings)
+    trusted = clean["trusted_proof_kinds"]
+    claims, findings, steps = (checked["answer"][name] for name in _ANSWER_LISTS)
+    new_count = sum(1 for each in findings
+                    if _proven(each, trusted) and not is_known(each["text"], each["proof_link"], known))
+    routed = sum(1 for each in steps if each["way"] and _proven(each, trusted))
+    return {"PROOF": _ratio(sum(1 for each in claims if _proven(each, trusted)), len(claims)),
+            "NEW": new_count,
+            "FIT": round(check_fit(option, clean)["fit"], 4),
+            "ROUTE": _ratio(routed, len(steps))}
+
+
+def score_rose(before: dict, after: dict) -> bool:
+    """Say whether the score rose between two rounds (RA2-02 helper).
+
+    Inputs: before and after, score dicts with PROOF, NEW, FIT and ROUTE.
+    Outputs: True when no part fell and at least one part rose.
+    Errors: RA_ROUND_SHAPE (a score is missing a part).
+    """
+    for scores in (before, after):
+        if not isinstance(scores, dict) or any(not _is_number(scores.get(part)) for part in SCORE_PARTS):
+            raise ValueError("RA_ROUND_SHAPE: a score needs numbers for PROOF, NEW, FIT and ROUTE")
+    return (all(after[part] >= before[part] for part in SCORE_PARTS)
+            and any(after[part] > before[part] for part in SCORE_PARTS))
+
+
+def _answered(previous: dict, current: dict) -> bool:
+    """Inputs: the round before and the last round. Outputs: True when every earlier objection got a fixed or answered reply. Errors: none."""
+    done = {each["objection_index"] for each in current["replies"] if each["status"] in ("fixed", "answered")}
+    return all(index in done for index in range(len(previous["objections"])))
+
+
+def decide_next_step(history: list, settings: dict, angle_changed: bool) -> dict:
+    """Let software decide whether the loop goes on, changes angle or stops (RA2-03).
+
+    Inputs: history, the checked rounds so far, each with its score added under "scores"; settings as in
+    load_research_settings; angle_changed, True once the angle has already been changed.
+    Outputs: {action, reason}, the first rule that matches: STOP ROUND_CAP (rounds at round_cap); STOP BUDGET_CAP
+    (total spent at or over budget_cap); STOP NO_RISE (from round 2, the score did not rise); STOP ONE_UP_FAILED
+    (one_up on, from round 2, an objection of the round before is not fixed or answered, or NEW is 0);
+    CHANGE_ANGLE (NEW is 0 and the angle was not yet changed) or STOP NOTHING_NEW; otherwise CONTINUE ALL_CLEAR.
+    Errors: RA_EMPTY_HISTORY, RA_REPLY_SHAPE (an index names no objection of the round before), and the
+    refusals of check_round.
+    """
+    if not isinstance(history, list) or not history:
+        raise ValueError("RA_EMPTY_HISTORY: give at least one checked round")
+    clean = _checked_settings(settings)
+    rounds = [check_round(each) for each in history]
+    for position, each in enumerate(rounds):
+        scores = each.get("scores")
+        if not isinstance(scores, dict) or any(not _is_number(scores.get(part)) for part in SCORE_PARTS):
+            raise ValueError("RA_ROUND_SHAPE: every round needs its scores")
+        earlier = len(rounds[position - 1]["objections"]) if position else 0
+        if any(reply["objection_index"] >= earlier for reply in each["replies"]):
+            raise ValueError("RA_REPLY_SHAPE: a reply names no objection of the round before")
+    last = rounds[-1]
+    if len(rounds) >= clean["round_cap"]:
+        return {"action": "STOP", "reason": "ROUND_CAP"}
+    if sum(each["spent"] for each in rounds) >= clean["budget_cap"]:
+        return {"action": "STOP", "reason": "BUDGET_CAP"}
+    if len(rounds) >= 2 and not score_rose(rounds[-2]["scores"], last["scores"]):
+        return {"action": "STOP", "reason": "NO_RISE"}
+    if clean["one_up"] and len(rounds) >= 2 and (not _answered(rounds[-2], last) or last["scores"]["NEW"] == 0):
+        return {"action": "STOP", "reason": "ONE_UP_FAILED"}
+    if last["scores"]["NEW"] == 0:
+        return {"action": "STOP" if angle_changed else "CHANGE_ANGLE", "reason": "NOTHING_NEW"}
+    return {"action": "CONTINUE", "reason": "ALL_CLEAR"}
+
+
+def _critic_view(answer: dict) -> dict:
+    """Inputs: an answer. Outputs: a deep copy of only its claims, findings and steps. Errors: none."""
+    return {name: copy.deepcopy(answer[name]) for name in _ANSWER_LISTS}
+
+
+def run_research_loop(brief: dict, settings: dict, option: dict, finder_fn: Callable, critic_fns: dict) -> dict:
+    """Run the research loop end to end with injected helpers and no AI (RA2-04).
+
+    Inputs: brief, settings and option as in score_round (mode single or gauntlet); finder_fn(brief, last_objections)
+    returning {answer, replies, spent}; critic_fns, a dict of critic role to a function that takes the blind view
+    of the answer (only claims, findings and steps) and returns a list of objections. In single mode every critic
+    is called each round; in gauntlet mode critics are called in dict order and only while every earlier critic
+    in that round returned no objections. After CHANGE_ANGLE the next finder call gets a brief copy with
+    "change_angle": true.
+    Outputs: {rounds [{round, scores, action, reason}], stop_reason, final}; final has the RA1-05 shape with ROUTE
+    taken from the last round's steps and ROUNDS filled.
+    Errors: RA_BAD_MODE (swarm), RA_BAD_CRITICS, and the refusals of check_round, score_round and decide_next_step.
+    """
+    clean = _checked_settings(settings)
+    if clean["mode"] == "swarm":
+        raise ValueError("RA_BAD_MODE: the loop runs single or gauntlet, not swarm")
+    if (not isinstance(critic_fns, dict) or not critic_fns
+            or any(role not in CRITIC_ROLES or not callable(critic) for role, critic in critic_fns.items())):
+        raise ValueError("RA_BAD_CRITICS: critic_fns must map Fact Critic or Gap Critic to functions")
+    if not callable(finder_fn):
+        raise ValueError("RA_ROUND_SHAPE: finder_fn must be a function")
+    history, summaries = [], []
+    last_objections: list = []
+    angle_changed = False
+    stop_reason = ""
+    while not stop_reason:
+        brief_copy = copy.deepcopy(brief)
+        if angle_changed:
+            brief_copy["change_angle"] = True
+        found = finder_fn(brief_copy, copy.deepcopy(last_objections))
+        if not isinstance(found, dict) or any(key not in found for key in ("answer", "replies", "spent")):
+            raise ValueError("RA_ROUND_SHAPE: the finder must return answer, replies and spent")
+        draft = {"round": len(history) + 1, "answer": found["answer"], "objections": [],
+                 "replies": found["replies"], "spent": found["spent"]}
+        check_round(draft)
+        view = _critic_view(draft["answer"])
+        for _role, critic in critic_fns.items():
+            raised = critic(copy.deepcopy(view))
+            if not isinstance(raised, list):
+                raise ValueError("RA_OBJECTION_SHAPE: a critic must return a list of objections")
+            draft["objections"].extend(raised)
+            if raised and clean["mode"] == "gauntlet":
+                break
+        checked = check_round(draft)
+        checked["scores"] = score_round(checked, brief, clean, option)
+        history.append(checked)
+        decision = decide_next_step(history, clean, angle_changed)
+        summaries.append({"round": checked["round"], "scores": checked["scores"],
+                          "action": decision["action"], "reason": decision["reason"]})
+        last_objections = checked["objections"]
+        angle_changed = angle_changed or decision["action"] == "CHANGE_ANGLE"
+        if decision["action"] == "STOP":
+            stop_reason = decision["reason"]
+    final = run_research_l0(brief, [option], clean)
+    final["ROUTE"] = [each["text"] for each in history[-1]["answer"]["steps"]]
+    final["ROUNDS"] = copy.deepcopy(summaries)
+    return {"rounds": summaries, "stop_reason": stop_reason, "final": final}
+
+
+def _checked_round_result(round_result: object) -> dict:
+    """Inputs: one rounds item from run_research_loop. Outputs: it, checked. Errors: RA_ROUND_SHAPE."""
+    if (not isinstance(round_result, dict) or not _is_int(round_result.get("round")) or round_result["round"] < 1
+            or round_result.get("action") not in ACTIONS or not _filled(round_result.get("reason"))):
+        raise ValueError("RA_ROUND_SHAPE: a round result needs round, scores, action and reason")
+    scores = round_result.get("scores")
+    if not isinstance(scores, dict) or any(not _is_number(scores.get(part)) for part in SCORE_PARTS):
+        raise ValueError("RA_ROUND_SHAPE: a round result needs numbers for PROOF, NEW, FIT and ROUTE")
+    return round_result
+
+
+def record_research_round(conn: sqlite3.Connection, run_id: str, round_result: dict, agent_code: str,
+                          recorded_at: str) -> dict:
+    """Add one research round to the table research_rounds and build its 8-line Log v2 text (RA2-05).
+
+    Inputs: conn, an open sqlite3 connection (never opened or closed here); run_id, non-blank text; round_result,
+    one rounds item from run_research_loop {round, scores, action, reason}; agent_code, one of GE, MU, CG, CL,
+    MI; recorded_at, ISO 8601 text with a time-zone offset (its digits are copied into the ID as written).
+    Outputs: {row, log_text}; row is {run_id, round, scores_json, action, reason, recorded_at}; log_text has the
+    lines ID, ASK, DID, RESULT (G for CONTINUE or CHANGE_ANGLE, Y for STOP), CHANGED, SOURCE, OPEN and NEXT.
+    The caller adds the text to the log chain. No row is ever changed or deleted.
+    Errors: RA_BAD_DB (conn is not a sqlite3 connection), RA_BAD_AGENT, RA_BAD_TIME (no offset), RA_ROUND_SHAPE,
+    RA_DUPLICATE_ROUND (the same run and round is already stored).
+    """
+    if not isinstance(conn, sqlite3.Connection):
+        raise ValueError("RA_BAD_DB: conn must be an open sqlite3 connection")
+    if agent_code not in AGENT_CODES:
+        raise ValueError("RA_BAD_AGENT: agent_code must be GE, MU, CG, CL or MI")
+    stamp_ok = isinstance(recorded_at, str) and _TIME_START.match(recorded_at) is not None
+    if stamp_ok:
+        try:
+            stamp_ok = datetime.fromisoformat(recorded_at).tzinfo is not None
+        except ValueError:
+            stamp_ok = False
+    if not stamp_ok:
+        raise ValueError("RA_BAD_TIME: recorded_at must be ISO 8601 with a time-zone offset")
+    if not _filled(run_id):
+        raise ValueError("RA_ROUND_SHAPE: run_id must not be blank")
+    result = _checked_round_result(round_result)
+    conn.execute("CREATE TABLE IF NOT EXISTS research_rounds (run_id TEXT NOT NULL, round INTEGER NOT NULL, "
+                 "scores_json TEXT NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL, "
+                 "recorded_at TEXT NOT NULL, PRIMARY KEY (run_id, round))")
+    if conn.execute("SELECT 1 FROM research_rounds WHERE run_id = ? AND round = ?",
+                    (run_id, result["round"])).fetchone() is not None:
+        raise ValueError("RA_DUPLICATE_ROUND: run " + run_id + " round " + str(result["round"]) + " is already stored")
+    row = {"run_id": run_id, "round": result["round"], "scores_json": json.dumps(result["scores"], sort_keys=True),
+           "action": result["action"], "reason": result["reason"], "recorded_at": recorded_at}
+    conn.execute("INSERT INTO research_rounds (run_id, round, scores_json, action, reason, recorded_at) "
+                 "VALUES (?, ?, ?, ?, ?, ?)",
+                 (row["run_id"], row["round"], row["scores_json"], row["action"], row["reason"], row["recorded_at"]))
+    conn.commit()
+    scores, number = result["scores"], str(result["round"])
+    lines = ["ID: " + recorded_at[0:4] + recorded_at[5:7] + recorded_at[8:10] + "-" + recorded_at[11:13]
+             + recorded_at[14:16] + "-" + agent_code,
+             "ASK: research run " + run_id + " round " + number,
+             "DID: scored round " + number + " (PROOF " + str(scores["PROOF"]) + ", NEW " + str(scores["NEW"])
+             + ", FIT " + str(scores["FIT"]) + ", ROUTE " + str(scores["ROUTE"]) + ")",
+             "RESULT: " + ("Y" if result["action"] == "STOP" else "G"),
+             "CHANGED: none",
+             "SOURCE: none",
+             "OPEN: " + ("none" if result["action"] == "STOP" else "round " + str(result["round"] + 1)),
+             "NEXT: " + result["action"] + " (" + result["reason"] + ")"]
+    return {"row": row, "log_text": "\n".join(lines)}
