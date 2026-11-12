@@ -3867,3 +3867,1447 @@ End of the Batch 43 second ruling.
 Writing real files (an `.html` page, the audit files, the zips) waits for a later Owner-tap change to the gate.
 
 End of the Batches 44–49 gate ruling.
+
+## Wording for FP1, PH1, RA1–RA3 and O1–O7 (Claude, 2026-11-12)
+
+Written by Claude (architect) on 2026-11-12, America/Vancouver. The Owner chose this at 12:52: "Claude words it" (ledger Q039). It replaces waiting for Gemini's reply to `ORACLE_AND_A_WORDING_BRIEF_2026-11-10`.
+
+**Status of every batch below: NOT ready to build.** A separate Claude run audits this wording first. A later add-only section marks each batch ready, with any corrections. Until then no builder builds any of them.
+
+**Sources read for this wording (2026-11-12):**
+
+- Drive › Claude 2: `WHOLE_PRODUCT_PLAN_v1_2026-11-04` (Part 2 rules, Part 4 template, Part 6 Track A lines A6, A8, A10–A12); `ORACLE_AND_A_WORDING_BRIEF_2026-11-10`; `PROJECT_RESEARCH_TIER_ON_HOLD_ADDENDUM_3_2026-11-04` (T8); `CLEAN_START_PLAN_v0.1_2026-11-04` (section 3, Focus Pack and slop gate); `FOCUS_CARD_RESEARCH_AGENT_v0.1_2026-11-04` and its `ADDENDUM_1_MODES`; `SESSION_GUARD_RESEARCH_A6_2026-11-05`; `HANDOFF_ADDENDUM_6_PILOT_REPLAY_OPEN_STANDARDS_2026-11-05`; `FEATURE_LEDGER_v2_2026-11-05`; `APCCS_TOOLBOX_LIBRARY_v2` (cards C10, C13, C15, C16); `RESEARCH_RESULTS_GEMINI_COMPACTION_AND_GUI_2026-11-04` (result 1, item 2, structured handoff).
+- Drive › log folder: `CLAUDE_AUDIT_LOG_ENTRY_0329` (Gemini's Oracle blueprint, word for word, and Claude's three changes).
+- Claude Doc "Oracle engine — software spec for the builders (draft)" (parts O1–O7, case-spine fields, software vs AI, tests list, open questions).
+- Repositories at `apccs` main `4f8c8a9` and `uclrcde` main `afc5f57`: both `AGENTS.md`, apccs `BUILDER_RUNBOOK.md`, `plan/RULEBOOK.md`, `plan/QUESTION_LEDGER.csv` (Q036–Q038), the end of this file, and every public function in `uclrcde/code/*.py`.
+
+### Rules for all 12 batches (read with each batch)
+
+1. **Readability gate (Q036–Q038).** Each batch's code goes in the NEW files named in its "Files" line. A later batch of the same group adds to the end of the file the first batch created; its test class goes just before the final `if __name__ == "__main__":` block. No older file is touched.
+2. **Names.** No function this wording names, and no helper, may start with `export`, `write_`, `save`, `persist`, `serialize` or `to_`, or be named `dump`. Never call such a function either (use `json.dumps`, never `json.dump`).
+3. **No file writes.** No code writes a file anywhere. Results are returned, or stored in SQLite at the `db_path` the caller gives. Files are only read. Tests build inputs in memory; a test may create a SQLite file or a read-only sample file only inside `tempfile.TemporaryDirectory()`.
+4. **Docstrings and hints.** Every module and public function has a docstring with `Inputs:`, `Outputs:` and `Errors:`, plus type hints on every parameter and the return value. Times are ISO 8601 with an offset; hashes are SHA-256 hex.
+5. **Standard library only. Made-up data only. No network, no keys, no AI model calls** in code or tests. Where a batch needs a model or a person, it takes an injected function that tests replace with a stub.
+6. **Refusals** raise `ValueError` whose message starts with the code shown (for example `FP_BAD_PATH: ...`). A function that checks something returns its result; it never edits what it checks.
+7. **SQLite tables** are created with `CREATE TABLE IF NOT EXISTS` and are add-only: no function updates or deletes a row.
+8. **Tests:** each instruction has at least the normal-use test and the bad-input test named below. Each test class prints its batch's canary line once.
+9. **APCCS research agent (RA1–RA3)** imports nothing from any `apccs_` or `uclrcde_` module (Focus Card R6, plan Part 1). **Track O** follows uclrcde `AGENTS.md`: never imports APCCS code, information not advice, and opens its database only through `uclrcde_core.open_uclrcde_db`. Results shown to a person carry `uclrcde_core.LEGAL_INFORMATION_NOTICE`.
+10. **Reuse, never rebuild** (Track O): `build_prompt_package`, `check_answer`, `save_verified_note`, `list_verified_notes`, `ask_twice_order_swapped`, `is_prediction_request`, `find_canadian_citations`, `check_citations_in_library`, `source_notice_for`, the BC currency functions and `check_bc_licence_release` stay as they are in `code/uclrcde_oracle.py`. Track O calls `is_prediction_request`, `find_canadian_citations`, `check_citations_in_library`, `KNOWN_COURT_CODES`, and from `code/uclrcde_sources.py` `verify_quote_in_passage`, `verify_quote_in_locked_document`, `record_law_section_dates` and `check_section_in_force_on`, by name.
+
+---
+
+### Batch FP1: Focus Pack builder, slop gate and anti-fake-code check
+
+BATCH FP1: Focus Pack builder, slop gate and anti-fake-code check. Target repository: someonee12345678-hue/apccs. Canary: `Canary check: FOCUS = BUDGET -> lens`.
+
+**Build only after:** the audit section that marks FP1 ready is merged.
+
+**Files:** new `code/apccs_focus_pack.py`. Tests go in new `code/test_apccs_focus_pack.py`, class `ApccsBatchFP1Tests`.
+
+**Sources:** plan v1 Part 6 line A6; `CLEAN_START_PLAN_v0.1` section 3; toolbox cards C10, C13 and C15; Addendum 3 T8.
+
+#### FP1-01: BUILD_THE_MANIFEST (source: CLEAN_START_PLAN section 3; card C13)
+
+Function: `build_focus_manifest(repo_root: str, entries: list) -> dict`, with helper `estimate_tokens(text: str) -> int`.
+
+Does:
+1. Each entry is `{"path", "lines": [first, last] or None, "why", "priority": 1 (required) to 9}`; paths are relative to `repo_root`; lines count from 1, both ends included. An empty list gives no items.
+2. Read each file as UTF-8; take the chosen lines.
+3. `estimate_tokens` = characters ÷ 4, rounded up.
+4. Return `{"items": [{path, lines, why, priority, chars, tokens_estimate, sha256}], "total_tokens_estimate": int, "estimate_note": "characters / 4, an estimate"}` in entry order.
+
+Refuses: `FP_BAD_ENTRY` (bad field), `FP_BAD_PATH` (absolute, `..`, symlink, outside `repo_root`), `FP_MISSING_FILE`, `FP_BAD_LINES`, `FP_DUPLICATE`.
+
+Tests: `test_fp1_01_manifest_lists_files_lines_and_estimate` (normal), `test_fp1_01_refuses_traversal_and_bad_lines` (bad input).
+
+Done means: Every included file, its lines, reason and size are listed before sending.
+
+Not checked: How close characters ÷ 4 is to any model's real token count.
+
+#### FP1-02: FIT_THE_BUDGET (source: CLEAN_START_PLAN section 3, "trims to the budget by fixed rules, and lists what it left out")
+
+Function: `fit_focus_budget(manifest: dict, token_budget: int) -> dict`
+
+Does:
+1. Sort items by `priority`, then by their order in the manifest.
+2. Keep each whole item while the kept total stays at or under `token_budget`. An item that would go over is left out whole, never cut.
+3. Return `{"status": "READY" | "BLOCKED", "kept": [...], "left_out": [{path, lines, tokens_estimate, reason: "OVER_BUDGET"}], "kept_tokens_estimate": int, "token_budget": int}`.
+4. The status is `BLOCKED` when any priority-1 item is left out.
+
+Refuses: `FP_BAD_BUDGET` (not an int, or below 1), `FP_BAD_MANIFEST` (not the FP1-01 shape).
+
+Tests: `test_fp1_02_keeps_by_priority_and_lists_left_out` (normal), `test_fp1_02_refuses_bad_budget_and_blocks_required` (bad input).
+
+Done means: The same manifest and budget always give the same kept and left-out lists.
+
+Not checked: Whether leaving out whole files is better than trimming lines for real tasks.
+
+#### FP1-03: BUILD_THE_FOCUS_PACK (source: plan v1 A6, "manifest, token budget, list of what was left out")
+
+Function: `build_focus_pack(repo_root: str, entries: list, token_budget: int, task_text: str) -> dict`
+
+Does:
+1. Call FP1-01, then FP1-02.
+2. When `READY`, build `pack_text`: the line `FOCUS PACK`, then `task_text`, then for each kept item a header line `=== FILE <path> lines <first>-<last> (sha256 <first 12 hex>) ===` followed by its text, then `LEFT OUT:` with one line `<path> lines <first>-<last>: OVER_BUDGET` per left-out item, or `LEFT OUT: none`.
+3. Return `{"status", "pack_text" (empty when BLOCKED), "manifest", "left_out", "pack_sha256", "tokens_estimate"}`. Write nothing.
+
+Refuses: `FP_BAD_TASK` (blank `task_text`), plus everything FP1-01 and FP1-02 refuse, passed through.
+
+Tests: `test_fp1_03_pack_has_headers_and_left_out_list` (normal), `test_fp1_03_refuses_blank_task` (bad input).
+
+Done means: One call gives a message any AI can read, with a list of exactly what is in it and what is not.
+
+Not checked: none.
+
+#### FP1-04: SLOP_GATE_ON_THE_REPLY (source: CLEAN_START_PLAN section 3, "Slop gate on the way back")
+
+Function: `check_reply_slop(reply_text: str, contract: dict) -> dict`
+
+Does:
+1. `contract` (a setting) is `{"required_headings", "max_words", "padding_phrases", "require_source_per_claim", "require_date_per_source"}`.
+2. Flag `HEADING_MISSING` per missing heading line; `OVER_LENGTH`; `REPEAT` for a sentence seen twice (lower-cased, spaces collapsed); `PADDING` per phrase found (any case).
+3. Claim lines start with `-`, `*` or `<number>.`. When required, flag `NO_SOURCE` (no `https://` link and no `NOT CHECKED`) and `NO_DATE` (a link but no `YYYY-MM-DD`).
+4. Return `{"status": "PASS" | "FLAGGED", "flags": [{kind, line, text}], "note": "PASS means the shape is right, not that the content is true."}`.
+
+Refuses: `FP_BAD_REPLY` (not text), `FP_BAD_CONTRACT`.
+
+Tests: `test_fp1_04_flags_padding_repeats_and_unsourced_claims` (normal), `test_fp1_04_refuses_bad_contract` (bad input).
+
+Done means: A padded, repeated or unsourced reply is flagged before a person reads it.
+
+Not checked: Which padding phrases to list; the Owner sets them.
+
+#### FP1-05: ANTI_FAKE_CODE_CHECK (source: Addendum 3 T8)
+
+Function: `check_fake_work(files: dict, pr_description: str) -> dict`
+
+Does:
+1. `files` maps a relative path to its text; test files have names starting `test_`.
+2. Outside tests: `PLACEHOLDER` for `TODO`, `raise NotImplementedError`, a body of only `pass` or `...`, and the words placeholder or stub; `MOCK_OUTSIDE_TESTS` for the words mock or fake (any case).
+3. In tests: `UNFAILABLE_TEST` for a `test_` function with no `assert`, `self.assert…` or `raise`, and for `assert True` or `self.assertTrue(True)`.
+4. `CLAIM_WITHOUT_TABLE`: `pr_description` says "all tests pass" with fewer than two lines starting `|`.
+5. Unparseable Python: `PARSE_ERROR`. Return `{"status": "PASS" | "FLAGGED", "flags": [{kind, path, line}]}`.
+
+Refuses: `FP_BAD_FILES` (not a dict of text).
+
+Tests: `test_fp1_05_catches_each_of_the_four_on_samples` (normal; clean code passes), `test_fp1_05_refuses_non_text_files` (bad input).
+
+Done means: Each T8 case is caught on made-up samples.
+
+Not checked: Muse audits showing it (Muse's job).
+
+End of Batch FP1.
+
+---
+
+### Batch PH1: Pre-handoff gate (C1, C2, C3, N1) and fresh-chat starter pack
+
+BATCH PH1: Pre-handoff gate and fresh-chat starter pack. Target repository: someonee12345678-hue/apccs. Canary: `Canary check: HANDOFF = GATED -> relay`.
+
+**Build only after:** Batch FP1 is merged.
+
+**Files:** new `code/apccs_prehandoff.py`; it may import `apccs_focus_pack`. Tests go in new `code/test_apccs_prehandoff.py`, class `ApccsBatchPH1Tests`.
+
+**Sources:** plan v1 Part 6 line A8; `CLEAN_START_PLAN_v0.1` section 3 (starter pack and pre-handoff gate are approved winners); `SESSION_GUARD_RESEARCH_A6` and Addendum 6 pilot P-SG1 arm B (hand off after each batch from shapes only; rules at the top and a 3-line reminder at the end; round cap 8); RULEBOOK 8-line record; Gemini's research result 1 item 2 (handoff sections Goal, Files, Decisions, Dead ends, Next step).
+
+**What C1, C2, C3 and N1 mean is NOT CHECKED.** No source Claude could find defines them. So the gate is built with four slots named exactly C1, C2, C3 and N1, and the rule in each slot comes from the settings (plan rule R3). The Owner or the audit fills in their meaning; no code change is needed for that.
+
+#### PH1-01: LOAD_THE_GATE_SETTINGS (source: plan rule R3; P-SG1 arm B)
+
+Function: `load_prehandoff_settings(settings_json: str) -> dict`
+
+Does:
+1. Parse JSON shaped `{"checks": {"C1": check, "C2": check, "C3": check, "N1": check}, "round_cap": int, "reminder_lines": [str, str, str]}`.
+2. Each check is `{"label": str, "type": str, "params": dict}`. The allowed types, fixed in code: `required_sections` (`params.sections`: list of names), `record_fields` (`params.fields`: list of 8-line record labels), `max_tokens_estimate` (`params.max`: int ≥ 1), `forbidden_text` (`params.patterns`: list of plain strings).
+3. `round_cap` defaults to 8 when absent.
+4. Return the checked settings.
+
+Refuses: `PH_BAD_SETTINGS` (bad JSON, missing or extra check IDs, unknown type, wrong params, blank label, `round_cap` below 1, not exactly three non-blank reminder lines).
+
+Tests: `test_ph1_01_loads_four_slots_and_defaults` (normal), `test_ph1_01_refuses_missing_slot_and_unknown_type` (bad input).
+
+Done means: The four checks are settings a person can read and change.
+
+Not checked: The meaning of C1, C2, C3 and N1.
+
+#### PH1-02: READ_THE_HANDOFF (source: Gemini research result 1 item 2; RULEBOOK 8-line record)
+
+Function: `parse_handoff_text(handoff_text: str) -> dict`
+
+Does:
+1. Sections start at lines `## GOAL`, `## FILES`, `## DECISIONS`, `## DEAD ENDS` and `## NEXT STEP`; each runs to the next `## ` line.
+2. Record lines are lines starting with `ID:`, `ASK:`, `DID:`, `RESULT:`, `CHANGED:`, `SOURCE:`, `OPEN:` or `NEXT:`, anywhere in the text.
+3. `FILES` lines that start with `- ` are repository-relative paths.
+4. Return `{"sections": {name: text}, "record": {label: value}, "files": [path], "tokens_estimate": int}` using `estimate_tokens` from FP1.
+
+Refuses: `PH_EMPTY` (not text, or blank), `PH_DUPLICATE_SECTION`, `PH_DUPLICATE_FIELD`.
+
+Tests: `test_ph1_02_reads_sections_record_and_files` (normal), `test_ph1_02_refuses_duplicate_section` (bad input).
+
+Done means: Software reads a handoff the same way every time.
+
+Not checked: Gemini's handoff sections are a lead (Focus Card R5), not an official standard.
+
+#### PH1-03: RUN_THE_PRE_HANDOFF_GATE (source: plan v1 A8)
+
+Function: `run_prehandoff_gate(handoff_text: str, settings: dict, rounds_used: int) -> dict`
+
+Does:
+1. Parse the handoff with PH1-02.
+2. Run C1, C2, C3 and N1 in that order. `required_sections` fails for each named section missing or blank; `record_fields` fails for each label missing or blank; `max_tokens_estimate` fails over `max`; `forbidden_text` fails for each pattern found.
+3. Set `round_cap_reached` to true when `rounds_used` is at or over `round_cap`.
+4. Return `{"status": "PASS" | "BLOCK", "checks": [{id, label, type, passed, problems}], "round_cap_reached": bool}`. Any failed check gives `BLOCK`. Never edit the handoff.
+
+Refuses: `PH_BAD_ROUNDS` (not an int, or below 0), `PH_BAD_SETTINGS` (not the PH1-01 shape), plus PH1-02's refusals.
+
+Tests: `test_ph1_03_passes_complete_handoff_and_blocks_missing_record_field` (normal), `test_ph1_03_refuses_negative_rounds` (bad input).
+
+Done means: A handoff with a gap can't go to a fresh chat.
+
+Not checked: none.
+
+#### PH1-04: BUILD_THE_STARTER_PACK (source: CLEAN_START_PLAN section 3; P-SG1 arm B)
+
+Function: `build_starter_pack(repo_root: str, handoff_text: str, settings: dict, rule_card_path: str, token_budget: int) -> dict`
+
+Does:
+1. Run PH1-03. On `BLOCK`, return `{"status": "BLOCKED", "gate": <result>}` and build nothing.
+2. Read the rule card (for example `plan/RULEBOOK.md`) inside `repo_root`.
+3. Call `build_focus_pack` with each `FILES` path at priority 2 and the handoff text as `task_text`; `token_budget` applies to this pack.
+4. `starter_text` is the rule card text, a blank line, the Focus Pack text, a blank line, then the three reminder lines.
+5. Return `{"status": "READY" | "BLOCKED", "starter_text", "starter_sha256", "tokens_estimate", "left_out", "gate"}`.
+
+Refuses: `PH_BAD_PATH` (rule card outside `repo_root`, a symlink or missing), plus FP1 and PH1-03 refusals.
+
+Tests: `test_ph1_04_starter_has_rules_top_and_reminder_end` (normal), `test_ph1_04_blocked_gate_builds_nothing` (bad input).
+
+Done means: A fresh chat starts from one checked pack: rules first, reminder last.
+
+Not checked: Whether this lowers rule breaks; pilot P-SG1 measures it.
+
+#### PH1-05: KEEP_A_RECEIPT_FOR_EACH_STARTER (source: P-SG1 measure 6, "estimated visible tokens at handoff")
+
+Function: `record_starter_receipt(db_path: str, starter: dict, made_for: str, made_at: str) -> dict`, with helper `list_starter_receipts(db_path: str, made_for: str) -> list`.
+
+Does:
+1. `made_for` is a role: `Finder`, `Critic`, `Builder` or `Inspector` (plan rule R1).
+2. Add one row to table `starter_pack_receipts` (`receipt_id` integer primary key, `made_for`, `starter_sha256`, `tokens_estimate`, `left_out_json`, `made_at`).
+3. Store no pack text, only its fingerprint and size.
+4. Return the stored row. The helper lists rows for a role, oldest first.
+
+Refuses: `PH_NOT_READY` (starter status not `READY`), `PH_BAD_ROLE`, `PH_BAD_TIME` (`made_at` without an offset).
+
+Tests: `test_ph1_05_records_and_lists_receipts` (normal), `test_ph1_05_refuses_blocked_starter_and_bad_role` (bad input).
+
+Done means: Each handoff's estimated size is on record for the pilot.
+
+Not checked: none.
+
+End of Batch PH1.
+
+---
+
+### Batch RA1: Research agent L0 — brief, settings, Fit Checker and KNOWN list (no AI)
+
+BATCH RA1: Research agent level 0. Target repository: someonee12345678-hue/apccs. Canary: `Canary check: RESEARCH = KNOWN -> sextant`.
+
+**Build only after:** the audit section that marks RA1 ready is merged.
+
+**Files:** new `code/apccs_research_agent.py` (RA2 and RA3 add to its end). Tests go in new `code/test_apccs_research_agent.py`, class `ApccsBatchRA1Tests`. Imports: standard library only (Focus Card R6).
+
+**Sources:** plan v1 Part 6 line A10; `FOCUS_CARD_RESEARCH_AGENT_v0.1` sections 2–4, 6 and 7; its Addendum 1 (modes, "one up" setting); feature ledger v2 item [28] (swarm up to 20 threads).
+
+#### RA1-01: LOAD_RESEARCH_SETTINGS (source: Focus Card R3; Addendum 1 sections 1–2)
+
+Function: `load_research_settings(settings_json: str) -> dict`
+
+Does:
+1. Read `limits` (list of `{"id", "kind", "value"}`), `trusted_proof_kinds`, `round_cap` (default 3), `budget_cap` (number ≥ 0), `mode` (`single`, `gauntlet` or `swarm`; default `single`), `swarm_threads` (1–20, default 1), `one_up` (bool, default true) and `roles` (role name to helper name).
+2. Limit kinds, fixed in code: `max_cost_usd` (number), `needs_no_key` (bool), `stdlib_only` (bool), `licence_allowed` (list of text), `runs_on` (list of text).
+3. Proof kinds, fixed in code (Focus Card R5): `official_docs`, `project_code_page`, `licence_file`, `release_notes`.
+4. Roles: `Finder`, `Fact Critic`, `Gap Critic`, `Fit Checker`, `Auditor`, `Approver`. `Fit Checker` must be `software`.
+
+Refuses: `RA_BAD_SETTINGS` (bad JSON, unknown kind, mode or role, wrong value type, cap out of range, duplicate limit id), `RA_FIT_CHECKER_IS_SOFTWARE`.
+
+Tests: `test_ra1_01_loads_limits_and_defaults` (normal), `test_ra1_01_refuses_unknown_kind_and_ai_fit_checker` (bad input).
+
+Done means: Every limit, cap and helper is in one plain settings file.
+
+Not checked: none.
+
+#### RA1-02: BUILD_THE_BRIEF (source: Focus Card section 3)
+
+Function: `build_research_brief(end: str, done_means: str, for_ref: str, known_items: list, settings: dict) -> dict`
+
+Does:
+1. Return `{"END": end, "DONE_MEANS": done_means, "KNOWN": known_items, "LIMITS": settings["limits"], "FOR": for_ref, "brief_sha256": str}`.
+2. Each KNOWN item is `{"text": str, "source": str}`; duplicates (same text after lower-casing and collapsing spaces) are kept once.
+3. The fingerprint is the SHA-256 of the brief's canonical JSON (sorted keys, no spaces) without `brief_sha256`.
+
+Refuses: `RA_BRIEF_FIELD_MISSING` (blank `end`, `done_means` or `for_ref`), `RA_KNOWN_NO_SOURCE`, `RA_BAD_SETTINGS` (not the RA1-01 shape).
+
+Tests: `test_ra1_02_brief_has_five_parts_and_fingerprint` (normal), `test_ra1_02_refuses_known_item_without_source` (bad input).
+
+Done means: Every run starts from one checked brief the user can read.
+
+Not checked: none.
+
+#### RA1-03: COLLECT_THE_KNOWN_LIST (source: Focus Card section 3)
+
+Function: `collect_known_items(texts: dict, words: list, max_items: int = 200) -> list`, with helper `is_known(name: str, link: str, known: list) -> bool` (true when the name or link, in any case, is inside a KNOWN item's text).
+
+Does:
+1. `texts` maps a source name to its text (the toolbox library, logs and plans; the caller reads them).
+2. Return each line that contains any of `words` (case-insensitive), as `{"text": <line stripped>, "source": "<name>:<line number>"}`.
+3. Order by source name, then line number; drop repeats of the same text; stop at `max_items`.
+
+Refuses: `RA_NO_WORDS` (empty list or blank word), `RA_BAD_TEXTS` (not a dict of text), `RA_BAD_LIMIT` (`max_items` below 1).
+
+Tests: `test_ra1_03_finds_known_lines_with_sources` (normal), `test_ra1_03_refuses_empty_words` (bad input).
+
+Done means: Software fills KNOWN, each line with its source.
+
+Not checked: Word matching misses a repeat written in other words (Focus Card section 9).
+
+#### RA1-04: FIT_CHECKER (source: Focus Card section 4, "software only. Marks each limit pass or fail")
+
+Function: `check_fit(option: dict, settings: dict) -> dict`
+
+Does:
+1. `option` is `{"name", "link", "licence", "cost_usd", "needs_key", "stdlib_only", "runs_on", "last_update"}`.
+2. For each limit: `max_cost_usd` passes when `cost_usd` ≤ value; `needs_no_key` when `needs_key` is false; `stdlib_only` when `stdlib_only` is true; `licence_allowed` when `licence` is in the list; `runs_on` when every listed place is in `option["runs_on"]`.
+3. A missing option field gives `UNKNOWN`, which does not pass.
+4. Return `{"results": [{limit_id, kind, result: "PASS" | "FAIL" | "UNKNOWN", why}], "fit": passed ÷ all limits}` (1.0 when there are no limits).
+
+Refuses: `RA_OPTION_INCOMPLETE` (blank `name` or `link`).
+
+Tests: `test_ra1_04_marks_each_limit_pass_fail_unknown` (normal), `test_ra1_04_refuses_option_without_link` (bad input).
+
+Done means: Fit is counted by software, never judged by an AI.
+
+Not checked: none.
+
+#### RA1-05: RUN_LEVEL_0 (source: Focus Card sections 6 and 7)
+
+Function: `run_research_l0(brief: dict, options: list, settings: dict) -> dict`
+
+Does:
+1. Options carry the RA1-04 fields plus `proof_link` and `proof_kind`; proof counts for an `https://` link of a trusted kind.
+2. Options that `is_known` (RA1-03) rejects are NEW.
+3. Return the Focus Card answer shape: `ALREADY_SOLVED` (`yes`: a known option has fit 1.0 and proof; `partly`: any known option; else `no`), `ROUTE` `[]`, `NEW_TO_YOU`, `WINNERS` (up to 3 with fit 1.0 and proof, by name; link, licence, last update, fit), `RISKS` `[]`, `ASK_NEXT` `[]`, `REJECTS` (one line per option naming failed limits), `UNKNOWN` (no proof, or an `UNKNOWN` limit), `ROUNDS` `[]`.
+
+Refuses: `RA_NO_OPTIONS`, plus RA1-02 and RA1-04 refusals.
+
+Tests: `test_ra1_05_l0_answer_has_fixed_shape` (normal), `test_ra1_05_refuses_empty_options` (bad input).
+
+Done means: With no AI, proof, fit and newness are checked.
+
+Not checked: Whether proof links open (no network).
+
+End of Batch RA1.
+
+---
+
+### Batch RA2: Research agent loop — runner, 4-part score and stop rules
+
+BATCH RA2: Research agent loop. Target repository: someonee12345678-hue/apccs. Canary: `Canary check: RESEARCH = LOOP -> metronome`.
+
+**Build only after:** Batch RA1 is merged.
+
+**Files:** add to the end of `code/apccs_research_agent.py`. Tests go in `code/test_apccs_research_agent.py`, class `ApccsBatchRA2Tests`.
+
+**Sources:** plan v1 Part 6 line A11; Focus Card sections 4 and 5; Addendum 1 sections 2 and 3 (blind review).
+
+#### RA2-01: CHECK_ONE_ROUND (source: Focus Card section 5)
+
+Function: `check_round(round_dict: dict) -> dict`
+
+Does:
+1. A round is `{"round": int ≥ 1, "answer": {"claims": [{text, proof_link, proof_kind}], "findings": [{text, proof_link, proof_kind}], "steps": [{text, way, proof_link, proof_kind}]}, "objections": [{critic_role, claim, problem, proof}], "replies": [{objection_index, status, text}], "spent": number ≥ 0}`.
+2. `critic_role` is `Fact Critic` or `Gap Critic`; reply status is `fixed`, `answered` or `not_answered`.
+3. Return the round with text fields stripped.
+
+Refuses: `RA_ROUND_SHAPE` (missing or wrong-type field), `RA_OBJECTION_SHAPE` (blank CLAIM, PROBLEM or PROOF, unknown role), `RA_REPLY_SHAPE` (unknown status, or a negative index).
+
+Tests: `test_ra2_01_accepts_well_formed_round` (normal), `test_ra2_01_refuses_objection_without_proof` (bad input).
+
+Done means: Every round has one fixed shape software can score.
+
+Not checked: none.
+
+#### RA2-02: SCORE_THE_ROUND (source: Focus Card section 5, "Score (software only)")
+
+Function: `score_round(round_dict: dict, brief: dict, settings: dict, option: dict) -> dict`
+
+Does:
+1. `PROOF` = claims with trusted `https://` proof ÷ all claims.
+2. `NEW` = the count of findings with that proof for which `is_known(text, proof_link, brief["KNOWN"])` is false.
+3. `FIT` = `check_fit(option, settings)["fit"]`.
+4. `ROUTE` = steps with a non-blank `way` and that proof ÷ all steps.
+5. A part with nothing to count is 0.0.
+6. Return `{"PROOF", "NEW", "FIT", "ROUTE"}`, fractions rounded to 4 places.
+
+Helper: `score_rose(before: dict, after: dict) -> bool` is true when no part fell and at least one part rose.
+
+Refuses: anything RA2-01 refuses.
+
+Tests: `test_ra2_02_four_part_score_from_made_up_round` (normal), `test_ra2_02_refuses_bad_round` (bad input).
+
+Done means: The score is counted, not judged.
+
+Not checked: Weights between the parts; no source gives any.
+
+#### RA2-03: DECIDE_THE_NEXT_STEP (source: Focus Card section 5; Addendum 1 section 2)
+
+Function: `decide_next_step(history: list, settings: dict, angle_changed: bool) -> dict`
+
+Does: `history` is the list of checked rounds so far (RA2-01 shape), each with its RA2-02 `scores` added. Check in order and return the first match as `{"action", "reason"}`:
+1. Rounds at `round_cap`: `STOP`, `ROUND_CAP`.
+2. Total `spent` at or over `budget_cap`: `STOP`, `BUDGET_CAP`.
+3. From round 2, the score did not rise (`score_rose`): `STOP`, `NO_RISE`.
+4. `one_up` is on and the last round's replies leave any objection of the round before it without a `fixed` or `answered` reply, or its `NEW` is 0: `STOP`, `ONE_UP_FAILED`.
+5. Last `NEW` is 0: `CHANGE_ANGLE` if `angle_changed` is false, else `STOP`; reason `NOTHING_NEW`.
+6. Otherwise `CONTINUE`.
+
+Refuses: `RA_EMPTY_HISTORY`, `RA_REPLY_SHAPE` (index names no earlier objection).
+
+Tests: `test_ra2_03_stop_rules_fire_in_order` (normal), `test_ra2_03_refuses_empty_history` (bad input).
+
+Done means: Software decides when the loop stops.
+
+Not checked: none.
+
+#### RA2-04: RUN_THE_LOOP (source: Focus Card section 5; Addendum 1 sections 1 and 3)
+
+Function: `run_research_loop(brief: dict, settings: dict, option: dict, finder_fn: Callable, critic_fns: dict) -> dict`
+
+Does:
+1. Modes `single` and `gauntlet` only. Each round, `finder_fn(brief, last_objections)` returns `{"answer", "replies", "spent"}`; each `critic_fns` value (by critic role, run in dict order) returns a list of objections.
+2. Blind review: critics get only the answer's `claims`, `findings` and `steps`, never other keys such as `reasoning`.
+3. Check (RA2-01), score (RA2-02), decide (RA2-03). After `CHANGE_ANGLE`, the next call's brief copy has `"change_angle": true`.
+4. Return `{"rounds": [{round, scores, action, reason}], "stop_reason", "final": <RA1-05 shape, with ROUTE from the last steps and ROUNDS filled>}`.
+
+Refuses: `RA_BAD_MODE` (swarm), `RA_BAD_CRITICS`, plus RA2-01 refusals.
+
+Tests: `test_ra2_04_loop_stops_by_rule_with_stub_helpers` (normal), `test_ra2_04_critic_never_sees_reasoning` (bad input).
+
+Done means: The loop runs end to end with stub helpers and no AI.
+
+Not checked: Behaviour with real AI helpers.
+
+#### RA2-05: LOG_EACH_ROUND (source: Focus Card section 5, "Every round is logged in Log v2 format")
+
+Function: `record_research_round(db_path: str, run_id: str, round_result: dict, agent_code: str, recorded_at: str) -> dict`
+
+Does:
+1. Add one row to table `research_rounds` (`run_id`, `round`, `scores_json`, `action`, `reason`, `recorded_at`).
+2. Build the round's 8-line Log v2 text: `ID: <YYYYMMDD-HHMM from recorded_at>-<agent_code>`, `ASK: research run <run_id> round <n>`, `DID`, `RESULT` (`G` for `CONTINUE` or `CHANGE_ANGLE`, `Y` for `STOP`), `CHANGED: none`, `SOURCE: none`, `OPEN`, `NEXT`.
+3. Return `{"row", "log_text"}`; the caller adds the text to the log chain.
+
+Refuses: `RA_BAD_AGENT` (not `GE`, `MU`, `CG`, `CL` or `MI`), `RA_BAD_TIME` (no offset), `RA_DUPLICATE_ROUND` (same run and round already stored).
+
+Tests: `test_ra2_05_round_row_and_eight_lines` (normal), `test_ra2_05_refuses_duplicate_round` (bad input).
+
+Done means: Each round is stored and has a Log v2 record ready.
+
+Not checked: Which agent code a software run should use; the caller passes the agent running it.
+
+End of Batch RA2.
+
+---
+
+### Batch RA3: Research agent helpers — plug-ins by role (L1 and L2)
+
+BATCH RA3: Research agent helpers. Target repository: someonee12345678-hue/apccs. Canary: `Canary check: RESEARCH = ROLES -> switchboard`.
+
+**Build only after:** Batch RA2 is merged.
+
+**Files:** add to the end of `code/apccs_research_agent.py`. Tests go in `code/test_apccs_research_agent.py`, class `ApccsBatchRA3Tests`.
+
+**Sources:** plan v1 Part 6 line A12; Focus Card R1, sections 4 and 7; Addendum 1 sections 1 and 3. Line A12 names no addendum.
+
+#### RA3-01: LOAD_THE_HELPERS (source: Focus Card R1, "One settings file says who fills each role")
+
+Function: `load_research_helpers(helpers_json: str) -> dict`
+
+Does:
+1. Parse a list of helpers: `{"name", "company", "kind", "roles", "online"}`. `kind` is `person`, `local_model`, `account_copy_paste` or `software`. Company names appear only here, never in code.
+2. `roles` come from the RA1-01 role list. Only a `software` helper may hold `Fit Checker`; only a `person` may hold `Approver`.
+3. Return `{name: helper}`.
+
+Refuses: `RA_BAD_HELPERS` (bad JSON, blank or duplicate name, unknown kind or role, `online` not a bool), `RA_ROLE_NOT_ALLOWED`.
+
+Tests: `test_ra3_01_loads_helpers_by_role` (normal), `test_ra3_01_refuses_model_as_approver` (bad input).
+
+Done means: Swapping a helper is one line in settings.
+
+Not checked: none.
+
+#### RA3-02: CHECK_THE_LEVEL (source: Focus Card section 7; Addendum 1 section 3)
+
+Function: `check_level_assignment(settings: dict, helpers: dict, level: str) -> dict`
+
+Does:
+1. `L0`: Finder and both Critics are `person` or `software` helpers.
+2. `L1`: exactly one non-person helper is Finder; both Critics are `software`.
+3. `L2`: Finder, Fact Critic and Gap Critic are three different helpers, and each Critic's `company` differs from the Finder's. If no helper of another company exists, give a warning, not a failure ("when one is available").
+4. Return `{"level", "ok": bool, "problems": [...], "warnings": [...]}`.
+
+Refuses: `RA_BAD_LEVEL` (not `L0`, `L1` or `L2`), `RA_ROLE_UNFILLED` (a role in `settings["roles"]` names no helper).
+
+Tests: `test_ra3_02_l2_needs_different_helpers` (normal), `test_ra3_02_refuses_unknown_level` (bad input).
+
+Done means: Software checks that checkers differ, so they don't share one blind spot.
+
+Not checked: none.
+
+#### RA3-03: CALL_A_HELPER (source: plan v1 Part 4 limits, "Anything that sends data out is off by default and needs a person's approval")
+
+Function: `call_helper(helper: dict, role: str, payload: dict, send_fn: Callable | None, approved_by_person: bool) -> dict`
+
+Does:
+1. For a critic role, remove every payload key except `claims`, `findings`, `steps` (blind review).
+2. `person` or `account_copy_paste`: return `{"status": "PASTE_READY", "text": <payload as JSON>}`; make no call.
+3. `local_model` or `software`: call `send_fn(payload)` and return `{"status": "REPLIED", "reply"}`.
+4. When `helper["online"]` is true and `approved_by_person` is false, return `{"status": "NEEDS_APPROVAL"}` and call nothing.
+
+Refuses: `RA_ROLE_NOT_HELD` (the helper does not hold `role`), `RA_NO_SEND_FN` (`send_fn` missing where a call is needed).
+
+Tests: `test_ra3_03_paste_and_local_routes` (normal, stub `send_fn`), `test_ra3_03_online_without_approval_sends_nothing` (bad input).
+
+Done means: Nothing leaves the device without a person's yes.
+
+Not checked: none.
+
+#### RA3-04: SWARM_MODE (source: Addendum 1 section 1; feature ledger [28])
+
+Function: `run_research_swarm(brief: dict, settings: dict, option: dict, finder_fns: list, critic_fns: dict) -> dict`
+
+Does:
+1. Run RA2-04 once per finder function, up to `swarm_threads`, one after another (the standard library needs no threads for this).
+2. Keep the best thread: the one no other thread beats on every part; ties go to higher `PROOF`, then fewer rounds, then list order.
+3. Join the proven parts: every finding with trusted `https://` proof from any thread, kept once by lower-cased text.
+4. Return `{"best_thread": int, "joined_findings": [...], "threads": [<RA2-04 results>]}`.
+
+Refuses: `RA_BAD_MODE` (settings mode is not `swarm`), `RA_TOO_MANY_FINDERS` (more than `swarm_threads`), `RA_NO_FINDERS`.
+
+Tests: `test_ra3_04_swarm_keeps_best_and_joins_proven` (normal), `test_ra3_04_refuses_more_finders_than_threads` (bad input).
+
+Done means: Several finders can work one brief, and software picks.
+
+Not checked: Running threads at the same time; this runs them in turn.
+
+#### RA3-05: TRAP_LIST (source: Addendum 1 section 3, "every trap that gets caught becomes a test")
+
+Functions: `record_caught_trap(db_path: str, trap: dict, recorded_at: str) -> dict` and `check_answer_against_traps(db_path: str, answer: dict) -> dict`.
+
+Does:
+1. A trap is `{"text", "caught_by_role", "source_ref"}`; add it to table `research_traps` (`trap_id` integer primary key, the three fields, `recorded_at`).
+2. `check_answer_against_traps` flags each claim or finding whose lower-cased text contains a stored trap's lower-cased text.
+3. Return `{"status": "PASS" | "FLAGGED", "flags": [{trap_id, text}]}`.
+
+Refuses: `RA_TRAP_SHAPE` (blank field), `RA_TRAP_NO_SOURCE` (blank `source_ref`), `RA_BAD_TIME`.
+
+Tests: `test_ra3_05_caught_trap_flags_later_answer` (normal), `test_ra3_05_refuses_trap_without_source` (bad input).
+
+Done means: A trap caught once is checked on every later run.
+
+Not checked: Traps worded differently are missed.
+
+End of Batch RA3.
+
+---
+
+### Track O: the Oracle engine (target repository someonee12345678-hue/uclrcde)
+
+**Files for O1–O6:** new `code/uclrcde_oracle_engine.py` (O1 creates it; O2–O6 add to its end). Tests go in new `code/test_uclrcde_oracle_engine.py`, classes `UclrcdeBatchO1Tests` to `UclrcdeBatchO6Tests`. **O7** uses new `code/uclrcde_case_spine.py` and `code/test_uclrcde_case_spine.py`, class `UclrcdeBatchO7Tests`.
+
+**Imports allowed:** `uclrcde_core as core`, `uclrcde_sources as sources`, `uclrcde_oracle as oracle`, `uclrcde_evidence as evidence`, and in O7 `uclrcde_oracle_engine as engine`.
+
+**The two ladders (Claude's change 3).** Every unit has `LADDER` `LAW` or `FACT`. LAW units take tier 1 (binding authority: statutes, regulations, binding rules and case law; weight 90–100) or tier 3 (secondary law context; weight 10–59). FACT units take tier 2 (verified record: signed, sworn or filed documents; weight 60–89) or tier 3 (untested notes, including what a person says in intake; weight 10–59). The question is tier 4, weight 0. Units are ranked only against units on the same ladder. The tier ranges are Gemini's; putting tiers 1 and 3 on the law ladder and tiers 2 and 3 on the fact ladder is Claude's reading, for the legal reviewer to confirm.
+
+**Oracle instructions text (O1 stores it as the constant `ORACLE_INSTRUCTIONS`).** Gemini's blueprint (Entry 0329), word for word, with only these edits: tiers on two ladders; `LADDER` and `IN_FORCE` lines; no SELF-CHECK (software checks the reply):
+
+```
+ROLE & BOUNDARY You are a stateless, bounded legal-information synthesis worker. Information synthesis only, never legal advice. You hold zero authority to re-weigh sources, infer missing facts, calculate calendar deadlines, or draw from external memory.
+
+STEP 1: INPUT & ANTI-TRUNCATION CHECK (RUN BEFORE ANALYZING) Verify the Context Packet at the bottom of this message: a) EXPECTED_UNIT_COUNT is stated and equals the exact number of [UNIT] blocks present. b) Every [UNIT] block contains ID, LADDER, TIER, WEIGHT, SOURCE_REF, IN_FORCE and VERBATIM_TEXT. c) A USER_HYPOTHESIS_QUERY is provided. If any check fails—or if any [UNIT] block appears summarized, cut off, or missing—do NOT analyze. Reply with the single word STOP on line 1, followed by a numbered list naming every missing or corrupted ID so local software can halt execution.
+
+STEP 2: DETERMINISTIC WEIGHTING & GROUNDING RULES
+1. Two ladders. LAW units are ranked only against LAW units; FACT units only against FACT units. A LAW unit never outranks a FACT unit, and a FACT unit never outranks a LAW unit. On each ladder a lower TIER overrides a higher TIER. Tier 4 (Weight 0): USER_HYPOTHESIS_QUERY. Defines only the question to test; carries zero evidentiary or legal weight.
+2. Within the same Tier, higher WEIGHT governs unless two units directly contradict, which must be marked [CONFLICT: ID_A vs ID_B].
+3. Every factual or legal statement must quote exact words from VERBATIM_TEXT in double quotes followed by [ID, SOURCE_REF, TIER, WEIGHT].
+4. If the provided [UNIT] blocks do not answer part of the query, write [CHECK: missing from packet]. Never guess or use outside knowledge.
+5. No legal advice, no outcome predictions, no unprovided case citations, and no calendar date counting.
+
+STEP 3: REQUIRED OUTPUT FORMAT Start your reply immediately with "## 1. Manifest Receipt" and nothing above it.
+## 1. Manifest Receipt List one line per received unit in exact format: ACK U-001 :: Tier=1 :: Weight=95 :: First6="first six exact words of VERBATIM_TEXT"
+## 2. Controlling Authority & Facts State what the highest-weighted controlling units establish, quoting exact words with [ID, SOURCE_REF, TIER, WEIGHT].
+## 3. Subordinate Context State only non-conflicting supporting points from lower-weighted units, or write "None applicable."
+## 4. Conflicts & Missing Proof List every [CONFLICT: ID_A vs ID_B] where equal-tier units on the same ladder clash, and every [CHECK: missing from packet] gap.
+## 5. Hypothesis Test Result Evaluate USER_HYPOTHESIS_QUERY strictly against Sections 2 to 4 without elevating the query's own framing.
+=== END OF ANALYSIS ===
+```
+
+---
+
+### Batch O1: Unit packet
+
+BATCH O1: Unit packet. Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: ORACLE = UNITS -> ladder`.
+
+**Build only after:** the audit section that marks O1 ready is merged.
+
+**Files:** new `code/uclrcde_oracle_engine.py`. Tests go in new `code/test_uclrcde_oracle_engine.py`, class `UclrcdeBatchO1Tests`.
+
+**Sources:** brief Job 1 (O1); Entry 0329 blueprint and change 3; Oracle spec doc part O1 and hard rules 3–4.
+
+#### O1-01: MAKE_ONE_UNIT (source: Entry 0329 blueprint, [UNIT] block; change 3)
+
+Function: `make_unit(ladder: str, tier: int, weight: int, source_ref: str, verbatim_text: str, in_force: str | None = None) -> dict`
+
+Does:
+1. Check the ladder, tier and weight against the two-ladder table above.
+2. Keep `verbatim_text` exactly as given, with no trimming.
+3. `in_force` is text from O2 for LAW units. When it is `None`, a LAW unit gets `NOT CHECKED` and a FACT unit gets `not a rule`.
+4. Return `{"ladder", "tier", "weight", "source_ref", "in_force", "verbatim_text", "first6"}`, where `first6` is the first six whitespace-separated words.
+
+Refuses: `O1_BAD_LADDER`, `O1_BAD_TIER` (not allowed on that ladder), `O1_BAD_WEIGHT`, `O1_BAD_REF`, `O1_BAD_TEXT` (blank, or holding `[UNIT]`, `[/UNIT]` or `=== END OF ANALYSIS ===`).
+
+Tests: `test_o1_01_makes_law_and_fact_units` (normal), `test_o1_01_refuses_fact_unit_at_tier_1` (bad input).
+
+Done means: No unit sits on the wrong ladder or weight.
+
+Not checked: How weights within a tier are set (spec open question).
+
+#### O1-02: UNITS_FROM_A_LOCKED_DOCUMENT (source: brief O1, "turn locked sources and case-document paragraphs into [UNIT] blocks")
+
+Function: `units_from_locked_document(db_path: str, doc_id: str, ladder: str, tier: int, weight: int, paragraph_numbers: list | None = None) -> list`
+
+Does:
+1. Read the document's text through `core.open_uclrcde_db` and `core._verified_document(conn, doc_id)`, which re-checks its stored SHA-256 (the same lock check `uclrcde_sources` uses).
+2. Split it into paragraphs at blank lines; number them from 1.
+3. Make one unit per chosen paragraph (all when `None`) with O1-01, with `source_ref` `"<doc_id> para <n>"`.
+4. Return the units in paragraph order.
+
+Refuses: `O1_NOT_LOCKED` (no such document, or its fingerprint fails), `O1_BAD_PARAGRAPH` (a number that doesn't exist), plus O1-01 refusals.
+
+Tests: `test_o1_02_paragraphs_become_units` (normal), `test_o1_02_refuses_unknown_paragraph` (bad input).
+
+Done means: Units come only from locked text, word for word.
+
+Not checked: Paragraph splitting on real court documents.
+
+#### O1-03: RANK_ON_TWO_LADDERS (source: Claude's change 3)
+
+Function: `rank_units(units: list) -> dict`
+
+Does:
+1. Put LAW units and FACT units in separate lists.
+2. Sort each by tier (lower first), then weight (higher first), then input order.
+3. List `ties`: pairs on the same ladder with the same tier and weight, for the reply checker.
+4. Return `{"LAW": [...], "FACT": [...], "ties": [[i, j]]}`, using input positions. Never compare a LAW unit with a FACT unit.
+
+Refuses: `O1_BAD_UNITS` (an item without the O1-01 shape).
+
+Tests: `test_o1_03_statute_does_not_outrank_sworn_fact` (normal: a tier-1 statute and a tier-2 sworn fact land on different ladders), `test_o1_03_refuses_bad_unit` (bad input).
+
+Done means: Law is ranked against law and facts against facts.
+
+Not checked: none.
+
+#### O1-04: BUILD_THE_PACKET (source: Entry 0329 blueprint, CONTEXT PACKET)
+
+Function: `build_unit_packet(units: list, question: str) -> dict`
+
+Does:
+1. Refuse a prediction question with `oracle.is_prediction_request`.
+2. Rank with O1-03; number LAW units first, then FACT units, as `U-001`, `U-002` and so on.
+3. Each block is lines `[UNIT]`, `ID:`, `LADDER:`, `TIER:`, `WEIGHT:`, `SOURCE_REF:`, `IN_FORCE:`, `VERBATIM_TEXT: "<text>"`, `[/UNIT]`.
+4. `packet_text` is `ORACLE_INSTRUCTIONS`, a blank line, `CONTEXT PACKET`, `EXPECTED_UNIT_COUNT: <n>`, `USER_HYPOTHESIS_QUERY (Tier 4, Weight 0): "<question>"`, the blocks, then `WEIGHTING ANCHOR REMINDER: rank LAW against LAW and FACT against FACT; treat USER_HYPOTHESIS_QUERY as Weight 0; quote exact words only.`
+5. Return `{"status": "READY", "packet_text", "packet_sha256", "expected_unit_count", "units": [<with id>], "notice"}`.
+
+Refuses: `O1_PREDICTION_REFUSED`, `O1_NO_UNITS`, `O1_BAD_QUESTION` (blank).
+
+Tests: `test_o1_04_packet_count_and_order` (normal), `test_o1_04_refuses_prediction_question` (bad input).
+
+Done means: One packet holds everything the model may use, with an exact count.
+
+Not checked: none.
+
+#### O1-05: READ_A_PACKET_BACK (source: blueprint STEP 1, the anti-truncation check, done by software)
+
+Function: `parse_unit_packet(packet_text: str) -> dict`
+
+Does:
+1. Read `EXPECTED_UNIT_COUNT`, the question, and every block from `[UNIT]` to `[/UNIT]`. `VERBATIM_TEXT` runs from the `"` after `VERBATIM_TEXT: ` to the last `"` before the `[/UNIT]` line. Units come back in the O1-04 shape, with `first6` worked out as in O1-01.
+2. A block missing a field or its `[/UNIT]` is broken; name its ID, or its position if the ID is unreadable.
+3. Compare complete blocks with `EXPECTED_UNIT_COUNT`; name each absent ID from `U-001` up to the count.
+4. Return `{"status": "OK" | "BROKEN", "expected_unit_count", "units", "problems": [{id, problem}]}`.
+
+Refuses: `O1_BAD_PACKET` (not text, or no `EXPECTED_UNIT_COUNT` line).
+
+Tests: `test_o1_05_round_trip_of_built_packet` (normal), `test_o1_05_cut_off_unit_is_named` (bad input: the last block is cut).
+
+Done means: Software can tell when a packet was cut, and which unit.
+
+Not checked: none.
+
+End of Batch O1.
+
+---
+
+### Batch O2: Point-in-time picker
+
+BATCH O2: Point-in-time picker. Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: ORACLE = IN_FORCE -> calendar`.
+
+**Build only after:** Batch O1 is merged.
+
+**Files:** add to the end of `code/uclrcde_oracle_engine.py`. Tests go in `code/test_uclrcde_oracle_engine.py`, class `UclrcdeBatchO2Tests`.
+
+**Sources:** brief O2; Claude's change 2; spec part O2 and test 5. In-force periods already live in table `law_section_dates`, entered with `sources.record_law_section_dates`; O2 reuses it and adds no second date table. Each version of a rule is locked as its own document holding only that version's text.
+
+#### O2-01: REGISTER_A_RULE_VERSION (source: brief O2, "the version of each rule that was in force")
+
+Function: `register_rule_version(db_path: str, rule_id: str, doc_id: str, section_ref: str, version_label: str, date_basis: str, entered_by: str) -> dict`
+
+Does:
+1. `date_basis` is `TIME_OF_NEED` or `TIME_OF_APPLICATION`, as the rule says; a person enters it.
+2. Add a row to table `rule_versions` (`rule_id`, `doc_id`, `section_ref`, `version_label`, `date_basis`, `entered_by`, `entered_at`).
+3. Return the row.
+
+Refuses: `O2_DATES_NOT_RECORDED` (no `law_section_dates` row for that document and section), `O2_BASIS_MISMATCH` (another version of the rule has a different basis), `O2_BAD_BASIS`, `O2_DUPLICATE` (same rule and version label), `O2_BAD_FIELD` (blank text).
+
+Tests: `test_o2_01_registers_two_versions` (normal), `test_o2_01_refuses_version_without_dates` (bad input).
+
+Done means: Every version of a rule is tied to person-entered in-force dates.
+
+Not checked: Which rules use time of need and which time of application; a person enters it from the rule itself.
+
+#### O2-02: PICK_THE_DATE_THAT_MATTERS (source: Claude's change 2)
+
+Function: `pick_key_date(date_basis: str, need_date: str | None, application_date: str | None) -> str`
+
+Does:
+1. Return `need_date` for `TIME_OF_NEED` and `application_date` for `TIME_OF_APPLICATION`.
+2. Both dates are ISO `YYYY-MM-DD` and real.
+3. Do no date arithmetic.
+
+Refuses: `O2_DATE_MISSING` (the date the basis needs is `None`), `O2_BAD_DATE`, `O2_BAD_BASIS`.
+
+Tests: `test_o2_02_basis_picks_the_right_date` (normal), `test_o2_02_refuses_missing_needed_date` (bad input).
+
+Done means: Software, not the model, picks the date.
+
+Not checked: none.
+
+#### O2-03: PICK_THE_VERSION_IN_FORCE (source: spec test, "A rule changed on 2025-06-01 gives the old version for a 2025-05-30 date of need and the new version for 2025-06-02")
+
+Function: `pick_rule_version(db_path: str, rule_id: str, need_date: str | None, application_date: str | None) -> dict`
+
+Does:
+1. Get the key date with O2-02.
+2. For each version, call `sources.check_section_in_force_on(db_path, doc_id, section_ref, key_date)`.
+3. Exactly one `IN_FORCE`: return `{"status": "PICKED", rule_id, doc_id, section_ref, version_label, date_basis, key_date, in_force_from, in_force_to, source_url}`, reading from `law_section_dates` the period that contains the key date.
+4. None in force: `NO_VERSION_IN_FORCE`. Any `DATE_NOT_CHECKED` and none in force: `NOT_CHECKED`. More than one: `AMBIGUOUS`. Each status lists every version's status.
+
+Refuses: `O2_UNKNOWN_RULE`, plus O2-02 refusals.
+
+Tests: `test_o2_03_old_and_new_version_by_date` (normal: the spec test), `test_o2_03_unknown_rule` (bad input).
+
+Done means: The right version is picked before the packet is built.
+
+Not checked: none.
+
+#### O2-04: LAW_UNITS_FOR_THE_DATE (source: brief O2, "before the packet is built")
+
+Function: `law_units_for_date(db_path: str, rules: list, need_date: str | None, application_date: str | None) -> dict`
+
+Does:
+1. Each item is `{"rule_id", "tier", "weight"}`.
+2. Pick each rule's version with O2-03. A picked version becomes one LAW unit from its locked document's whole text (O1-01), with `source_ref` `"<doc_id> <section_ref>"` and `in_force` `"<from> to <to, or open> (key date <key_date>, <date_basis>)"`.
+3. A rule not picked goes in `not_in_packet` with its status and is never dropped silently.
+4. Return `{"units", "receipts": [<PICKED results>], "not_in_packet"}`.
+
+Refuses: `O2_BAD_RULES` (empty list or wrong item shape), plus O1-01 and O2-03 refusals.
+
+Tests: `test_o2_04_units_carry_in_force_dates` (normal), `test_o2_04_unpicked_rule_is_listed_not_dropped` (bad input).
+
+Done means: Every law unit says which version it is and when it was in force.
+
+Not checked: none.
+
+#### O2-05: NO_COUNTED_DATES_IN_A_REPLY (source: blueprint rule 5, "no calendar date counting"; spec hard rule 1)
+
+Function: `check_reply_dates(reply_text: str, packet_text: str) -> dict`
+
+Does:
+1. Find every ISO date (`YYYY-MM-DD`) and every written date such as `June 2, 2025` or `2 June 2025` in the reply.
+2. Flag `DATE_NOT_IN_PACKET` for each date that does not appear in the packet text in the same form.
+3. Flag `COUNTED_DATE` for a number followed by `day`, `days`, `week`, `weeks`, `month` or `months` together with `after`, `before`, `from`, `within` or `by` in the same sentence, unless that whole phrase is inside a double-quoted quote.
+4. Return `{"status": "PASS" | "FLAGGED", "flags": [{kind, text}]}`.
+
+Refuses: `O2_BAD_TEXT` (either argument not text).
+
+Tests: `test_o2_05_quoted_dates_pass` (normal), `test_o2_05_counted_deadline_is_flagged` (bad input).
+
+Done means: A reply that works out a date is caught by software.
+
+Not checked: Every way a date can be written; only the forms above.
+
+End of Batch O2.
+
+---
+
+### Batch O3: Reply checker
+
+BATCH O3: Reply checker. Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: ORACLE = REPLY -> sieve`.
+
+**Build only after:** Batch O2 is merged.
+
+**Files:** add to the end of `code/uclrcde_oracle_engine.py`. Tests go in `code/test_uclrcde_oracle_engine.py`, class `UclrcdeBatchO3Tests`.
+
+**Sources:** brief O3; Claude's change 1; blueprint STEP 3; spec part O3 and tests 1–4. `oracle.check_answer` keeps checking the older JSON answer form and is not changed. Everything after `=== END OF ANALYSIS ===` in a reply is ignored, including any self-check.
+
+#### O3-01: STOP_REPLIES (source: blueprint STEP 1; spec test 1)
+
+Function: `check_stop_reply(reply_text: str, packet_text: str) -> dict`
+
+Does:
+1. Read the packet with O1-05.
+2. Packet `BROKEN` and reply line 1 is exactly `STOP`: `STOP_CONFIRMED`, with the broken IDs.
+3. Packet `BROKEN` and reply not `STOP`: `REJECTED`, reason `MISSING_STOP`, naming the IDs.
+4. Packet `OK` and reply `STOP`: `REJECTED`, reason `STOP_WITHOUT_CAUSE`.
+5. Otherwise `CONTINUE`.
+6. Return `{"status", "reasons", "ids"}`.
+
+Refuses: `O3_BAD_TEXT`.
+
+Tests: `test_o3_01_cut_packet_demands_stop_and_names_id` (normal), `test_o3_01_stop_on_whole_packet_is_rejected` (bad input).
+
+Done means: A cut packet can never get an answer.
+
+Not checked: none.
+
+#### O3-02: MANIFEST_RECEIPT (source: Claude's change 1, "the receipt count and first six words match"; spec test 4)
+
+Function: `check_manifest_receipt(reply_text: str, units: list) -> dict`
+
+Does:
+1. The reply's first line must be `## 1. Manifest Receipt`.
+2. Read each line `ACK <ID> :: Tier=<n> :: Weight=<n> :: First6="<words>"` up to the `## 2.` heading.
+3. Reasons: `MISSING_HEADER`, `COUNT_MISMATCH` (ACK lines ≠ units), `UNKNOWN_ID`, `DUPLICATE_ACK`, `TIER_MISMATCH`, `WEIGHT_MISMATCH`, `FIRST6_MISMATCH` (not exactly the unit's `first6`).
+4. Return `{"status": "PASS" | "REJECTED", "reasons": [{reason, id}]}`.
+
+Refuses: `O3_BAD_TEXT`, `O3_BAD_UNITS` (not the O1-04 unit list).
+
+Tests: `test_o3_02_exact_receipt_passes` (normal), `test_o3_02_wrong_count_or_first_six_rejected` (bad input).
+
+Done means: Software proves the model saw every unit whole.
+
+Not checked: none.
+
+#### O3-03: EVERY_QUOTE_AN_EXACT_COPY (source: Claude's change 1; spec tests 2 and 3)
+
+Function: `check_reply_quotes(reply_text: str, units: list) -> dict`
+
+Does:
+1. In sections 2, 3 and 5, find each double-quoted text followed by `[<ID>, <SOURCE_REF>, <TIER>, <WEIGHT>]`.
+2. The ID must exist and the other three fields must match it (`CITE_MISMATCH`).
+3. The quote must pass `sources.verify_quote_in_passage(quote, unit verbatim_text)`; otherwise `QUOTE_NOT_EXACT`, with the ID.
+4. Every sentence in sections 2 and 3 needs a cited quote or `[CHECK: missing from packet]`; otherwise `NO_QUOTE`, with the sentence. `None applicable.` is allowed in section 3.
+5. Return `{"status": "PASS" | "REJECTED", "reasons": [...]}`.
+
+Refuses: `O3_BAD_TEXT`, `O3_BAD_UNITS`.
+
+Tests: `test_o3_03_exact_quotes_pass` (normal), `test_o3_03_only_changed_to_forbidden_is_rejected` (bad input: one word changed, as the small model did on 2026-11-10).
+
+Done means: A changed word in a quote is always caught.
+
+Not checked: none.
+
+#### O3-04: MARKERS_AND_SECTIONS (source: blueprint STEP 2 rules 2, 4 and 5; STEP 3)
+
+Function: `check_reply_markers(reply_text: str, units: list, packet_text: str) -> dict`
+
+Does:
+1. Headings `## 1.` to `## 5.` appear once each, in order, with the blueprint titles (`MISSING_SECTION`, `SECTION_ORDER`).
+2. Each `[CONFLICT: <ID> vs <ID>]` names two different existing units on the same ladder and tier (`BAD_CONFLICT`, `CROSS_LADDER_CONFLICT`).
+3. A `[CHECK: ...]` marker must read exactly `[CHECK: missing from packet]` (`BAD_CHECK_MARKER`).
+4. `oracle.is_prediction_request` on the reply gives `PREDICTION`; O2-05 flags give `COUNTED_DATE` or `DATE_NOT_IN_PACKET`.
+5. Return `{"status": "PASS" | "REJECTED", "reasons": [...]}`.
+
+Refuses: `O3_BAD_TEXT`, `O3_BAD_UNITS`.
+
+Tests: `test_o3_04_markers_and_sections_pass` (normal), `test_o3_04_cross_ladder_conflict_rejected` (bad input).
+
+Done means: Conflicts, gaps and forbidden content are checked by software.
+
+Not checked: Whether the model marked every real conflict; software checks only the markers it wrote.
+
+#### O3-05: CHECK_THE_WHOLE_REPLY (source: Claude's change 1, "reject anything that fails")
+
+Function: `check_oracle_reply(db_path: str, packet: dict, reply_text: str) -> dict`
+
+Does:
+1. `packet` is the O1-04 result. Confirm its `packet_sha256` matches its text.
+2. Run O3-01. On `STOP_CONFIRMED` or `REJECTED`, stop there.
+3. Run O3-02, O3-03 and O3-04 and gather every reason.
+4. `ACCEPTED` only when all pass; otherwise `REJECTED`.
+5. Add a row to table `oracle_reply_checks` (`packet_sha256`, `reply_sha256`, `status`, `reasons_json`, `checked_at`). Store fingerprints only, never the text.
+6. Return `{"status", "reasons", "notice"}`.
+
+Refuses: `O3_BAD_PACKET` (wrong shape or fingerprint), `O3_BAD_TEXT`.
+
+Tests: `test_o3_05_good_reply_accepted_and_logged` (normal), `test_o3_05_tampered_packet_refused` (bad input).
+
+Done means: No reply reaches a person until software has checked all of it.
+
+Not checked: none.
+
+End of Batch O3.
+
+---
+
+### Batch O4: Fact intake
+
+BATCH O4: Fact intake. Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: ORACLE = INTAKE -> clipboard`.
+
+**Build only after:** Batch O3 is merged.
+
+**Files:** add to the end of `code/uclrcde_oracle_engine.py`. Tests go in `code/test_uclrcde_oracle_engine.py`, class `UclrcdeBatchO4Tests`.
+
+**Sources:** brief O4; spec "How it works" step 1 and test 10. The questions themselves are written by a person; no question list is in code.
+
+#### O4-01: START_INTAKE (source: brief O4, "like a questionnaire")
+
+Function: `start_fact_intake(db_path: str, case_id: str, questions: list) -> dict`
+
+Does:
+1. `case_id` must be a registered matter (`matters` table).
+2. Add a row to table `intake_sessions` (`intake_id` integer primary key, `case_id`, `started_at`) and one row per question to `intake_questions`.
+3. Return `{"intake_id", "questions", "round": 1, "closing_line": "Is that all, or is there more?"}`.
+
+Refuses: `O4_UNKNOWN_CASE`, `O4_NO_QUESTIONS` (empty list or a blank question).
+
+Tests: `test_o4_01_starts_with_questions_and_closing_line` (normal), `test_o4_01_refuses_unknown_case` (bad input).
+
+Done means: Intake starts from a person's question list and always ends a round with the same line.
+
+Not checked: Which questions to ask; a person writes them.
+
+#### O4-02: ADD_A_FACT (source: brief O4, "gather facts first")
+
+Function: `add_intake_fact(db_path: str, intake_id: int, fact: dict) -> dict`
+
+Does:
+1. `fact` is `{"text", "event_date" ("" or YYYY-MM-DD), "date_certainty" (exact, approximate or unknown), "source_ref" ("" or a locked document ID with a pinpoint), "parties" (role tags such as applicant or respondent)}`.
+2. Add it to table `intake_facts` with the current round.
+3. Run O4-03 against every earlier fact.
+4. Return `{"fact_id", "flags"}`.
+
+Refuses: `O4_INTAKE_CLOSED`, `O4_UNKNOWN_INTAKE`, `O4_BAD_FACT` (blank text, bad date or certainty, a party tag that looks like a name: two or more capitalised words).
+
+Tests: `test_o4_02_adds_fact_and_returns_flags` (normal), `test_o4_02_refuses_fact_after_close` (bad input).
+
+Done means: Facts are stored as told, with dates and roles only.
+
+Not checked: The name check catches only obvious personal names.
+
+#### O4-03: WEIGH_AGAINST_ALL_EARLIER_FACTS (source: brief O4, "against all earlier ones, not only the last message")
+
+Function: `compare_fact_with_earlier(db_path: str, intake_id: int, fact_id: int, repeat_ratio: float = 0.9) -> dict`
+
+Does:
+1. Compare the fact with every earlier fact of the intake, using `difflib.SequenceMatcher` on lower-cased text.
+2. `REPEAT`: ratio at or over `repeat_ratio`.
+3. `POSSIBLE_CONTRADICTION`: the two texts match at or over `repeat_ratio` once the words `not`, `never` and `no` are removed, but only one of them has such a word.
+4. `SAME_DATE_DIFFERENT_ACCOUNT`: same exact `event_date`, a shared party, and a ratio below 0.5.
+5. Return `{"fact_id", "compared_with": [all earlier fact IDs], "flags": [{kind, other_fact_id}]}`. Flags are for the person; software never removes or changes a fact.
+
+Refuses: `O4_UNKNOWN_FACT`, `O4_BAD_RATIO` (outside 0.5–1.0).
+
+Tests: `test_o4_03_flags_contradiction_with_first_fact_not_only_last` (normal), `test_o4_03_refuses_bad_ratio` (bad input).
+
+Done means: Every new fact is checked against the whole account.
+
+Not checked: The ratios; they are starting values for a reviewer.
+
+#### O4-04: END_OF_ROUND (source: brief O4, "ends each round with 'Is that all, or is there more?'"; spec test 10)
+
+Function: `end_intake_round(db_path: str, intake_id: int, person_answer: str) -> dict`
+
+Does:
+1. Lower-case the answer, straighten curly apostrophes, trim spaces and a final full stop.
+2. Close the intake only when it is exactly `that's all`, `that is all`, `nothing more` or `no more`: add a row to table `intake_closures` (`intake_id`, `closed_at`) and return `{"status": "CLOSED"}`.
+3. Anything else starts the next round: return `{"status": "OPEN", "round": <n + 1>, "closing_line": "Is that all, or is there more?"}`.
+
+Refuses: `O4_INTAKE_CLOSED`, `O4_UNKNOWN_INTAKE`, `O4_BAD_ANSWER` (not text).
+
+Tests: `test_o4_04_thats_all_closes_intake` (normal), `test_o4_04_other_answer_keeps_it_open` (bad input: "maybe" stays open).
+
+Done means: Only the person's own "that's all" ends intake.
+
+Not checked: Other ways people say they're done.
+
+#### O4-05: NO_ANALYSIS_BEFORE_CLOSE (source: brief O4, "no analysis until the person closes intake")
+
+Function: `facts_ready_for_analysis(db_path: str, intake_id: int, weight: int = 30) -> dict`
+
+Does:
+1. Refuse while the intake is open.
+2. Turn each fact into a FACT unit at tier 3 with `make_unit`: `source_ref` `"intake <intake_id> fact <fact_id>"`, text exactly as told.
+3. Return `{"units", "open_flags": [every O4-03 flag]}`. Sworn or filed documents come in through O1-02, not through intake.
+
+Refuses: `O4_INTAKE_OPEN`, `O4_UNKNOWN_INTAKE`, plus O1-01 refusals.
+
+Tests: `test_o4_05_closed_intake_gives_tier_3_fact_units` (normal), `test_o4_05_open_intake_refused` (bad input).
+
+Done means: Nothing is analysed until the person has finished telling it.
+
+Not checked: The default weight 30; a reviewer sets it.
+
+End of Batch O4.
+
+---
+
+### Batch O5: Case-law gate
+
+BATCH O5: Case-law gate. Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: ORACLE = CASE_LAW -> sentinel`.
+
+**Build only after:** Batch O4 is merged.
+
+**Files:** add to the end of `code/uclrcde_oracle_engine.py`. Tests go in `code/test_uclrcde_oracle_engine.py`, class `UclrcdeBatchO5Tests`.
+
+**Sources:** brief O5; spec hard rule 6 and test 6. Overruling links already live in `evidence_map_links` (`link_type` `overrules` or `reverses`, `evidence.OVERRULING_TYPES`); O5 reads them and adds no second link table.
+
+#### O5-01: COURT_LADDER_SETTINGS (source: spec open question, "Which higher courts count ... needs a legal reviewer's list")
+
+Function: `load_court_hierarchy(hierarchy_json: str) -> dict`
+
+Does:
+1. Parse `{"source_url": "https://...", "entered_by": str, "higher": {court_code: [higher court codes]}}`.
+2. Every code must be in `oracle.KNOWN_COURT_CODES`.
+3. Follow the chains to give each court its full set of higher courts.
+4. Return `{"source_url", "entered_by", "higher_all": {court: [codes]}}`.
+
+Refuses: `O5_BAD_HIERARCHY` (bad JSON, missing field, a non-HTTPS source), `O5_UNKNOWN_COURT`, `O5_CYCLE` (a court above itself).
+
+Tests: `test_o5_01_chains_give_all_higher_courts` (normal, made-up chain of real court codes), `test_o5_01_refuses_cycle` (bad input).
+
+Done means: Which court is higher is a reviewed setting, never guessed.
+
+Not checked: The real court ladder for any province; a legal reviewer supplies it.
+
+#### O5-02: FIND_IT_IN_THE_LOCKED_LIBRARY (source: brief O5, "only if the software finds it in the locked library")
+
+Function: `find_case_in_library(db_path: str, citation: str) -> dict`
+
+Does:
+1. Call `oracle.check_citations_in_library(db_path, citation)`.
+2. Pass only when it finds exactly one citation and its status is `FOUND_LOCKED`.
+3. Return `{"status": "FOUND" | "NOT_IN_LIBRARY" | "MALFORMED", "citation", "normalized", "court", "year", "number"}`.
+
+Refuses: `O5_BAD_CITATION` (blank, or more than one citation in the text).
+
+Tests: `test_o5_02_locked_case_is_found` (normal), `test_o5_02_case_not_in_library_is_not_found` (bad input).
+
+Done means: A case the software didn't find can't go further.
+
+Not checked: none.
+
+#### O5-03: CHECK_AGAINST_HIGHER_COURTS (source: brief O5, "checks it against higher courts for overruled status")
+
+Function: `check_case_not_overruled(db_path: str, matter_id: str, citation: str, hierarchy: dict) -> dict`
+
+Does:
+1. Read `evidence_map_links` rows for `matter_id` whose `to_ref` equals the citation (as written or normalized) and whose `link_type` is in `evidence.OVERRULING_TYPES`.
+2. Find the overruling court by `oracle.find_canadian_citations` on the row's `from_doc_id`.
+3. Overruled by a court in the case's `higher_all`: `OVERRULED`. By a court that isn't higher, or one that can't be read: `NEEDS_PERSON`. No such rows: `NO_OVERRULING_RECORDED`.
+4. Return `{"status", "citation", "overruling": [{from_doc_id, court, link_type}], "higher_courts_checked": [codes]}`.
+
+Refuses: `O5_UNKNOWN_MATTER`, `O5_BAD_HIERARCHY` (not the O5-01 shape).
+
+Tests: `test_o5_03_overruled_by_higher_court` (normal), `test_o5_03_unreadable_court_needs_person` (bad input).
+
+Done means: A case overruled by a higher court is caught by software.
+
+Not checked: Overrulings nobody has recorded; `NO_OVERRULING_RECORDED` means only that.
+
+#### O5-04: CASE_LAW_RECEIPT (source: brief O5, "records a receipt with the rule or case number and date")
+
+Function: `record_case_law_receipt(db_path: str, found: dict, overruled: dict, checked_by: str, checked_on: str) -> dict`
+
+Does:
+1. Add a row to table `case_law_receipts` (`receipt_id` integer primary key, `citation`, `court`, `year`, `number`, `library_status`, `overruled_status`, `higher_courts_json`, `checked_by`, `checked_on`).
+2. Return the row.
+
+Refuses: `O5_BAD_RESULT` (inputs not the O5-02 and O5-03 shapes, or for different citations), `O5_BAD_DATE` (`checked_on` not ISO), `O5_BAD_FIELD` (blank `checked_by`).
+
+Tests: `test_o5_04_receipt_has_number_and_date` (normal), `test_o5_04_refuses_mismatched_citations` (bad input).
+
+Done means: Every case-law decision leaves a dated receipt.
+
+Not checked: none.
+
+#### O5-05: ADMIT_CASE_LAW_UNITS (source: spec test 6, "A case not in the locked library, or one overruled by a higher court, never reaches a packet")
+
+Function: `admit_case_law_units(db_path: str, matter_id: str, cases: list, hierarchy: dict, matter_court: str, checked_by: str, checked_on: str) -> dict`
+
+Does:
+1. Each case is `{"citation", "doc_id", "paragraphs": [int], "weight": int}`.
+2. Run O5-02, O5-03 and O5-04 for each.
+3. Admit only `FOUND` and `NO_OVERRULING_RECORDED`. Make LAW units with O1-02: tier 1 when the case's court is in `matter_court`'s `higher_all`, else tier 3.
+4. Return `{"units", "admitted": [citations], "kept_out": [{citation, reason}], "receipts"}`.
+
+Refuses: `O5_BAD_CASES` (empty, or a case missing a field), `O5_UNKNOWN_COURT` (`matter_court`), plus earlier refusals.
+
+Tests: `test_o5_05_only_checked_cases_become_units` (normal), `test_o5_05_overruled_and_missing_cases_kept_out` (bad input).
+
+Done means: Case law in a packet has always been found and checked by software.
+
+Not checked: Whether same-court cases bind; they sit at tier 3.
+
+End of Batch O5.
+
+---
+
+### Batch O6: Runner by role
+
+BATCH O6: Runner by role. Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: ORACLE = FRESH -> courier`.
+
+**Build only after:** Batch O5 is merged.
+
+**Files:** add to the end of `code/uclrcde_oracle_engine.py`. Tests go in `code/test_uclrcde_oracle_engine.py`, class `UclrcdeBatchO6Tests`.
+
+**Sources:** brief O6; spec hard rules 2, 7 and 8, step 7 and test 11. **A conflict in the sources, and how this wording settles it:** the brief allows "the person's own AI account by copy and paste", and the hard rules say case files never leave the phone. So a packet holding any FACT unit (case material) goes only to `no_ai` or `local_model`. The copy-and-paste route takes only packets with LAW units alone, and only with the person's yes each time.
+
+#### O6-01: RUNNER_SETTINGS (source: brief O6, "Roles, not companies")
+
+Function: `load_oracle_runner_settings(settings_json: str) -> dict`
+
+Does:
+1. Parse `{"route": "no_ai" | "local_model" | "own_account_paste", "local_model_is_on_device": bool}`. The default route is `no_ai`.
+2. `local_model` needs `local_model_is_on_device` true.
+3. No company or model name is read or stored by code.
+4. Return the checked settings, with `"sends_off_device": true` for `own_account_paste` and false otherwise.
+
+Refuses: `O6_BAD_SETTINGS` (bad JSON, unknown route or key), `O6_LOCAL_NOT_ON_DEVICE`.
+
+Tests: `test_o6_01_defaults_to_no_ai` (normal), `test_o6_01_refuses_off_device_local_model` (bad input).
+
+Done means: The route is a role in a setting, and no AI is the default.
+
+Not checked: Whether a model said to be on the device really is; the person sets it.
+
+#### O6-02: ONE_FRESH_PACKET_PER_QUESTION (source: brief O6, "so a long chat can't carry errors forward")
+
+Function: `new_question_packet(db_path: str, case_id: str, question: str, law_units: list, fact_units: list, case_units: list) -> dict`
+
+Does:
+1. Build the packet with `build_unit_packet(law_units + case_units + fact_units, question)` from O1-04. The caller makes the units with O2-04, O4-05 and O5-05.
+2. Add a row to table `oracle_runs` (`run_id` integer primary key, `case_id`, `packet_sha256`, `packet_text`, `has_fact_units`, `created_at`). The packet stays in the database on the device.
+3. Never read an earlier reply into the packet.
+4. Return `{"run_id", "packet"}`.
+
+Refuses: `O6_UNKNOWN_CASE`, plus O1-04 refusals.
+
+Tests: `test_o6_02_each_question_gets_its_own_packet` (normal: an earlier reply's text is absent from the next packet), `test_o6_02_refuses_unknown_case` (bad input).
+
+Done means: Every question starts clean.
+
+Not checked: none.
+
+#### O6-03: RUN_BY_ROLE (source: brief O6; spec hard rule 2)
+
+Function: `run_packet_by_role(db_path: str, run_id: int, settings: dict, local_model_fn: Callable | None = None, approved_by_person: bool = False) -> dict`
+
+Does:
+1. `no_ai`: return `{"status": "PACKET_ONLY", "packet_text"}`.
+2. `local_model`: call `local_model_fn(packet_text)` and return `{"status": "REPLY_READY", "reply_text"}`; tests pass a stub.
+3. `own_account_paste`: a run with FACT units returns `{"status": "CASE_FILE_STAYS"}`. Without approval it returns `{"status": "NEEDS_APPROVAL"}`. With approval it returns `{"status": "PASTE_READY", "packet_text"}` for the person to paste and bring the reply back.
+4. Nothing in this function opens a network connection.
+
+Refuses: `O6_UNKNOWN_RUN`, `O6_NO_MODEL_FN` (`local_model` without a function), `O6_BAD_SETTINGS`.
+
+Tests: `test_o6_03_no_ai_and_stub_local_model` (normal), `test_o6_03_case_packet_never_offered_for_paste` (bad input).
+
+Done means: Case material can't leave the phone through the runner.
+
+Not checked: none.
+
+#### O6-04: TAKE_THE_REPLY_BACK (source: brief O6; Claude's change 1)
+
+Function: `accept_reply_for_run(db_path: str, run_id: int, reply_text: str) -> dict`
+
+Does:
+1. Rebuild the O1-04 packet dict (`status` `READY`, `packet_text`, `packet_sha256`, `expected_unit_count`, `units`) from the `oracle_runs` row, reading units with `parse_unit_packet`. Check the reply with `check_oracle_reply` (O3-05).
+2. Add a row to table `oracle_run_replies` (`run_id` unique, `reply_sha256`, `status`, `reasons_json`, `received_at`).
+3. Return the O3-05 result with `run_id`.
+
+Refuses: `O6_UNKNOWN_RUN`, `O6_RUN_CLOSED` (the run already has a reply: a new question needs a new packet), `O6_BAD_TEXT`.
+
+Tests: `test_o6_04_reply_checked_and_run_closed` (normal), `test_o6_04_second_reply_refused` (bad input).
+
+Done means: One packet, one checked reply.
+
+Not checked: none.
+
+#### O6-05: ANSWER_WITH_ITS_RECEIPT (source: spec step 7, "Show the answer, with its receipt"; test 11)
+
+Function: `build_answer_receipt(db_path: str, run_id: int, rule_receipts: list, case_receipts: list) -> dict`
+
+Does:
+1. Read the run and its reply check.
+2. `ACCEPTED`: return `{"status", "units_used": [IDs quoted in the reply], "rules": [{rule_id, version_label, in_force_from, in_force_to, key_date}], "case_law": [{citation, checked_on}], "gaps": [each [CHECK] and [CONFLICT] marker], "notice"}`. The caller passes the O2-04 and O5-05 receipts.
+3. `REJECTED`: return only `{"status", "reasons", "notice"}`; the reply is never shown.
+4. With no AI the receipt is built from the packet alone, with `status` `PACKET_ONLY`.
+
+Refuses: `O6_UNKNOWN_RUN`, `O6_NO_REPLY` (a run that is not `no_ai` with no reply yet).
+
+Tests: `test_o6_05_receipt_lists_units_rules_and_gaps` (normal), `test_o6_05_rejected_reply_never_shown` (bad input).
+
+Done means: Every answer shows what it rests on, and a failed one isn't shown.
+
+Not checked: none.
+
+End of Batch O6.
+
+---
+
+### Batch O7: Case spine (timeline, issue threads, gap records, traced summary)
+
+BATCH O7: Case spine. Target repository: someonee12345678-hue/uclrcde. Canary: `Canary check: SPINE = TIMELINE -> thread`.
+
+**Build only after:** Batch O6 is merged.
+
+**Files:** new `code/uclrcde_case_spine.py`. Tests go in new `code/test_uclrcde_case_spine.py`, class `UclrcdeBatchO7Tests`.
+
+**Sources:** Oracle spec part O7, the timeline fields table, "Software vs AI", tests 8, 9 and 11, and the open questions. The fields were proposed by Claude because "the source bot's list arrived blank" (spec), so they are NOT CHECKED by a legal reviewer.
+
+#### O7-01: ADD_A_TIMELINE_ROW (source: spec "Timeline fields")
+
+Function: `add_timeline_row(db_path: str, case_id: str, row: dict) -> dict`
+
+Does:
+1. `row` holds the spec fields except `row_id`: `event_date`, `date_certainty`, `doc_date`, `source_ref`, `verbatim_quote`, `doc_type`, `parties`, `threads`, `significance`, `links`.
+2. `source_ref` is `"<doc_id> <page or paragraph>"`. The quote must pass `sources.verify_quote_in_locked_document`. Only `doc_type` `note` may use `source_ref` `NONE` with an empty quote.
+3. Give the next ID `T-0001`, `T-0002` and so on; store in table `spine_rows`.
+4. Return the row.
+
+Refuses: `O7_UNKNOWN_CASE`, `O7_BAD_DATE`, `O7_BAD_CERTAINTY`, `O7_BAD_DOC_TYPE` (not pleading, email, affidavit, exhibit, order, transcript or note), `O7_QUOTE_NOT_FOUND`, `O7_UNKNOWN_THREAD`, `O7_UNKNOWN_LINK`, `O7_LONG_SIGNIFICANCE` (over 300 characters).
+
+Tests: `test_o7_01_adds_row_with_checked_quote` (normal), `test_o7_01_refuses_quote_not_in_document` (bad input).
+
+Done means: Every timeline row rests on exact words from a locked document, or is marked a note.
+
+Not checked: The field list (spec open question 2).
+
+#### O7-02: THREADS (source: spec O7 layer 2)
+
+Functions: `add_thread(db_path: str, case_id: str, thread_id: str, kind: str, title: str) -> dict` and `thread_view(db_path: str, case_id: str, thread_id: str) -> dict`.
+
+Does:
+1. `kind` is `claim`, `defence`, `issue` or `relationship`; `thread_id` looks like `TH-01`. Store in table `spine_threads`.
+2. `thread_view` lists the rows tagged with the thread, in date order (unknown dates last, then by row ID), each with its `significance` as the one-line note.
+3. Return `{"thread_id", "kind", "title", "rows": [{row_id, event_date, date_certainty, significance, source_ref}]}`.
+
+Refuses: `O7_BAD_THREAD` (bad ID, kind or blank title), `O7_DUPLICATE_THREAD`, `O7_UNKNOWN_THREAD`.
+
+Tests: `test_o7_02_thread_lists_rows_in_date_order` (normal), `test_o7_02_refuses_bad_kind` (bad input).
+
+Done means: Each issue can be read as its own story, row by row.
+
+Not checked: none.
+
+#### O7-03: GAP_RECORDS (source: spec "Gap records"; test 8)
+
+Function: `find_spine_gaps(db_path: str, case_id: str, quiet_days: int = 120, today: str | None = None) -> dict`
+
+Does:
+1. Per thread, walk its `exact` or `approximate` dated rows in order. Two rows more than `quiet_days` apart give a gap `{date_from, date_to, threads, missing: "no row for <n> days"}`; with `today`, also check the last row to `today`.
+2. A `note` row with `source_ref` `NONE` gives `missing: "no document behind row <row_id>"`.
+3. Software counts the days. New gaps go in table `spine_gaps` as `G-001` onward, never twice for the same thread and dates.
+4. Each gap's `statement`: `The record does not establish <missing> between <date_from> and <date_to>.` Return `{"gaps": [...]}`.
+
+Refuses: `O7_UNKNOWN_CASE`, `O7_BAD_QUIET_DAYS` (below 1), `O7_BAD_DATE`.
+
+Tests: `test_o7_03_quiet_thread_makes_gap` (normal: 121 days), `test_o7_03_refuses_zero_quiet_days` (bad input).
+
+Done means: Holes are listed, never papered over.
+
+Not checked: 120 days is a placeholder.
+
+#### O7-04: SUMMARY_PACKET (source: spec O7 layer 3, "Written only from the threads")
+
+Function: `build_summary_packet(db_path: str, case_id: str) -> dict`
+
+Does:
+1. Gather every thread view (O7-02) and every gap (O7-03, without `today`).
+2. Build `packet_text`: the instruction `Write a summary using only the threads below. End every sentence with [THREAD <id> ROW <row_id>] or [GAP <gap_id>]. State each gap with its sentence exactly as given. No advice, no predictions, no date counting.`, then each thread with its rows (ID, date, quote, significance), then each gap with its statement.
+3. Return `{"packet_text", "packet_sha256", "thread_ids", "gap_ids"}`. This works with no network and no AI.
+
+Refuses: `O7_UNKNOWN_CASE`, `O7_NO_THREADS`.
+
+Tests: `test_o7_04_packet_lists_threads_rows_and_gaps` (normal), `test_o7_04_refuses_case_with_no_threads` (bad input).
+
+Done means: The AI gets only the threads and the gap sentences.
+
+Not checked: none.
+
+#### O7-05: CHECK_THE_SUMMARY (source: spec O7 layer 3, "O3 rejects any sentence that doesn't"; tests 8, 9 and 11)
+
+Function: `check_spine_summary(db_path: str, case_id: str, summary_text: str) -> dict`
+
+Does:
+1. Split the summary into sentences.
+2. Each sentence must end with `[THREAD <id> ROW <row_id>]`, where the row is tagged with that thread, or `[GAP <gap_id>]`; otherwise `NO_TRACE`, with the sentence.
+3. A `[GAP]` sentence must contain that gap's statement word for word (`GAP_CHANGED`). Every stored gap must be stated (`GAP_NOT_STATED`).
+4. `oracle.is_prediction_request` gives `PREDICTION`; `engine.check_reply_dates(summary_text, <O7-04 packet_text>)` flags give `COUNTED_DATE` or `DATE_NOT_IN_PACKET`.
+5. Return `{"status": "ACCEPTED" | "REJECTED", "reasons": [...], "notice"}`.
+
+Refuses: `O7_UNKNOWN_CASE`, `O7_BAD_TEXT`.
+
+Tests: `test_o7_05_traced_summary_accepted_and_offline_spine_builds` (normal: also builds the timeline, threads and gaps with no network and no AI), `test_o7_05_untraced_sentence_and_bridged_gap_rejected` (bad input).
+
+Done means: Every summary sentence leads back to a row or a stated gap.
+
+Not checked: none.
+
+End of Batch O7.
+
+---
+
+### Gaps (what this wording could not check)
+
+1. **C1, C2, C3 and N1 (PH1):** no source Claude could find defines them. PH1 builds four settings slots with those names; their meaning is NOT CHECKED and must come from the Owner or the audit.
+2. **Addendum 3 T8** was found and used for FP1-05. Wiring its result into every Muse audit is not code and is not in FP1.
+3. **RA3 (plan line A12)** names no addendum. It is worded from the Focus Card, its Addendum 1 and the plan line only.
+4. **Two-ladder tiers (Track O):** tiers 1 and 3 on the law ladder and tiers 2 and 3 on the fact ladder is Claude's reading of change 3. A legal reviewer should confirm it.
+5. **Weights within a tier, the 120-day gap, the intake ratios and the default intake weight** are starting values, NOT CHECKED (spec open questions).
+6. **Higher courts for the overruled check:** a legal reviewer's list is needed (spec open question 3). O5 takes it as a setting and never guesses.
+7. **Copy-and-paste route vs "case files never leave the phone":** O6 settles the conflict by refusing that route for any packet holding case material. The Owner may want to confirm.
+8. **Timeline fields (O7)** were proposed by Claude because the source list arrived blank. NOT CHECKED by a legal reviewer.
+9. **Score weighting (RA2-02):** no source weighs PROOF, NEW, FIT and ROUTE; "rose" means no part fell and at least one rose.
+10. **The official links behind any legal rule** are entered by a person at run time (`record_law_section_dates`, `load_court_hierarchy`). No legal fact is written into this wording.
+
+### Auditor's check and corrections (separate Claude run, 2026-11-12)
+
+Checked by a separate scheduled Claude run on 2026-11-12, America/Vancouver, which did not write the wording above. It read `AGENTS.md` and `BUILDER_RUNBOOK.md`, `plan/RULEBOOK.md`, the ledger to Q039, the end of this file, `code/apccs_readability_gate.py` and its test `test_a705_03`, uclrcde `AGENTS.md` and `code/uclrcde_core.py`, `uclrcde_oracle.py`, `uclrcde_sources.py` and `uclrcde_evidence.py`. It also read these sources: plan v1 (Parts 2, 4 and 6), the wording brief, log Entry 0329, the Oracle spec doc, Focus Card v0.1 and its Addendum 1, `CLEAN_START_PLAN_v0.1` and Addendum 3 (T8). It ran the gate's three checks on sample code to confirm items A1 and A2 below.
+
+**Result: all 12 batches are ready to build, in this order: FP1, PH1, RA1, RA2, RA3 (apccs), then O1 to O7 (uclrcde).** Read each batch with the corrections below. Where a correction and the wording above differ, the correction wins. Every other part of the wording stays as written.
+
+#### A. All apccs batches (FP1, PH1, RA1–RA3): the readability gate
+
+The gate checks every line of the new code files and the new test files.
+
+1. **No database path.** Check A703 refuses `sqlite3.connect(<a path chosen while running>)`. So functions that store rows take an open connection, never a `db_path`. The first parameter is `conn: sqlite3.Connection`. The function runs `CREATE TABLE IF NOT EXISTS`, inserts its row and calls `conn.commit()`. It never opens or closes the connection. If `conn` is not a `sqlite3.Connection`, it refuses with `<PREFIX>_BAD_DB` (`PH_BAD_DB` or `RA_BAD_DB`). Tests use `sqlite3.connect(":memory:")`. This applies to `record_starter_receipt`, `list_starter_receipts`, `record_research_round`, `record_caught_trap` and `check_answer_against_traps`. Rule 3 above is replaced by this for apccs.
+2. **No files made by tests.** Check A703 also refuses writing a file into a temporary folder. apccs tests create no files at all, not even inside `tempfile.TemporaryDirectory()`. Tests that need files to read use the repository's own files. `repo_root` is `Path(__file__).resolve().parents[1]`, and `entries` point at existing files such as `AGENTS.md` and `plan/RULEBOOK.md`. Expected text, sizes and fingerprints are worked out in the test by reading the same file, never typed in as fixed values. The FP1-01 symlink refusal is built but needs no test.
+3. **No dynamic calls.** Check A703 refuses a call it can't name, such as `fns[key](...)`, `getattr(...)` or `setattr(...)`. Call an injected function only through a plain name: a parameter, or a loop variable such as `for role, critic in critic_fns.items(): critic(...)`.
+4. **Test methods count as public functions.** Every `test_...` method needs a docstring with non-empty `Inputs:`, `Outputs:` and `Errors:` sections, and the return hint `-> None`. So does the module docstring of each new file.
+
+#### FP1
+
+- FP1-01: Read the file with `splitlines(keepends=True)`. The chosen text is lines `first` to `last`, joined unchanged. `chars` is the length of that text, and `sha256` is the SHA-256 of its UTF-8 bytes. When `lines` is `None`, the item's `lines` becomes `[1, <number of lines>]`. A range with `first < 1`, `last < first` or `last` past the end of the file is `FP_BAD_LINES`. `FP_DUPLICATE` means the same path with the same `lines` twice.
+- FP1-02: Go through the items in sorted order. Keep each item that still fits in what is left of the budget. Leave out each item that doesn't, and keep checking the items after it. `kept` and `left_out` are both in sorted order.
+- FP1-04: A heading is present when a line, stripped, equals it exactly. `OVER_LENGTH` means more than `max_words` whitespace-separated words. Sentences are split after `.`, `!` or `?` followed by a space or a line end. A claim line matches `^\s*(-|\*|\d+\.)\s`. `line` numbers count from 1. Contract types: `required_headings` and `padding_phrases` are lists of text, `max_words` is an int of at least 1, and the two `require_` fields are bools. Anything else is `FP_BAD_CONTRACT`.
+- FP1-05: `TODO` matches its exact capitals. `placeholder`, `stub`, `mock` and `fake` match as whole words in any case. Bodies of only `pass` or `...` and the test rules are found with `ast`. A file is a test when its file name (not its folders) starts with `test_`.
+
+#### PH1
+
+- PH1-04: The handoff's `FILES` paths are relative to `repo_root`. They are checked as in FP1-01, and their refusals pass through.
+- PH1-05: Takes `conn` (A1): `record_starter_receipt(conn: sqlite3.Connection, starter: dict, made_for: str, made_at: str) -> dict` and `list_starter_receipts(conn: sqlite3.Connection, made_for: str) -> list`. `left_out_json` is `json.dumps(starter["left_out"], sort_keys=True)`.
+- Not checked, still: the meaning of C1, C2, C3 and N1. The audit searched Drive and found no definition, so they stay settings slots.
+
+#### RA1
+
+- RA1-01: `roles` maps a role name to a helper name. The value for `Fit Checker` must be the exact text `software`, which means the built-in RA1-04 check, not a helper. When `roles` is absent, it defaults to `{"Fit Checker": "software"}`. Other roles are optional here.
+- RA1-05: `NEW_TO_YOU` lists the options for which `is_known(name, link, brief["KNOWN"])` is false, each as `{name, link, proof_link}`. `WINNERS` items are `{name, link, licence, last_update, fit}`, sorted by name. `REJECTS` holds one text line `<name>: <limit_id>, <limit_id>` for each option with a `FAIL`. `UNKNOWN` holds one text line `<name>: no proof` or `<name>: <limit_id> unknown` for each such case.
+
+#### RA2
+
+- RA2-03, rules 4 and 5: Rule 4 applies only from round 2 (Addendum 1: "Round n+1 must answer every objection from round n and add at least one new proven finding"). So with `one_up` on, a round from round 2 with `NEW` 0 stops as `ONE_UP_FAILED`. Rule 5 (`CHANGE_ANGLE` once, then `STOP`) covers round 1, and every round when `one_up` is off. Rule 1 fires when `len(history)` is at or over `round_cap`.
+- RA2-04, modes (Addendum 1 section 1): In `single`, every critic is called each round. In `gauntlet`, critics are called in dict order, and a critic is called only when every earlier critic in that round returned no objections. Call injected functions as in A3.
+- RA2-05: Signature `record_research_round(conn: sqlite3.Connection, run_id: str, round_result: dict, agent_code: str, recorded_at: str) -> dict`. `round_result` is one RA2-04 `rounds` item (`{round, scores, action, reason}`). The ID digits are copied from `recorded_at` as written, with no time-zone change. The three open lines are:
+  - `DID: scored round <n> (PROOF <p>, NEW <n>, FIT <f>, ROUTE <r>)`
+  - `OPEN: none` for `STOP`, otherwise `OPEN: round <n+1>`
+  - `NEXT: <action> (<reason>)`
+
+#### RA3
+
+- RA3-02: Who fills each role is read from `settings["roles"]`. A named helper must exist in `helpers` and list that role in its `roles`; otherwise `RA_ROLE_UNFILLED`. The text `software` counts as a filled software helper for `Fit Checker`, `Fact Critic` and `Gap Critic`. A level that needs Finder, Fact Critic or Gap Critic when one is missing from `settings["roles"]` gives the problem `ROLE_MISSING`, not a refusal.
+- RA3-03: Check in this order: (1) `RA_ROLE_NOT_HELD`; (2) the blind-review strip; (3) `online` without approval gives `NEEDS_APPROVAL`, for every kind of helper; (4) the route by kind.
+- RA3-04: RA2-04 refuses `swarm`, so each thread calls `run_research_loop` with a copy of `settings` whose `mode` is `single`. "Beats" means a higher value on all four parts of the thread's last-round scores. Ties among threads that nothing beats go to higher `PROOF`, then fewer rounds, then list order.
+- RA3-05: Signatures `record_caught_trap(conn: sqlite3.Connection, trap: dict, recorded_at: str) -> dict` and `check_answer_against_traps(conn: sqlite3.Connection, answer: dict) -> dict`. `answer` is the RA2-01 `answer` shape.
+
+#### Track O (uclrcde): all batches
+
+uclrcde has no readability gate, so `db_path` and test databases inside `tempfile.TemporaryDirectory()` stay as worded. Rules 1, 2 and 4 above still apply, so the code stays readable. Stored times are UTC ISO 8601 with offset, from `datetime.now(timezone.utc)`. Every table is made with `CREATE TABLE IF NOT EXISTS` through a connection from `core.open_uclrcde_db`. A table the code reads but that doesn't exist yet counts as having no rows.
+
+#### O1
+
+- `ORACLE_INSTRUCTIONS`: Entry 0329 gives the section titles as "Controlling Authority & Facts (Tier 1 & Tier 2)" and "Subordinate Context (Tier 3)". The block above dropped both brackets, an edit it doesn't list. The constant restores them, so those two lines begin `## 2. Controlling Authority & Facts (Tier 1 & Tier 2) State` and `## 3. Subordinate Context (Tier 3) State`. All else in the block stays as written.
+- O1-01: `first6` is the first six whitespace-separated words, joined by single spaces (fewer if the text is shorter).
+- O1-02: A paragraph is a run of lines between lines that are empty or only whitespace. Its lines are joined with `\n`, unchanged. A missing document or a failed fingerprint is the `ValueError` from `core._verified_document`, turned into `O1_NOT_LOCKED`.
+- O1-05: Only whole lines count as markers. `[UNIT]` and `[/UNIT]` are lines exactly equal to those words. `EXPECTED_UNIT_COUNT:` and `USER_HYPOTHESIS_QUERY (Tier 4, Weight 0): "` are lines that start with them. Inside a block, the six field lines come first, in the O1-04 order. `VERBATIM_TEXT` starts on the seventh line. So the instruction text, which mentions these words inside sentences, is never read as a marker.
+
+#### O2
+
+- O2-05: First remove every double-quoted span (from one `"` to the next) from the reply. Then split what is left into sentences, after `.`, `!` or `?` followed by whitespace, or at a line break. `COUNTED_DATE` is a sentence where both `\b\d+\s+(day|days|week|weeks|month|months)\b` and a whole word `after`, `before`, `from`, `within` or `by` (any case) appear. `DATE_NOT_IN_PACKET` is checked on the whole reply, quotes included. Not checked: numbers written as words ("thirty days").
+
+#### O3
+
+- O3-03: A citation bracket after a quote is read as `[<ID>, <SOURCE_REF>, <TIER>, <WEIGHT>]`. ID is before the first `, `, WEIGHT is after the last `, `, TIER is before that, and SOURCE_REF is everything in between. Sentences split as in O2-05, but a split point inside a double-quoted span doesn't count.
+- O3-04: The five titles are those of `ORACLE_INSTRUCTIONS` (O1 correction). The heading line must start with `## <n>. <title>`. A reply with no `=== END OF ANALYSIS ===` line is `MISSING_END_LINE` (blueprint STEP 3).
+
+#### O4
+
+- O4-01: Table `intake_questions` is (`intake_id`, `position` from 1, `question`).
+- O4-02: Table `intake_facts` is (`fact_id` integer primary key, `intake_id`, `round`, `text`, `event_date`, `date_certainty`, `source_ref`, `parties_json`, `added_at`). A non-blank `source_ref` is `"<doc_id> <pinpoint>"`, split at the first space. `doc_id` must be a locked document of the intake's case; otherwise `O4_BAD_FACT`.
+- O4-03: Each earlier fact gets at most one flag, checked in this order: `POSSIBLE_CONTRADICTION`, then `REPEAT`, then `SAME_DATE_DIFFERENT_ACCOUNT`. "Same exact `event_date`" means both facts have `date_certainty` `exact` and the same non-blank date. Words are found with `\b` boundaries, after lower-casing.
+- O4-04: Rounds are stored add-only. An `OPEN` answer adds a row to table `intake_round_ends` (`intake_id`, `round`, `ended_at`). The current round is 1 plus the number of those rows.
+- O4-05: `open_flags` comes from calling O4-03 again for each fact in `fact_id` order. Flags are not stored.
+
+#### O5
+
+- O5-03: `matter_id` must be in table `matters`. If table `evidence_map_links` doesn't exist, the result is `NO_OVERRULING_RECORDED`.
+- O5-05: A case's tier must fit its `weight` (tier 1: 90–100; tier 3: 10–59). When it doesn't, the case goes in `kept_out` with reason `WEIGHT_NOT_IN_TIER` and is never made a unit. `matter_court` with no entry in the hierarchy has no higher courts.
+
+#### O6
+
+- O6-05 (buildability): O6-04 stores only the reply's fingerprint, so the receipt needs the text. The signature is `build_answer_receipt(db_path: str, run_id: int, rule_receipts: list, case_receipts: list, reply_text: str | None = None) -> dict`.
+  - With a stored reply: `reply_text` is required, and its SHA-256 must equal the stored `reply_sha256`; otherwise refuse `O6_REPLY_MISMATCH`.
+  - With no stored reply and `reply_text` `None`: give the `PACKET_ONLY` receipt. Its `units_used` is every unit ID in the packet, `rules` and `case_law` come from the receipts, and `gaps` is `[]`.
+  - With no stored reply but `reply_text` given: refuse `O6_NO_REPLY` (check it with O6-04 first).
+- O6-03: The run doesn't store its route. The route always comes from the `settings` passed in.
+- Not checked: the question text (tier 4) goes into a law-only packet sent by copy and paste. A person's question can describe their case. The Owner may want the paste route to show the question back for the person's yes. It does that already, because `PASTE_READY` returns the whole packet text before anything is sent.
+
+#### O7
+
+- O7-01, field types (spec "Timeline fields"):
+  - `event_date` and `doc_date`: `""` or `YYYY-MM-DD`
+  - `date_certainty`: `exact`, `approximate` or `unknown`
+  - `parties`: a list of role tags
+  - `threads`: a list of thread IDs already added (at least one)
+  - `significance`: text of at most 300 characters
+  - `links`: a list of earlier row IDs of the same case
+- O7-01, other points:
+  - `doc_id` is the part of `source_ref` before the first space.
+  - Row IDs count per case.
+  - Table `spine_rows` has the primary key (`case_id`, `row_id`), and the list fields are stored as JSON.
+  - `case_id` must be a registered matter.
+- O7-02: `thread_id` matches `TH-\d{2,}` and is unique per case.
+- O7-03: Rows are compared with the next row in the thread. The gap's `threads` is `[<thread_id>]`. Gap IDs count per case. The function returns every stored gap of the case, in ID order.
+- O7-03, gap sentence (spec: "the record does not establish X between date A and date B"). The `missing` texts above would make a double negative ("does not establish no row for ..."). So:
+  - A quiet thread's `missing` is `what happened in thread <thread_id>`.
+  - A note row's `missing` is `a document behind row <row_id>`, with `date_from` and `date_to` both that row's `event_date` (`unknown` when blank).
+  - The `statement` stays `The record does not establish <missing> between <date_from> and <date_to>.`
+- O7-05: Split sentences as in O3-03.
+
+#### Not changed, noted for the Owner
+
+- Plan v1 Part 1 says shared gates are stand-alone files. PH1 may still import `apccs_focus_pack`, as worded, because both are new APCCS files.
+- The pull request carrying this wording has a branch name (`plan/wording-fp1-ph1-ra-o`) that the daily status's batch matcher reads as FP1 and PH1. For a while it may call those two "merged" before their real build pull requests are.
+
+End of the auditor's check.
+
+End of wording for FP1, PH1, RA1–RA3 and O1–O7.
