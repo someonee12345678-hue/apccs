@@ -5190,4 +5190,124 @@ End of Batch O7.
 9. **Score weighting (RA2-02):** no source weighs PROOF, NEW, FIT and ROUTE; "rose" means no part fell and at least one rose.
 10. **The official links behind any legal rule** are entered by a person at run time (`record_law_section_dates`, `load_court_hierarchy`). No legal fact is written into this wording.
 
+### Auditor's check and corrections (separate Claude run, 2026-11-12)
+
+Checked by a separate scheduled Claude run on 2026-11-12, America/Vancouver, which did not write the wording above. It read `AGENTS.md` and `BUILDER_RUNBOOK.md`, `plan/RULEBOOK.md`, the ledger to Q039, the end of this file, `code/apccs_readability_gate.py` and its test `test_a705_03`, uclrcde `AGENTS.md` and `code/uclrcde_core.py`, `uclrcde_oracle.py`, `uclrcde_sources.py` and `uclrcde_evidence.py`. It also read these sources: plan v1 (Parts 2, 4 and 6), the wording brief, log Entry 0329, the Oracle spec doc, Focus Card v0.1 and its Addendum 1, `CLEAN_START_PLAN_v0.1` and Addendum 3 (T8). It ran the gate's three checks on sample code to confirm items A1 and A2 below.
+
+**Result: all 12 batches are ready to build, in this order: FP1, PH1, RA1, RA2, RA3 (apccs), then O1 to O7 (uclrcde).** Read each batch with the corrections below. Where a correction and the wording above differ, the correction wins. Every other part of the wording stays as written.
+
+#### A. All apccs batches (FP1, PH1, RA1–RA3): the readability gate
+
+The gate checks every line of the new code files and the new test files.
+
+1. **No database path.** Check A703 refuses `sqlite3.connect(<a path chosen while running>)`. So functions that store rows take an open connection, never a `db_path`. The first parameter is `conn: sqlite3.Connection`. The function runs `CREATE TABLE IF NOT EXISTS`, inserts its row and calls `conn.commit()`. It never opens or closes the connection. If `conn` is not a `sqlite3.Connection`, it refuses with `<PREFIX>_BAD_DB` (`PH_BAD_DB` or `RA_BAD_DB`). Tests use `sqlite3.connect(":memory:")`. This applies to `record_starter_receipt`, `list_starter_receipts`, `record_research_round`, `record_caught_trap` and `check_answer_against_traps`. Rule 3 above is replaced by this for apccs.
+2. **No files made by tests.** Check A703 also refuses writing a file into a temporary folder. apccs tests create no files at all, not even inside `tempfile.TemporaryDirectory()`. Tests that need files to read use the repository's own files. `repo_root` is `Path(__file__).resolve().parents[1]`, and `entries` point at existing files such as `AGENTS.md` and `plan/RULEBOOK.md`. Expected text, sizes and fingerprints are worked out in the test by reading the same file, never typed in as fixed values. The FP1-01 symlink refusal is built but needs no test.
+3. **No dynamic calls.** Check A703 refuses a call it can't name, such as `fns[key](...)`, `getattr(...)` or `setattr(...)`. Call an injected function only through a plain name: a parameter, or a loop variable such as `for role, critic in critic_fns.items(): critic(...)`.
+4. **Test methods count as public functions.** Every `test_...` method needs a docstring with non-empty `Inputs:`, `Outputs:` and `Errors:` sections, and the return hint `-> None`. So does the module docstring of each new file.
+
+#### FP1
+
+- FP1-01: Read the file with `splitlines(keepends=True)`. The chosen text is lines `first` to `last`, joined unchanged. `chars` is the length of that text, and `sha256` is the SHA-256 of its UTF-8 bytes. When `lines` is `None`, the item's `lines` becomes `[1, <number of lines>]`. A range with `first < 1`, `last < first` or `last` past the end of the file is `FP_BAD_LINES`. `FP_DUPLICATE` means the same path with the same `lines` twice.
+- FP1-02: Go through the items in sorted order. Keep each item that still fits in what is left of the budget. Leave out each item that doesn't, and keep checking the items after it. `kept` and `left_out` are both in sorted order.
+- FP1-04: A heading is present when a line, stripped, equals it exactly. `OVER_LENGTH` means more than `max_words` whitespace-separated words. Sentences are split after `.`, `!` or `?` followed by a space or a line end. A claim line matches `^\s*(-|\*|\d+\.)\s`. `line` numbers count from 1. Contract types: `required_headings` and `padding_phrases` are lists of text, `max_words` is an int of at least 1, and the two `require_` fields are bools. Anything else is `FP_BAD_CONTRACT`.
+- FP1-05: `TODO` matches its exact capitals. `placeholder`, `stub`, `mock` and `fake` match as whole words in any case. Bodies of only `pass` or `...` and the test rules are found with `ast`. A file is a test when its file name (not its folders) starts with `test_`.
+
+#### PH1
+
+- PH1-04: The handoff's `FILES` paths are relative to `repo_root`. They are checked as in FP1-01, and their refusals pass through.
+- PH1-05: Takes `conn` (A1): `record_starter_receipt(conn: sqlite3.Connection, starter: dict, made_for: str, made_at: str) -> dict` and `list_starter_receipts(conn: sqlite3.Connection, made_for: str) -> list`. `left_out_json` is `json.dumps(starter["left_out"], sort_keys=True)`.
+- Not checked, still: the meaning of C1, C2, C3 and N1. The audit searched Drive and found no definition, so they stay settings slots.
+
+#### RA1
+
+- RA1-01: `roles` maps a role name to a helper name. The value for `Fit Checker` must be the exact text `software`, which means the built-in RA1-04 check, not a helper. When `roles` is absent, it defaults to `{"Fit Checker": "software"}`. Other roles are optional here.
+- RA1-05: `NEW_TO_YOU` lists the options for which `is_known(name, link, brief["KNOWN"])` is false, each as `{name, link, proof_link}`. `WINNERS` items are `{name, link, licence, last_update, fit}`, sorted by name. `REJECTS` holds one text line `<name>: <limit_id>, <limit_id>` for each option with a `FAIL`. `UNKNOWN` holds one text line `<name>: no proof` or `<name>: <limit_id> unknown` for each such case.
+
+#### RA2
+
+- RA2-03, rules 4 and 5: Rule 4 applies only from round 2 (Addendum 1: "Round n+1 must answer every objection from round n and add at least one new proven finding"). So with `one_up` on, a round from round 2 with `NEW` 0 stops as `ONE_UP_FAILED`. Rule 5 (`CHANGE_ANGLE` once, then `STOP`) covers round 1, and every round when `one_up` is off. Rule 1 fires when `len(history)` is at or over `round_cap`.
+- RA2-04, modes (Addendum 1 section 1): In `single`, every critic is called each round. In `gauntlet`, critics are called in dict order, and a critic is called only when every earlier critic in that round returned no objections. Call injected functions as in A3.
+- RA2-05: Signature `record_research_round(conn: sqlite3.Connection, run_id: str, round_result: dict, agent_code: str, recorded_at: str) -> dict`. `round_result` is one RA2-04 `rounds` item (`{round, scores, action, reason}`). The ID digits are copied from `recorded_at` as written, with no time-zone change. The three open lines are:
+  - `DID: scored round <n> (PROOF <p>, NEW <n>, FIT <f>, ROUTE <r>)`
+  - `OPEN: none` for `STOP`, otherwise `OPEN: round <n+1>`
+  - `NEXT: <action> (<reason>)`
+
+#### RA3
+
+- RA3-02: Who fills each role is read from `settings["roles"]`. A named helper must exist in `helpers` and list that role in its `roles`; otherwise `RA_ROLE_UNFILLED`. The text `software` counts as a filled software helper for `Fit Checker`, `Fact Critic` and `Gap Critic`. A level that needs Finder, Fact Critic or Gap Critic when one is missing from `settings["roles"]` gives the problem `ROLE_MISSING`, not a refusal.
+- RA3-03: Check in this order: (1) `RA_ROLE_NOT_HELD`; (2) the blind-review strip; (3) `online` without approval gives `NEEDS_APPROVAL`, for every kind of helper; (4) the route by kind.
+- RA3-04: RA2-04 refuses `swarm`, so each thread calls `run_research_loop` with a copy of `settings` whose `mode` is `single`. "Beats" means a higher value on all four parts of the thread's last-round scores. Ties among threads that nothing beats go to higher `PROOF`, then fewer rounds, then list order.
+- RA3-05: Signatures `record_caught_trap(conn: sqlite3.Connection, trap: dict, recorded_at: str) -> dict` and `check_answer_against_traps(conn: sqlite3.Connection, answer: dict) -> dict`. `answer` is the RA2-01 `answer` shape.
+
+#### Track O (uclrcde): all batches
+
+uclrcde has no readability gate, so `db_path` and test databases inside `tempfile.TemporaryDirectory()` stay as worded. Rules 1, 2 and 4 above still apply, so the code stays readable. Stored times are UTC ISO 8601 with offset, from `datetime.now(timezone.utc)`. Every table is made with `CREATE TABLE IF NOT EXISTS` through a connection from `core.open_uclrcde_db`. A table the code reads but that doesn't exist yet counts as having no rows.
+
+#### O1
+
+- `ORACLE_INSTRUCTIONS`: Entry 0329 gives the section titles as "Controlling Authority & Facts (Tier 1 & Tier 2)" and "Subordinate Context (Tier 3)". The block above dropped both brackets, an edit it doesn't list. The constant restores them, so those two lines begin `## 2. Controlling Authority & Facts (Tier 1 & Tier 2) State` and `## 3. Subordinate Context (Tier 3) State`. All else in the block stays as written.
+- O1-01: `first6` is the first six whitespace-separated words, joined by single spaces (fewer if the text is shorter).
+- O1-02: A paragraph is a run of lines between lines that are empty or only whitespace. Its lines are joined with `\n`, unchanged. A missing document or a failed fingerprint is the `ValueError` from `core._verified_document`, turned into `O1_NOT_LOCKED`.
+- O1-05: Only whole lines count as markers. `[UNIT]` and `[/UNIT]` are lines exactly equal to those words. `EXPECTED_UNIT_COUNT:` and `USER_HYPOTHESIS_QUERY (Tier 4, Weight 0): "` are lines that start with them. Inside a block, the six field lines come first, in the O1-04 order. `VERBATIM_TEXT` starts on the seventh line. So the instruction text, which mentions these words inside sentences, is never read as a marker.
+
+#### O2
+
+- O2-05: First remove every double-quoted span (from one `"` to the next) from the reply. Then split what is left into sentences, after `.`, `!` or `?` followed by whitespace, or at a line break. `COUNTED_DATE` is a sentence where both `\b\d+\s+(day|days|week|weeks|month|months)\b` and a whole word `after`, `before`, `from`, `within` or `by` (any case) appear. `DATE_NOT_IN_PACKET` is checked on the whole reply, quotes included. Not checked: numbers written as words ("thirty days").
+
+#### O3
+
+- O3-03: A citation bracket after a quote is read as `[<ID>, <SOURCE_REF>, <TIER>, <WEIGHT>]`. ID is before the first `, `, WEIGHT is after the last `, `, TIER is before that, and SOURCE_REF is everything in between. Sentences split as in O2-05, but a split point inside a double-quoted span doesn't count.
+- O3-04: The five titles are those of `ORACLE_INSTRUCTIONS` (O1 correction). The heading line must start with `## <n>. <title>`. A reply with no `=== END OF ANALYSIS ===` line is `MISSING_END_LINE` (blueprint STEP 3).
+
+#### O4
+
+- O4-01: Table `intake_questions` is (`intake_id`, `position` from 1, `question`).
+- O4-02: Table `intake_facts` is (`fact_id` integer primary key, `intake_id`, `round`, `text`, `event_date`, `date_certainty`, `source_ref`, `parties_json`, `added_at`). A non-blank `source_ref` is `"<doc_id> <pinpoint>"`, split at the first space. `doc_id` must be a locked document of the intake's case; otherwise `O4_BAD_FACT`.
+- O4-03: Each earlier fact gets at most one flag, checked in this order: `POSSIBLE_CONTRADICTION`, then `REPEAT`, then `SAME_DATE_DIFFERENT_ACCOUNT`. "Same exact `event_date`" means both facts have `date_certainty` `exact` and the same non-blank date. Words are found with `\b` boundaries, after lower-casing.
+- O4-04: Rounds are stored add-only. An `OPEN` answer adds a row to table `intake_round_ends` (`intake_id`, `round`, `ended_at`). The current round is 1 plus the number of those rows.
+- O4-05: `open_flags` comes from calling O4-03 again for each fact in `fact_id` order. Flags are not stored.
+
+#### O5
+
+- O5-03: `matter_id` must be in table `matters`. If table `evidence_map_links` doesn't exist, the result is `NO_OVERRULING_RECORDED`.
+- O5-05: A case's tier must fit its `weight` (tier 1: 90–100; tier 3: 10–59). When it doesn't, the case goes in `kept_out` with reason `WEIGHT_NOT_IN_TIER` and is never made a unit. `matter_court` with no entry in the hierarchy has no higher courts.
+
+#### O6
+
+- O6-05 (buildability): O6-04 stores only the reply's fingerprint, so the receipt needs the text. The signature is `build_answer_receipt(db_path: str, run_id: int, rule_receipts: list, case_receipts: list, reply_text: str | None = None) -> dict`.
+  - With a stored reply: `reply_text` is required, and its SHA-256 must equal the stored `reply_sha256`; otherwise refuse `O6_REPLY_MISMATCH`.
+  - With no stored reply and `reply_text` `None`: give the `PACKET_ONLY` receipt. Its `units_used` is every unit ID in the packet, `rules` and `case_law` come from the receipts, and `gaps` is `[]`.
+  - With no stored reply but `reply_text` given: refuse `O6_NO_REPLY` (check it with O6-04 first).
+- O6-03: The run doesn't store its route. The route always comes from the `settings` passed in.
+- Not checked: the question text (tier 4) goes into a law-only packet sent by copy and paste. A person's question can describe their case. The Owner may want the paste route to show the question back for the person's yes. It does that already, because `PASTE_READY` returns the whole packet text before anything is sent.
+
+#### O7
+
+- O7-01, field types (spec "Timeline fields"):
+  - `event_date` and `doc_date`: `""` or `YYYY-MM-DD`
+  - `date_certainty`: `exact`, `approximate` or `unknown`
+  - `parties`: a list of role tags
+  - `threads`: a list of thread IDs already added (at least one)
+  - `significance`: text of at most 300 characters
+  - `links`: a list of earlier row IDs of the same case
+- O7-01, other points:
+  - `doc_id` is the part of `source_ref` before the first space.
+  - Row IDs count per case.
+  - Table `spine_rows` has the primary key (`case_id`, `row_id`), and the list fields are stored as JSON.
+  - `case_id` must be a registered matter.
+- O7-02: `thread_id` matches `TH-\d{2,}` and is unique per case.
+- O7-03: Rows are compared with the next row in the thread. The gap's `threads` is `[<thread_id>]`. Gap IDs count per case. The function returns every stored gap of the case, in ID order.
+- O7-03, gap sentence (spec: "the record does not establish X between date A and date B"). The `missing` texts above would make a double negative ("does not establish no row for ..."). So:
+  - A quiet thread's `missing` is `what happened in thread <thread_id>`.
+  - A note row's `missing` is `a document behind row <row_id>`, with `date_from` and `date_to` both that row's `event_date` (`unknown` when blank).
+  - The `statement` stays `The record does not establish <missing> between <date_from> and <date_to>.`
+- O7-05: Split sentences as in O3-03.
+
+#### Not changed, noted for the Owner
+
+- Plan v1 Part 1 says shared gates are stand-alone files. PH1 may still import `apccs_focus_pack`, as worded, because both are new APCCS files.
+- The pull request carrying this wording has a branch name (`plan/wording-fp1-ph1-ra-o`) that the daily status's batch matcher reads as FP1 and PH1. For a while it may call those two "merged" before their real build pull requests are.
+
+End of the auditor's check.
+
 End of wording for FP1, PH1, RA1–RA3 and O1–O7.
