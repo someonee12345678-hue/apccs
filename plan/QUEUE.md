@@ -5311,3 +5311,183 @@ uclrcde has no readability gate, so `db_path` and test databases inside `tempfil
 End of the auditor's check.
 
 End of wording for FP1, PH1, RA1–RA3 and O1–O7.
+
+## Batches OG-1 to OG-6 — OmniGuide shared web app, Phase 1 (Claude, 2026-11-13)
+
+Written by Claude (architect) on 2026-11-13, America/Vancouver. The Owner said at 15:04 "update everything and do your own push and mergers or delegated out", after sending OmniGuide spec v2 at 14:53 (phones and TVs: LG webOS .ipk, browsers, Android, Fire TV). Plan: https://claude.ai/artifact/KTECiWoBFKnpZTdi5SEnHN (sections "Spec v2" and "Log entry structure").
+
+**Status: OG-1 to OG-6 are ready to build, in order.** No separate wording audit for this group (Owner's 15:04 instruction); the "Build and test" check in omniguide is the gate.
+
+### Rules for all OmniGuide batches (read with each batch)
+
+1. Target repository: `someonee12345678-hue/omniguide`. Follow its `AGENTS.md`, section "The shared web app". All code goes in `webapp/src/`, all tests in `webapp/test/`. Never touch `.github/`, `AGENTS.md` or `app/` (the Kotlin app) in these batches.
+2. Plain JavaScript ES modules (ES2020, runs on Chromium 87), no npm dependencies, no framework. Each module exports named functions; no default exports; no globals.
+3. Pure logic: functions take everything they need as arguments (text, time in ms, injected `fetchFn`, injected `storage` with `getItem/setItem`). Only files named `*_view.js` may touch `document`, and they are not unit-tested.
+4. Refusals throw `Error` whose message starts with the code shown (for example `OG_BAD_M3U: ...`). Checks return results; they never change their input.
+5. Tests: one file per batch, `webapp/test/og<N>.test.js`, using `node:test` and `node:assert/strict`, one normal-use and one bad-input test per instruction, named as listed. The file's first test prints the batch canary with `console.log`. Made-up data only (channel names like "Example News 24", URLs under `https://example.com/`).
+6. Before the pull request: `cd webapp && node --test` passes. Pull request title: `Batch OG-<N>: <a few words>`, label `apccs-batch`.
+7. Only channels and titles a service offers in Canada (region code `CA`). No proxy, no sign-in, no DRM handling, no stream relaying.
+
+---
+
+### Batch OG-1: Ledger in JavaScript (same hashes as the Android app)
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: CHAIN = LINK -> seal`.
+**Files:** new `webapp/src/ledger.js`. Tests: `webapp/test/og1.test.js`.
+
+#### OG-1-01: canonicalJson(value) -> string
+Sorted object keys (plain string compare), no whitespace, strings escaped like `JSON.stringify` except that characters above U+007F stay raw. Whole numbers only: a non-integer number throws `OG_LEDGER_FRACTION`. `undefined` or a function anywhere throws `OG_LEDGER_BAD_VALUE`.
+Tests: `og1_01_canonical_sorts_and_escapes` — must give exactly `{"agent":"app","entry_id":"01JCX4M8Q2W7Z9K3R5T6Y8B1N0","kind":"app_start","rag":{"keywords":["startup"],"summary":"App started"},"status":"green"}` for that object with keys shuffled; `og1_01_refuses_fractions`.
+
+#### OG-1-02: async sha256Hex(text) -> string
+UTF-8, lowercase hex. Uses `globalThis.crypto.subtle` (works in browsers and Node 22).
+Tests: `og1_02_sha256_known_value` (SHA-256 of "abc" is `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`); `og1_02_refuses_non_string` (`OG_LEDGER_BAD_VALUE`).
+
+#### OG-1-03: async hashOf(entry), async seal(entry, prevHash)
+`hashOf` hashes `canonicalJson` of the entry without its `integrity` key. `seal` returns a new object with `integrity: {hash, prev_hash}`. `GENESIS_PREV_HASH` = 64 zeros, exported. `prevHash` not 64 lowercase hex throws `OG_LEDGER_BAD_HASH`.
+Tests: `og1_03_matches_python_reference` — the two entries in `tools/ledger_vectors.py` (`VECTOR_ENTRIES`) must hash to `f0a788111aaf6653cdb5c44161ec2f96943cdb629d376925be11f91b5abb2000` and `d86defffd344aeae4d5256842b9ca6d04ee3fadb4857b93fded7738888314365`; `og1_03_refuses_bad_prev_hash`.
+
+#### OG-1-04: async verifyChain(entries, startPrevHash = GENESIS_PREV_HASH)
+Returns `{ok, checked, firstBadIndex, reason, lastGoodHash}`; stops at the first entry with no integrity block (`missing integrity block`), a wrong `prev_hash` (`broken link`) or a wrong hash (`content changed`).
+Tests: `og1_04_intact_chain_verifies`; `og1_04_detects_edit_and_deletion`.
+
+#### OG-1-05: buildEntry({agent, kind, correlationId, summary, keywords, status, payload, nowMs, entryId}) and ulid(nowMs, randomBytesFn)
+Same fields and writer rules as `docs/specs/Security.json` (`writers`) and the plan's "Log entry structure": `@context`, `@type`, `entry_id`, `correlation_id`, `timestamp_utc` (ISO, seconds), `timestamp_local` (`YYYY-MM-DD HH:mm America/Vancouver`, via `Intl.DateTimeFormat`), `agent`, `kind`, `status` (green/red/grey), `rag: {summary, keywords}`, optional `payload`. An agent writing a kind it may not write throws `OG_LEDGER_NOT_ALLOWED`. `ulid` gives 26 Crockford base32 characters, time-sortable.
+Tests: `og1_05_builds_entry_with_local_time` (fixed `nowMs` 1763068140000 gives `2025-11-13 13:09 America/Vancouver`); `og1_05_refuses_wrong_writer`.
+
+---
+
+### Batch OG-2: Channels, duplicates and the best stream
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: MERGE = ONE -> card`. **Build only after:** OG-1 is merged.
+**Files:** new `webapp/src/channels.js`. Tests: `webapp/test/og2.test.js`.
+
+A channel source record is `{source, sourceChannelId, name, number, logoUrl, groups: [], streamUrl, region, quality: 'sd'|'hd'|'fhd'|'uhd'|'unknown', drm: bool, epgId}`. `source` is one of `samsung, roku, lg, google_tv, tcl, vizio, vidaa, amazon`.
+
+#### OG-2-01: validateSourceChannel(record) -> record (frozen copy)
+Throws `OG_BAD_CHANNEL: <field>` for a missing name, stream URL not `https://`, unknown source or quality, or a region that isn't two capital letters.
+Tests: `og2_01_accepts_good_record`; `og2_01_refuses_bad_fields`.
+
+#### OG-2-02: normalizeChannelName(name) -> string
+Lowercase; strip accents; `&` -> `and`; drop punctuation; drop trailing words `hd`, `uhd`, `4k`, `tv`, `channel`, `network` (once each, from the end); collapse spaces. Keeps time-shift markers like `+1` as ` plus1`; keeps region words (`east`, `west`, `pacific`).
+Tests: `og2_02_normalizes_variants` ("Example News HD", "EXAMPLE NEWS", "Example-News Channel" all give `example news`; "Example Movies +1" gives `example movies plus1`); `og2_02_refuses_empty`.
+
+#### OG-2-03: dedupeChannels(records) -> [{key, name, sources: [...]}]
+Two records are the same channel when their `epgId` values are equal and not empty, or else when their normalized names are equal. Time-shift (`plus1`) and regional feeds stay separate. Output order: by `number` (missing last), then name. `key` is `epg:<epgId>` or `name:<normalized>`.
+Tests: `og2_03_merges_same_channel_across_sources`; `og2_03_keeps_timeshift_and_regions_apart`.
+
+#### OG-2-04: pickBestSource(sources, health) -> source record
+`health` maps `source:sourceChannelId` to `{failures, lastOkMs}`. Order: no DRM first; then fewer failures; then higher quality (uhd>fhd>hd>sd>unknown); then the source order listed above. Throws `OG_NO_PLAYABLE_SOURCE` when every source has DRM or the list is empty.
+Tests: `og2_04_prefers_healthy_high_quality`; `og2_04_refuses_all_drm`.
+
+#### OG-2-05: filterForRegion(records, region = 'CA') -> {kept, leftOut}
+Keeps records whose `region` equals the given region; `leftOut` lists `{source, sourceChannelId, name, reason: 'NOT_IN_REGION'}`. Never rewrites a URL.
+Tests: `og2_05_keeps_canada_only`; `og2_05_refuses_bad_region_code`.
+
+---
+
+### Batch OG-3: Reading channel lists and the TV guide
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: GUIDE = GRID -> now`. **Build only after:** OG-2 is merged.
+**Files:** new `webapp/src/sources.js`. Tests: `webapp/test/og3.test.js`.
+
+#### OG-3-01: parseM3U(text, source, region) -> source records
+Reads `#EXTM3U` playlists: each `#EXTINF` line's `tvg-id` (-> `epgId`), `tvg-chno` (-> `number`), `tvg-logo`, `group-title` (split on `;`), the title after the last comma, and the URL on the next non-comment line. Lines it can't use are skipped and counted. Returns `{records, skipped}`; each record passes `validateSourceChannel`. No `#EXTM3U` header throws `OG_BAD_M3U`.
+Tests: `og3_01_reads_playlist`; `og3_01_refuses_non_playlist`.
+
+#### OG-3-02: parseXmltv(text) -> {programmes: [{epgId, startMs, stopMs, title, description, category}]}
+Reads `<programme start="YYYYMMDDHHMMSS +ZZZZ" stop=... channel=...>` with `<title>`, `<desc>`, `<category>`, using string parsing only (no DOMParser, so it runs in Node). Decodes `&amp; &lt; &gt; &quot; &apos;`. Bad times skip that programme. Not XMLTV throws `OG_BAD_XMLTV`.
+Tests: `og3_02_reads_guide_with_time_zones`; `og3_02_refuses_non_xmltv`.
+
+#### OG-3-03: nowAndNext(programmes, epgId, nowMs) -> {now, next}
+`now` is the programme whose start <= nowMs < stop; `next` is the first starting at or after `now.stop` (or after nowMs if no `now`). Either may be `null`.
+Tests: `og3_03_finds_now_and_next`; `og3_03_handles_gaps_and_unknown_channel`.
+
+#### OG-3-04: guideWindow(programmes, epgIds, startMs, hours) -> rows
+One row per epgId: programmes overlapping `[startMs, startMs + hours*3600000)`, each with `leftPct` and `widthPct` of the window (clipped to 0–100, 2 decimals), sorted by start. `hours` outside 1–6 throws `OG_BAD_WINDOW`.
+Tests: `og3_04_lays_out_window`; `og3_04_refuses_bad_hours`.
+
+#### OG-3-05: async loadSource({name, playlistUrl, guideUrl, region}, fetchFn, cache, nowMs)
+Fetches both URLs through the injected `fetchFn(url, {signal})` with a 15-second timeout, parses them, and returns `{records, programmes, fetchedAtMs, fromCache}`. Caches the raw text in `cache` (getItem/setItem) under `og:src:<name>` for 6 hours; on a fetch failure it returns the cached copy with `fromCache: true`, or throws `OG_SOURCE_UNAVAILABLE` if there is none. URLs must be `https://`.
+Tests: `og3_05_loads_and_caches` (fake fetchFn); `og3_05_falls_back_to_cache_then_refuses`.
+
+---
+
+### Batch OG-4: Remote control and screen navigation
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: REMOTE = ARROW -> focus`. **Build only after:** OG-3 is merged.
+**Files:** new `webapp/src/navigation.js` and `webapp/src/grid_view.js` (DOM, not unit-tested). Tests: `webapp/test/og4.test.js`.
+
+#### OG-4-01: keyToAction(keyCode, key) -> 'up'|'down'|'left'|'right'|'ok'|'back'|'play'|'pause'|'playpause'|null
+Codes: 38/37/40/39 arrows, 13 OK, 461 LG Back, 8 and 27 Back, 415 Play, 19 Pause, 179 play/pause; `key` names (`ArrowUp`, `Enter`, `Escape`, `Backspace`, `MediaPlayPause`) also work.
+Tests: `og4_01_maps_lg_and_browser_keys`; `og4_01_unknown_keys_give_null`.
+
+#### OG-4-02: moveFocus(grid, focus, action) -> focus
+`grid` is `{rows, cols, count}` (row-major, last row may be short); `focus` is an index. Arrows move one cell and stop at edges; down into a short last row lands on its last item. Bad grid or focus throws `OG_BAD_FOCUS`.
+Tests: `og4_02_moves_and_stops_at_edges`; `og4_02_refuses_out_of_range`.
+
+#### OG-4-03: screenReducer(state, action) -> state
+Screens: `grid`, `guide`, `player`. `ok` on grid opens `player` with the focused channel; `back` from player returns to grid with the same focus; `back` on grid returns `{...state, exitRequested: true}`; `left`/`right` on player switch to the previous/next channel (wrapping). Never mutates `state`.
+Tests: `og4_03_opens_player_and_returns`; `og4_03_back_on_grid_requests_exit`.
+
+#### OG-4-04: gridLayout(viewportWidth, viewportHeight) -> {cols, cardWidth, cardHeight, gap}
+TV (width >= 1280): cards about 300 px wide; phone (width < 600): 2 columns; otherwise 3 or 4. 16:9 cards, gap 16 (24 on TV). Width or height under 200 throws `OG_BAD_VIEWPORT`.
+Tests: `og4_04_tv_and_phone_layouts`; `og4_04_refuses_tiny_viewport`.
+
+#### OG-4-05: grid_view.js renderGrid(container, channels, focus, onAction)
+Draws channel cards (logo, name, now-playing title) in a CSS grid from `gridLayout`, marks the focused card with `aria-selected` and a 4 px outline, listens to `keydown` through `keyToAction`, and to click/tap (tap = focus + ok). On LG, the Magic Remote pointer hovering a card focuses it. Update `src/main.js` to load made-up demo channels and show the grid.
+Tests (logic only): `og4_05_demo_channels_are_valid` (the demo list passes `validateSourceChannel`); `og4_05_layout_used_for_demo_viewport`.
+
+---
+
+### Batch OG-5: Video player and the guide screen
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: PLAY = STREAM -> screen`. **Build only after:** OG-4 is merged.
+**Files:** new `webapp/src/player.js`, `webapp/src/player_view.js`, `webapp/src/guide_view.js`. Tests: `webapp/test/og5.test.js`.
+
+#### OG-5-01: playbackPlan(channelEntry, health, canPlayHls) -> {url, source, mime, fallbacks: [...]}
+Uses `pickBestSource`; `mime` is `application/x-mpegURL` for `.m3u8` URLs, `video/mp4` for `.mp4`, otherwise `application/x-mpegURL`. `fallbacks` lists the other playable sources in the same order. If `canPlayHls` is false and every source is HLS, throws `OG_NO_HLS`.
+Tests: `og5_01_plans_with_fallbacks`; `og5_01_refuses_without_hls`.
+
+#### OG-5-02: nextFallback(plan, failedUrl, health, nowMs) -> {plan, health}
+Records the failure in a new `health` object (failures + 1) and returns a plan starting at the next fallback; throws `OG_ALL_SOURCES_FAILED` when none is left.
+Tests: `og5_02_moves_to_next_source`; `og5_02_refuses_when_exhausted`.
+
+#### OG-5-03: player_view.js startPlayer(container, plan, ledgerAppend)
+A native `<video>` element (HLS plays natively on webOS and Android WebView), full screen, autoplay; on `error` or 15 s of stalling it calls `nextFallback` and retries; it shows the channel name and now/next for 4 seconds on start and on OK. Every start, stop and source switch is passed to `ledgerAppend(kind 'stream_event', summary, payload)`.
+Tests (logic only): `og5_03_stall_timeout_constant_is_15s`; `og5_03_event_payload_has_no_url_secrets` (payload holds source and channel key, never query strings).
+
+#### OG-5-04: guide_view.js renderGuide(container, rows, focus, onAction)
+Draws `guideWindow` rows: channel names in a fixed left column, programme blocks positioned by `leftPct/widthPct`, a vertical line at "now", arrow keys move between programmes and channels, OK on a programme playing now opens the player.
+Tests (logic only): `og5_04_now_line_position` (a helper `nowLinePct(startMs, hours, nowMs)` exported from `player.js`); `og5_04_now_line_outside_window_is_null`.
+
+#### OG-5-05: castAvailability(env) -> {chromecast: bool, reason}
+`env` is `{isAndroidApp, isFireTv, isWebOs, hasCastBridge}`. Chromecast only in the Android app with the cast bridge and not on Fire TV; on webOS it is `false` with reason `TV_IS_THE_SCREEN`. (The Android cast bridge itself comes in a later batch.)
+Tests: `og5_05_cast_only_on_android_phones_and_tv`; `og5_05_refuses_bad_env`.
+
+---
+
+### Batch OG-6: Saved state, the log on the device, and recovery
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: RESTORE = CHECKPOINT -> replay`. **Build only after:** OG-5 is merged.
+**Files:** new `webapp/src/state.js`. Tests: `webapp/test/og6.test.js`.
+
+#### OG-6-01: createLedgerStore(storage, agent) -> {append, all, verify}
+Keeps sealed entries (OG-1) as a JSON array under `og:ledger` in the injected storage; `append` seals with the last entry's hash; `verify` uses `verifyChain`. Storage that isn't `{getItem, setItem}` throws `OG_BAD_STORAGE`.
+Tests: `og6_01_appends_a_valid_chain`; `og6_01_refuses_bad_storage`.
+
+#### OG-6-02: saveSnapshot(store, state) / snapshotFrom(entries)
+A snapshot is a `state_snapshot` entry whose payload is `{favourites, lastChannelKey, lastScreen, volume}` (whole numbers only). Taken every 50 entries and on clean exit. `snapshotFrom` returns the newest snapshot payload in a verified prefix, or `null`.
+Tests: `og6_02_takes_and_reads_snapshot`; `og6_02_refuses_fractional_volume`.
+
+#### OG-6-03: async recover(store, remoteDaysFn) -> {restoredFrom, state, quarantined}
+Follows the plan's recovery protocol: verify local; if good, use the newest local snapshot. If broken, keep the good prefix, move the rest to `og:quarantine`, and if the prefix has no snapshot, call the injected `remoteDaysFn()` (returns arrays of entries per day, newest first) until a verified snapshot is found. Appends a `recovery` entry saying what was restored and quarantined. Nothing found returns `{restoredFrom: 'empty', state: defaults}`.
+Tests: `og6_03_restores_from_local_snapshot`; `og6_03_quarantines_after_break_and_uses_remote`.
+
+#### OG-6-04: favourites(state, channelKey, action 'add'|'remove') -> state
+Returns a new state; no duplicates; at most 200 favourites (`OG_TOO_MANY_FAVOURITES`).
+Tests: `og6_04_adds_and_removes`; `og6_04_refuses_over_limit`.
+
+#### OG-6-05: main.js start-up order
+`main.js` runs: recover -> load demo or configured sources -> dedupe -> region filter -> show grid on the last screen and channel -> append `app_start`. Export `startupSteps()` returning the ordered list of step names so it can be tested.
+Tests: `og6_05_startup_order`; `og6_05_recovery_runs_before_ui`.
