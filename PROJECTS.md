@@ -8,6 +8,7 @@ Basis: Constitution Amendment 1, approved by the owner on 2026-10-29 (Drive › 
 |---|---|---|---|
 | Unified Software Builder (APCCS, the builder bot). Genesis is folded in. | `someonee12345678-hue/apccs` (private) | Active. Built and accepted to instruction 140. | Yes |
 | Canadian legal research engine (UCLRCDE) | `someonee12345678-hue/uclrcde` (private) | Active. Created by the owner on 2026-10-29; its own `AGENTS.md`, test runner and two checks arrived through its setup pull request (uclrcde #1). Holds Batches 29, 35 and 36. | Yes |
+| OmniGuide (free-TV channel app for phone and Android TV) | `someonee12345678-hue/omniguide` (private) | Active. Created by the owner on 2026-11-13; its `AGENTS.md`, "Build and test" check and its own auto-merge gate were pushed at creation (Owner's request 2026-11-13: no pulls or merges for him). Batches are `## Batch OG-...` sections in `plan/QUEUE.md`. | Yes |
 | Genesis (old repository, kept as a source) | `someonee12345678-hue/genesis` (private) | Folded into APCCS. Its features arrive as planned APCCS batches (the B40 plan). | No |
 | Elite Kit | `someonee12345678-hue/elite-kit` (private) | Separate. No approved work for the builder. | No |
 | Phone bridge | `someonee12345678-hue/aab-queue` (public) | Grok dropped. Archiving waits for the owner's yes. | No |
