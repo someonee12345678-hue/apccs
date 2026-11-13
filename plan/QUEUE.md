@@ -5491,3 +5491,58 @@ Tests: `og6_04_adds_and_removes`; `og6_04_refuses_over_limit`.
 #### OG-6-05: main.js start-up order
 `main.js` runs: recover -> load demo or configured sources -> dedupe -> region filter -> show grid on the last screen and channel -> append `app_start`. Export `startupSteps()` returning the ordered list of step names so it can be tested.
 Tests: `og6_05_startup_order`; `og6_05_recovery_runs_before_ui`.
+
+## OmniGuide addendum: corrections to OG-2 to OG-5 and new Batch OG-7 (Claude, 2026-11-13)
+
+Owner's addendum "Critical Technical Specifications & Edge Case Handling" (2026-11-13 15:13), added at his 15:16 request "add all the addendum changes to the plan". Where this section differs from "Batches OG-1 to OG-6", this section wins. Status: ready to build; OG-7 builds after OG-6.
+
+**Not built (architect's decision, logged in Entry 0367):** the server-side transcoding proxy and the Canadian proxy that signs in with session tokens and relays streams (it gets around the services' access controls, rebroadcasts their streams, and needs a paid server); audio or video fingerprinting for duplicates; Web Audio `GainNode` cross-fading (streams without CORS headers play silent through Web Audio, and the TV can't decode two streams at once); bundling `com.pirate.refresh` inside the app (it is installed on the TV separately, once). The replacements are below.
+
+### Corrections
+
+**OG-2, new instruction OG-2-06: dedupMap(groups, health) -> array** (the `channel_dedup_map.json` shape). One item per merged channel: `{channel_id, name, sources: ["samsung", ...], best_source, match: "epg" | "name"}`. `channel_id` is the group key with `epg:`/`name:` removed and spaces as `_`. `best_source` comes from `pickBestSource`. No fingerprint field. An empty group throws `OG_BAD_GROUP`. Tests: `og2_06_builds_dedup_map`; `og2_06_refuses_empty_group`.
+
+**OG-3-05 cache times** replace "6 hours": export `TTL_METADATA_MS` = 4 hours (channel lists and titles), `TTL_STREAM_URL_MS` = 60 minutes (a cached stream URL older than this is fetched again before playing), `TTL_GUIDE_MS` = 1 hour. The guide keeps up to 7 days of programmes. Add test `og3_05_ttls_match_owner_addendum`.
+
+**OG-4, new instruction OG-4-06: virtualWindow(count, focus, maxNodes = 20, buffer = 5) -> {start, end}** (end exclusive). A run of at most `maxNodes` indexes containing `focus`, with at least `buffer` items before and after the focus where the list allows, clipped at both ends. `renderGrid` (OG-4-05) creates DOM nodes only for this window (never more than 20 cards), reuses nodes as focus moves, and sets `loading="lazy"` and `decoding="async"` on logos; descriptions are filled in only for cards in the window. Bad numbers throw `OG_BAD_WINDOW`. Tests: `og4_06_window_never_exceeds_20_for_500_items`; `og4_06_window_clips_at_edges`.
+
+**OG-5-01 codec choice:** `playbackPlan(channelEntry, health, canPlay)` — `canPlay(mime)` replaces `canPlayHls` and wraps `video.canPlayType`. Mimes: `.m3u8` -> `application/x-mpegURL`, `.mpd` -> `application/dash+xml`, `.mp4` -> `video/mp4`. Sources whose mime the device can't play are skipped (listed in `skipped` with reason `FORMAT`). If nothing is playable and the channel has an `lg` source while running on webOS, return `{kind: "launch_lg_channels", channelKey}` (OG-7 opens it); otherwise throw `OG_NO_PLAYABLE_FORMAT`. No transcoding, no extra player libraries.
+
+**OG-5-03 volume:** on every channel change or source switch, ramp `video.volume` down by 6 dB (multiply by 10^(-6/20), about 0.5) over 2 seconds before switching, then start the new stream at that channel's remembered volume. Add pure `volumeRamp(startVolume, dropDb, durationMs, stepMs) -> [{atMs, volume}]` to `player.js` (volumes 0–1, rounded to 3 decimals). Tests: `og5_03_ramp_drops_6db_over_2s`; `og5_03_ramp_refuses_bad_volume`.
+
+**OG-5-05 casting mutes the local player:** add `localAudioWhenCasting(castActive) -> {muted: true, paused: true} | {muted: false, paused: false}`; the Android cast bridge (later batch) calls it so the phone or TV stops its own sound while casting.
+
+---
+
+### Batch OG-7: LG TV features, guide refresh and self-test
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: MAGIC = REMOTE -> smooth`. **Build only after:** OG-6 is merged.
+**Files:** new `webapp/src/webos.js`, `webapp/src/selftest.js`, `webapp/src/selftest_view.js`. Tests: `webapp/test/og7.test.js`.
+
+#### OG-7-01: lunaCall(bridge, uri, params, timeoutMs = 5000) -> Promise
+Calls a webOS system service through an injected bridge object `{call(uri, paramsJson, onResponse)}` (on the TV this wraps `window.PalmServiceBridge`; in tests a fake). `uri` must start with `luna://` (`OG_BAD_LUNA`). Resolves with the parsed response; rejects with `OG_LUNA_FAILED: <errorText>` when `returnValue` is false, or `OG_LUNA_TIMEOUT` after the timeout. `isWebOs(env)` returns true when `env.PalmServiceBridge` exists.
+Tests: `og7_01_calls_and_parses`; `og7_01_refuses_non_luna_and_times_out`.
+
+#### OG-7-02: openLgChannels(bridge, channelHint) -> {opened, reason}
+Launches LG's own channels app with `luna://com.webos.applicationManager/launch` and `{id: LG_CHANNELS_APP_ID, params: {channelHint}}`. Export `LG_CHANNELS_APP_ID = "com.webos.app.lgchannels"` with a comment that the ID is checked on the Owner's TV during the hardware test. On failure returns `{opened: false, reason}` (never throws). Used for OG-5's `launch_lg_channels` plan.
+Tests: `og7_02_launches_with_app_id`; `og7_02_reports_failure_without_throwing`.
+
+#### OG-7-03: nativeTvPlaying(queryFn) -> {known, playing}
+Asks the TV whether its own live TV is playing, through an injected `queryFn` (on the TV a `lunaCall` to the TV program service; sideloaded apps may be refused). Any refusal or error gives `{known: false, playing: false}`; the app then simply plays, never blocks. When `playing` is true, the player shows "Live TV is already playing" and asks before starting a second stream.
+Tests: `og7_03_reports_playing`; `og7_03_refusal_means_unknown`.
+
+#### OG-7-04: guideRefreshPlan(nowMs, lastFullMs, lastHourlyMs, timeZone = "America/Vancouver") -> "full7day" | "hourly" | "none"
+`full7day` when the local time is between 03:00 and 05:00 and the last full refresh was over 20 hours ago, or there has never been one; `hourly` when the last refresh of either kind was over 1 hour ago (`TTL_GUIDE_MS`); otherwise `none`. Bad times throw `OG_BAD_TIME`.
+Tests: `og7_04_nightly_full_and_hourly`; `og7_04_refuses_bad_time`.
+
+#### OG-7-05: self-test (Owner's addendum section 6)
+`selftest.js`: `fpsFromFrames(frameTimesMs) -> {fps, ok}` (average over the frames, `ok` when fps >= 50; fewer than 10 frames throws `OG_TOO_FEW_FRAMES`); `testChecklist(results)` returns the five Owner tests in order — Playback (one stream per source), Scroll (100 channels, 50+ fps), Region (all channels play in Canada), Remote (Magic Remote point-and-click, no lag), Cast (local sound stops) — each `{name, status: "pass" | "fail" | "not run", detail}`. `selftest_view.js` adds a "Self-test" screen (Back from the grid's settings row): it scrolls 100 demo channels with `requestAnimationFrame`, shows the fps result, tries one stream per configured source, and appends the results to the ledger as one `stream_event` entry.
+Tests: `og7_05_fps_pass_and_fail`; `og7_05_checklist_has_five_tests_in_order`.
+
+### Deliverables from the addendum, and where they are
+
+- `manifest.xml`: webOS web apps use `webapp/appinfo.json` (already there). Luna permissions go in its `requiredACG` list once OG-7's calls are confirmed on the TV.
+- `proxy_config.json`: not built (see above).
+- `channel_dedup_map.json`: OG-2-06.
+- Virtual scrolling: OG-4-06. Volume ramp: OG-5-03.
+- Multi-CPU Android APKs (armeabi-v7a, arm64-v8a, x86_64, plus universal): done in omniguide `app/build.gradle.kts` on 2026-11-13; every green build publishes them to the "latest" release.
