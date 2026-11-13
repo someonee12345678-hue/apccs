@@ -5546,3 +5546,90 @@ Tests: `og7_05_fps_pass_and_fail`; `og7_05_checklist_has_five_tests_in_order`.
 - `channel_dedup_map.json`: OG-2-06.
 - Virtual scrolling: OG-4-06. Volume ramp: OG-5-03.
 - Multi-CPU Android APKs (armeabi-v7a, arm64-v8a, x86_64, plus universal): done in omniguide `app/build.gradle.kts` on 2026-11-13; every green build publishes them to the "latest" release.
+
+## OmniGuide addendum 2: Batches OG-8 to OG-10 — player robustness, parental controls, Android app (Claude, 2026-11-13)
+
+Owner's "Advanced Features & Robustness Layer" addendum, 2026-11-13 15:27 ("build it into program"). Status: ready to build, in order, after OG-7. All earlier OmniGuide rules apply (no dependencies, no proxy, made-up data, `cd webapp && node --test`).
+
+**Changed from the addendum (architect, Entry 0369):** no proxy, so no server-made LL-HLS segments: switching is made fast on the device (live edge, warmed connections) and measured. No Sentry or Mixpanel: they need accounts and keys, add npm dependencies, and send viewing data to outside companies; the same four metrics are kept on the device in the ledger. Background audio on the LG is not built (a TV runs one app in front; no supported API for it); background audio and picture-in-picture are built in the Android app (OG-10) and in browsers that support them. Service workers can't keep a stream alive and are not used for it. Ratings use the correct names plus Canada's TV ratings.
+
+---
+
+### Batch OG-8: Error states, fast switching and on-device stream health
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: RETRY = FALLBACK -> picture`. **Build only after:** OG-7 is merged.
+**Files:** new `webapp/src/playback_state.js`, `webapp/src/metrics.js`; `webapp/src/player_view.js` uses them. Tests: `webapp/test/og8.test.js`.
+
+#### OG-8-01: playbackReducer(state, event) -> state
+States `loading`, `playing`, `buffering`, `error`. Events: `start`, `playing`, `waiting`, `stalled`, `error` (with `code`), `retry`, `fallback`. `error` keeps `{code, message, canRetry}`. Never mutates input; unknown event throws `OG_BAD_EVENT`.
+Tests: `og8_01_moves_through_states`; `og8_01_refuses_unknown_event`.
+
+#### OG-8-02: errorMessage(mediaErrorCode) -> {message, action}
+HTML `MediaError` codes: 1 aborted -> "Playback stopped." (retry); 2 network -> "Network problem. Check your connection." (retry); 3 decode -> "This stream couldn't be decoded. Trying another source..." (fallback); 4 not supported -> "This format won't play here. Trying another source..." (fallback); anything else -> "Playback failed. Please try again." (retry). The player view shows a "Connecting..." / "Buffering..." overlay and, on error, the message with a focusable Retry button; fallbacks run automatically (OG-5-02) before the Retry button is shown.
+Tests: `og8_02_maps_all_codes`; `og8_02_unknown_code_has_generic_message`.
+
+#### OG-8-03: liveEdgeTarget(seekableStart, seekableEnd, holdBackS = 3) -> seconds | null
+For live streams, the time to jump to after loading: `seekableEnd - holdBackS`, never before `seekableStart`; `null` when there is no seekable range. The player view jumps there once on `loadedmetadata`, and again if playback falls more than 30 s behind the live edge.
+Tests: `og8_03_targets_live_edge`; `og8_03_null_without_range`.
+
+#### OG-8-04: warmNeighbours(channelList, index, fetchFn) -> Promise<string[]>
+While a channel plays, fetch only the playlist text (not video) of the previous and next channel's best source, at most once per 60 s each, so a switch skips DNS and connection set-up. Returns the URLs warmed. A failed warm-up is ignored. Never fetches more than 2 URLs per call.
+Tests: `og8_04_warms_two_neighbours`; `og8_04_ignores_failures_and_rate_limits`.
+
+#### OG-8-05: metrics.js — summarizeStreamEvents(entries, nowMs) -> {successRatePct, avgSwitchMs, topErrors, daysUsedLast30}
+Reads `stream_event` ledger entries whose payload has `{event: "start"|"playing"|"error", channelKey, source, atMs, code?}`. Success rate = starts that reached playing within 20 s; switch time = start -> playing; top 3 error codes with counts; distinct local days with an `app_start` in the last 30 days (retention). A "Stream health" screen in settings shows these four numbers. Nothing leaves the device.
+Tests: `og8_05_summarizes_metrics`; `og8_05_empty_log_gives_zeros`.
+
+---
+
+### Batch OG-9: Parental controls and PIN lock
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: PIN = LOCK -> safe`. **Build only after:** OG-8 is merged.
+**Files:** new `webapp/src/parental.js`, `webapp/src/pin_view.js`. Tests: `webapp/test/og9.test.js`.
+
+#### OG-9-01: RATINGS and normalizeRating(text) -> {system, code, level}
+Levels 0–4. US: TV-Y/TV-G/G = 0 (General), TV-Y7/TV-PG/PG = 1 (Parental guidance), PG-13 = 2, TV-14 = 2 (Parents strongly cautioned), TV-MA/R = 3 (Mature), NC-17 = 4. Canada TV: C = 0, C8 = 1, G = 0, PG = 1, 14+ = 2, 18+ = 3. Accepts spellings like `TV_14`, `tv-14`, `14+`. Unknown or missing gives `{code: "UNRATED", level: null}`.
+Tests: `og9_01_normalizes_us_and_canadian`; `og9_01_unknown_is_unrated`.
+
+#### OG-9-02: isAllowed(item, settings) -> {allowed, reason}
+`item` has `rating` (programme rating from the guide's XMLTV `<rating>`, else channel rating). `settings` = `{enabled, maxLevel 0–4, blockUnrated, unlockedUntilMs, nowMs}`. Allowed when controls are off, or level <= maxLevel, or unlocked and `nowMs < unlockedUntilMs`. Unrated follows `blockUnrated`.
+Tests: `og9_02_allows_and_blocks_by_level`; `og9_02_unrated_and_unlock_window`.
+
+#### OG-9-03: async hashPin(pin, saltHex) / async checkPin(pin, stored)
+PIN is 4–8 digits (`OG_BAD_PIN` otherwise). PBKDF2-SHA-256, 100000 iterations, 16-byte random salt, through `crypto.subtle`; stored as `{saltHex, hashHex, iterations}`. `checkPin` compares in constant time over the hex strings.
+Tests: `og9_03_hash_and_check`; `og9_03_refuses_bad_pin`.
+
+#### OG-9-04: pinAttemptReducer(state, {ok, nowMs}) -> state
+After 5 wrong PINs in a row, locked for 5 minutes (`lockedUntilMs`); a right PIN resets the count and unlocks for 4 hours (`unlockedUntilMs`). Attempts during lock-out are refused without checking.
+Tests: `og9_04_locks_after_five_failures`; `og9_04_success_resets_and_unlocks`.
+
+#### OG-9-05: filterChannelsForDisplay(channels, settings) and pin_view.js
+Blocked channels stay in the grid with a lock badge, title hidden; opening one shows the PIN pad (digits by arrow keys and OK, or number keys 48–57; touch on phones). Settings screen: on/off, maximum rating (as words), block unrated, change PIN (needs the old PIN). Settings live in storage under `og:parental`; PIN never stored in plain text.
+Tests: `og9_05_blocked_channels_are_badged_not_removed`; `og9_05_titles_hidden_when_blocked`.
+
+---
+
+### Batch OG-10: Android app shows the shared app, with picture-in-picture, background audio and casting
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: PHONE = POCKET -> pip`. **Build only after:** OG-9 is merged.
+**Files:** `app/` (Kotlin). This batch may change `app/src/main/**` and `app/build.gradle.kts` dependencies only as listed; never `.github/`. The GitHub check "Build and test" compiles it (the builder can't compile Android in its session). Tests: JVM unit tests in `app/src/test/java/app/omniguide/web/`.
+
+#### OG-10-01: Bundle and load the shared app
+Gradle copies `webapp/index.html`, `webapp/src/**`, icons into `app/src/main/assets/web/` at build time (a `Copy` task wired before `preBuild`; tests and package.json not copied). `WebAppActivity` (new launcher activity, replacing `MainActivity` as LAUNCHER/LEANBACK_LAUNCHER) shows them in a `WebView` through `androidx.webkit.WebViewAssetLoader` at `https://appassets.androidplatform.net/assets/web/index.html`; JavaScript on; no file access; mixed content blocked. Add `androidx.webkit:webkit:1.12.1`.
+Tests: `og10_01_asset_url_is_https_app_assets` (a pure helper `startUrl()`); `og10_01_blocks_non_asset_navigation` (helper `isAllowedNavigation(url)` allows only the asset host and `https:` stream hosts for media, never `file:` or `javascript:`).
+
+#### OG-10-02: JavaScript bridge `OmniAndroid`
+`@JavascriptInterface` methods: `platform()` -> JSON `{isAndroidApp: true, isFireTv, hasCastBridge}` (Fire TV when `Build.MANUFACTURER` is Amazon); `ledgerAppend(json)` -> writes to the existing encrypted Kotlin ledger (`Ledger.append`, kind must pass `LedgerKinds.mayWrite("app", kind)`); `cast(json)` -> `OmniCastManager.cast`, returns the `CastResult` name. Bad JSON returns `{"error":"OG_BAD_BRIDGE_JSON"}` and never throws into JavaScript. The web app's `castAvailability` (OG-5-05) reads `platform()`.
+Tests: `og10_02_parses_bridge_json_or_reports_error` (pure parser); `og10_02_fire_tv_detection` (pure helper on manufacturer/model strings).
+
+#### OG-10-03: Picture-in-picture on phones
+`android:supportsPictureInPicture="true"` on `WebAppActivity`; on `onUserLeaveHint` while video plays (the web app tells the bridge via `setPlaying(bool)`), enter PiP with a 16:9 aspect ratio. Not on TVs (`PackageManager.FEATURE_LEANBACK`) or Fire TV. In browsers, the web player offers the PiP button only when `document.pictureInPictureEnabled` is true.
+Tests: `og10_03_pip_allowed_only_on_phones` (pure helper `shouldEnterPip(isTv, isFireTv, playing, sdkInt)`; SDK 26+).
+
+#### OG-10-04: Background audio on phones
+When the app goes to the background while playing and PiP is off, a foreground service with a media notification (play/pause, stop) keeps audio playing; `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permissions; Android 13+ asks for notification permission once. A Media Session gives lock-screen controls. Stops when the user taps stop or after 4 hours.
+Tests: `og10_04_background_rules` (pure helper `shouldKeepAudio(isTv, inPip, playing, userSetting)`); `og10_04_four_hour_cap`.
+
+#### OG-10-05: Cast bridge mutes the local player
+When a cast session starts, call `localAudioWhenCasting(true)` in the web app (pause + mute local video); when it ends, resume locally from the cast position for on-demand titles, live edge for channels. The cast button shows only when `castAvailability` says so.
+Tests: `og10_05_cast_state_to_local_audio` (pure helper mapping session state to `{muted, paused}`); `og10_05_no_cast_on_fire_tv`.
