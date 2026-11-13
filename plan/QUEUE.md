@@ -5633,3 +5633,36 @@ Tests: `og10_04_background_rules` (pure helper `shouldKeepAudio(isTv, inPip, pla
 #### OG-10-05: Cast bridge mutes the local player
 When a cast session starts, call `localAudioWhenCasting(true)` in the web app (pause + mute local video); when it ends, resume locally from the cast position for on-demand titles, live edge for channels. The cast button shows only when `castAvailability` says so.
 Tests: `og10_05_cast_state_to_local_audio` (pure helper mapping session state to `{muted, paused}`); `og10_05_no_cast_on_fire_tv`.
+
+## OmniGuide addendum 3: Batch OG-11 — source attribution, region setting, black-screen recovery (Claude, 2026-11-13)
+
+Owner's "Addendum v2.0: Legal, Regional & Edge-Case Handling", 2026-11-13 15:36 ("Add this to the program"). Status: ready to build after OG-10. All earlier OmniGuide rules apply.
+
+**Changed from the addendum (architect, Entry 0370):** no regional proxies (`ca-proxy`, `us-proxy`, `uk-proxy`) and no proxy back end: the region setting only chooses which region's published channel lists are shown, and says plainly that a region's channels play only when you are in that country. Attribution shows the service's name as text, not company logos (their logos are their trademarks, and no image files are bundled for them).
+
+### Batch OG-11
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: SOURCE = CREDIT -> shown`. **Build only after:** OG-10 is merged.
+**Files:** new `webapp/src/attribution.js`, `webapp/src/region.js`, `webapp/src/recovery.js`; `player_view.js` and the settings screen use them. Tests: `webapp/test/og11.test.js`.
+
+#### OG-11-01: sourceLabel(source) -> string
+`samsung` "Samsung TV Plus", `roku` "The Roku Channel", `lg` "LG Channels", `google_tv` "Google TV", `tcl` "TCLtv+", `vizio` "VIZIO WatchFree+", `vidaa` "VIDAA Channels", `amazon` "Amazon Fire TV". Unknown source throws `OG_BAD_SOURCE`.
+Tests: `og11_01_labels_all_eight`; `og11_01_refuses_unknown`.
+
+#### OG-11-02: attribution overlay
+`attributionText(plan) -> "Stream from <label>"` (and "Opened in LG Channels" for a `launch_lg_channels` plan). The player shows it in the bottom-right corner (semi-transparent black box, white 18 px text on TV, 12 px on phones) for the whole time a stream plays, and it changes on every source switch. The info overlay (OG-5-03) also shows it. Never hidden by parental or error overlays' layout.
+Tests: `og11_02_text_for_stream_and_launch`; `og11_02_refuses_plan_without_source`.
+
+#### OG-11-03: region.js — regionChoices(sourceConfigs) and applyRegion(settings, code)
+`regionChoices` lists only region codes that at least one configured source publishes a channel list for, Canada first, as `{code, label, note}` where `note` is "Plays only when you're in <country>" for every region except the device's home region (default `CA`). `applyRegion` returns new settings with `region` set; unknown codes throw `OG_BAD_REGION`. The settings screen shows "Region: Canada (default)". Changing region reloads channel lists through `filterForRegion` (OG-2-05); URLs are never rewritten and nothing is routed elsewhere.
+Tests: `og11_03_lists_only_published_regions_canada_first`; `og11_03_refuses_unknown_region`.
+
+#### OG-11-04: recovery.js — decideRecovery(errorCode, history) -> "reset" | "fallback" | "give_up"
+`history` = `{resetsForThisSource, fallbacksLeft}`. Decode error (3) or a black-screen detection (OG-11-05) on a source not yet reset -> `reset` (once per source); after that, or for codes 2/4 -> `fallback` while fallbacks are left; then `give_up` (OG-8 error screen with Retry). `resetPlayer(video)` in the view: pause, remove `src`, `load()`, wait 500 ms, set the same URL, `play()`; a failed `play()` counts as an error. The player's info overlay has a "Refresh stream" action (OK on the button) that runs the same reset.
+Tests: `og11_04_reset_once_then_fallback_then_give_up`; `og11_04_network_error_skips_reset`.
+
+#### OG-11-05: blackScreenSuspected(samples) -> bool
+`samples` = recent `{atMs, currentTime, videoWidth, readyState}` taken every 2 s while state is `playing`. Suspected when, for 8 s or more, `currentTime` advances but `videoWidth` is 0, or `currentTime` doesn't advance while state stays `playing` and `readyState` >= 3. Fewer than 4 samples gives false.
+Tests: `og11_05_detects_frozen_and_no_picture`; `og11_05_needs_four_samples`.
+
+**Owner's test cases (added to the OG-7 self-test checklist as a sixth row "Region"):** with Canada selected, "CBC News" from any source plays; a US-only channel such as "ABC News" is absent or marked "Plays only when you're in United States".
