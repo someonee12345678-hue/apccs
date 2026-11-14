@@ -5813,3 +5813,42 @@ Tests: `og16_04_sections_split_by_geo`; `og16_04_us_section_hidden_when_off`.
 #### OG-16-05: "Proxy Active" badge and attribution
 US cards and the player show a "Proxy Active" badge while playing through the proxy; attribution reads "Stream from <service> (US, via your proxy)". Player failover for US channels: proxy error -> try the next US source through the proxy -> OG-8 error screen.
 Tests: `og16_05_badge_and_attribution_text`; `og16_05_failover_stays_on_proxy`.
+
+## OmniGuide addendum 6: error context, fallback queue, latency scores, cross-device resume — corrections to OG-6, OG-8, OG-11 and new Batch OG-17 (Claude, 2026-11-13)
+
+Owner's request 2026-11-13 17:56 ("Add these changes"). Where this differs from earlier OmniGuide sections, this section wins. Status: ready. If a batch named here was already merged before this section, the builder adds the change as a follow-up pull request titled "Batch OG-<n> update (addendum 6)" with its own tests.
+
+### Corrections
+
+**OG-8-02 error context (replaces the plain message table):** `classifyFailure({mediaErrorCode, online, probeOk, proxyUsed, proxyHealthy})` -> one of:
+- `NETWORK` — device offline (`navigator.onLine` false) or the connectivity probe fails (probe = `fetchFn` HEAD/GET of the app's own start page, or the proxy's `/health` when the channel uses the proxy, 5 s timeout). Message "Network issue: check your Wi-Fi." Icon: Wi-Fi with a slash. No automatic switching; retries when the device comes back online (`online` event).
+- `SOURCE_UNAVAILABLE` — network fine, but the stream fails to load (code 2) or returns HTTP 4xx/5xx. Message "<service> isn't responding. Trying again in 5 seconds..." Icon: broken link. Retries the same source once after 5 s, then OG-11 fallback queue.
+- `FORMAT` — codes 3 or 4. Message "This format won't play on this device. Switching source..." Icon: film strip. Goes straight to the fallback queue.
+- `PROXY_DOWN` — a US channel and the proxy's `/health` fails. Message "Your US proxy is offline." Canadian channels unaffected.
+Each message names the service (OG-11-01 label). Tests: `og8_02_classifies_network_source_format_proxy`; `og8_02_source_retries_after_5s_then_queues`.
+
+**OG-11 smart fallback queue (adds OG-11-06):** `fallbackQueue(channelEntry, health, sessionLock)` returns every playable source for the channel, ordered: the session-locked source first (if any), then by `pickBestSource` rules including latency (below). `nextInQueue(queue, failedSource)` moves on; when all have failed once, wait 30 s and cycle once more; then the OG-8 error screen with Retry. While cycling, the overlay shows "Trying <service> (3 of 5)..." — never silent. The first source that plays becomes `sessionLock[channelKey]` (kept in memory for the session, not saved), so the next tune goes straight to it. Every switch is a `stream_event` in the ledger. Tests: `og11_06_cycles_all_sources_then_waits_and_retries`; `og11_06_locks_working_source_for_session`.
+
+**Latency scores (adds to OG-2-04 health and OG-15):** health records gain `latencyMs` (time to fetch a source's playlist, or the proxy's `/health` round trip). `latencyGrade(ms)`: under 100 -> "excellent", 100–500 -> "good", over 500 -> "fair". `pickBestSource` and the fallback queue put "fair" sources after "excellent"/"good" ones of the same quality. OG-15's `/health` also returns `{"upstream_ms": <time of the last successful upstream fetch>}`; the app shows the proxy's grade under Settings > "Test US proxy". (The OmniStream `omnistream.py` script is not used; the app and `/health` do this job.) Tests in the batch that builds them: `latency_grade_thresholds`; `fair_sources_sorted_last`.
+
+### Batch OG-17: Cross-device "Resume where you left off"
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: RESUME = PHONE -> TV`. **Build only after:** OG-6, OG-14 and OG-15 are merged.
+**Files:** new `webapp/src/resume_sync.js`, `webapp/src/resume_view.js`; `proxy/omniproxy.py` gains `/sync` (same key). Tests: `webapp/test/og17.test.js`, `proxy/test_sync.py`.
+
+The owner's proxy server is the sync point (it's always on and already key-locked), so no Google sign-in is needed on the TV. Without a proxy set up, resume stays per-device.
+
+#### OG-17-01: proxy `/sync`
+`GET /sync?k=<key>` returns the stored resume JSON; `PUT /sync?k=<key>` with a JSON body up to 64 KB replaces it, written atomically to `/var/lib/omniproxy/resume.json`. Body must be `{"items": [{"key", "kind": "channel"|"title"|"episode", "positionS", "watchedAtMs", "device": "phone"|"tv"|"browser", "label"}]}` with at most 50 items (`400` otherwise). Tests: `test_og17_01_sync_round_trip`; `test_og17_01_refuses_bad_body_and_key`.
+
+#### OG-17-02: mergeResume(local, remote) -> items
+Per key, keep the newest `watchedAtMs`; drop items older than 30 days; keep the 50 newest. Tests: `og17_02_newest_wins`; `og17_02_drops_old_and_caps`.
+
+#### OG-17-03: async syncResume(fetchFn, settings, store)
+On app start, every 5 minutes while playing, and on pause/exit: GET, merge, PUT. Failures are silent (keeps local copy) and logged. Tests: `og17_03_syncs_and_merges`; `og17_03_offline_keeps_local`.
+
+#### OG-17-04: resumeOffer(items, nowMs, thisDevice) -> item | null
+The newest item watched on another device within the last 24 hours, with position > 60 s and not finished (< 95% for titles). Live channels offer "Back to <channel>" (live edge, no position). Tests: `og17_04_offers_recent_other_device_item`; `og17_04_nothing_older_than_24h`.
+
+#### OG-17-05: resume_view.js
+On start, if `resumeOffer` returns an item, a banner over the grid: "Resume <label> — watched on your <device> at <time>" with buttons Resume (focused) and Not now; OK resumes at `positionS` (on-demand) or tunes the channel. Dismissed offers aren't shown again for that item. Tests: `og17_05_banner_text`; `og17_05_dismissed_not_shown_again`.
