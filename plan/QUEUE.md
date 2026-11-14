@@ -5755,3 +5755,61 @@ Tests: `og14_04_filters_by_genre`; `og14_04_parental_controls_apply`.
 #### OG-14-05: daily refresh and the Trending screen
 `trendingRefreshDue(lastMs, nowMs)` true after 24 h (refresh runs with the nightly guide refresh, OG-7-04). `vod_view.js`: a "Trending Now" row of posters on the home screen and a full screen with genre chips; OK opens playback (stream) or the service's app/page (deep link), with the OG-11 attribution shown. Resume position saved in `sync_state`.
 Tests: `og14_05_refresh_due_after_a_day`; `og14_05_resume_position_saved`.
+
+## OmniGuide addendum 5: Batches OG-15 and OG-16 — the owner's US proxy and a separate US channels heading (Claude, 2026-11-13)
+
+Owner's decision, 2026-11-13 17:45: "Yes I want you to build a proxy as I specified. And separate the US channels under a different heading. And test that it actually works." This replaces the "no proxy" lines in earlier OmniGuide sections and in "Rules for all OmniGuide batches" rule 7, for US channels only. Status: ready to build. OG-15 may be built before OG-12 to OG-14 (it doesn't depend on them); OG-16 builds after OG-15 and OG-12.
+
+**Still not built:** ad stripping (Pi-hole/AdGuard), paid rotating-IP services (no budget), signing in to the services, DRM. Canadian channels never go through the proxy.
+
+### Batch OG-15: The US proxy server (runs on the owner's free Oracle Cloud VM in a US region)
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: PROXY = LOCKED -> allowlist`.
+**Files:** new `proxy/omniproxy.py`, `proxy/config.example.json`, `proxy/deploy/cloud-init.sh`, `proxy/deploy/Caddyfile`, `proxy/README.md`. Tests: `proxy/test_omniproxy.py` (unittest), run with `python3 -I -m unittest discover -s proxy -p "test_*.py"`. Python 3.10+ standard library only.
+
+#### OG-15-01: Config and key check
+`load_config(path)` reads `{"key_sha256": hex, "allowed_host_suffixes": [...], "listen_port": 8080, "max_requests_per_minute": 600}`; refuses a missing key hash, an empty allowlist, or a port outside 1024–65535 (`ProxyConfigError`). `key_ok(given, key_sha256)` hashes the given key with SHA-256 and compares with `hmac.compare_digest`. The example config's allowlist is the services' stream and playlist host suffixes only, each with a comment line in README naming the service; nothing else.
+Tests: `test_og15_01_config_loads_and_checks_key`; `test_og15_01_refuses_empty_allowlist`.
+
+#### OG-15-02: Target URL safety
+`check_target(url, allowed_suffixes, resolve)` allows only `https://` (and `http://` only when the host is allowlisted), host ending in an allowed suffix (dot-boundary match, so `evil-example.com` doesn't match `example.com`), and every resolved address (injected `resolve(host)`) public — refuses loopback, private, link-local, multicast and reserved addresses (`ipaddress`), and ports other than 80/443. Returns the normalized URL or raises `ProxyRefused(reason)`.
+Tests: `test_og15_02_allows_listed_host`; `test_og15_02_refuses_private_ip_and_lookalike_host`.
+
+#### OG-15-03: Playlist rewriting
+`rewrite_m3u8(text, base_url, proxy_base, key)` turns every URI line and every `URI="..."` attribute into `proxy_base + "/hls?u=" + quote(absolute_url) + "&k=" + key`, resolving relative URIs against `base_url`; comments and tags are kept byte-for-byte otherwise. Non-allowlisted URIs inside a playlist are left out with a comment `#OMNIPROXY-SKIPPED`.
+Tests: `test_og15_03_rewrites_relative_and_absolute`; `test_og15_03_rewrites_key_and_map_uris`.
+
+#### OG-15-04: The server
+`ThreadingHTTPServer` on `127.0.0.1:<listen_port>` (Caddy in front gives HTTPS). Routes: `GET /health` -> `{"ok": true, "version": "0.1.0"}` with no key; `GET /hls?u=<url>&k=<key>` -> key check (403), target check (403 with reason), then fetch with `urllib.request` (15 s timeout, fixed User-Agent "OmniGuide/0.1", no cookies, no auth headers forwarded, at most 3 redirects, each re-checked), playlists (`.m3u8` or content-type `mpegurl`) rewritten, everything else streamed in 64 KB chunks; `Access-Control-Allow-Origin: *` on responses so the LG and browser app can read them. Only GET and OPTIONS. Per-client rate limit (`max_requests_per_minute`, 429). No request bodies, no logging of keys or full URLs (log host + status only).
+Tests: `test_og15_04_health_and_auth` (server on a free port with a fake upstream on 127.0.0.1 allowed only in test mode via an injected `resolve`); `test_og15_04_rate_limit_returns_429`.
+
+#### OG-15-05: One-step setup on the VM
+`deploy/cloud-init.sh` (pasted once by the owner into Oracle's "initialization script" box when creating the VM): installs `python3` and `caddy`, creates user `omniproxy`, downloads `omniproxy.py` and the config from the omniguide "latest" release assets `omniproxy.py` and `config.example.json` (public release download URL is passed in as variable `OMNI_RELEASE_URL` at the top), writes the key hash from variable `OMNI_KEY_SHA256`, opens port 443 in the VM firewall (`iptables`/`firewall-cmd`), installs a systemd service with restart=always, and a Caddyfile serving `https://<public-ip-with-dashes>.sslip.io` -> `127.0.0.1:8080`. `README.md` explains the owner's steps in plain numbered English for a phone.
+Tests: `test_og15_05_cloud_init_has_no_secrets_and_sets_service` (reads the script: no literal key, contains `Restart=always`, `sslip.io`, `127.0.0.1:8080`).
+
+---
+
+### Batch OG-16: US channels heading, "Enable US Content Access", routing and badge
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: US = HEADING -> proxy`. **Build only after:** OG-15 and OG-12 are merged.
+**Files:** new `webapp/src/georoute.js`, `webapp/src/us_view.js`. Tests: `webapp/test/og16.test.js`.
+
+#### OG-16-01: geoTag(channel) -> "ca" | "us" | "global"
+From the source list's region (OG-2-05 records carry `region`): `CA` -> "ca"; `US` -> "us"; a channel merged from both -> "global" (plays direct).
+Tests: `og16_01_tags_by_region`; `og16_01_merged_ca_and_us_is_global`.
+
+#### OG-16-02: routeFor(channelGeo, settings, userCountry) -> {mode: "direct" | "proxy" | "hidden", reason}
+`settings` = `{usAccess: bool, proxyBase, proxyKey}`. Canada + usAccess off: "ca"/"global" direct, "us" hidden. Canada + usAccess on: "us" via proxy (needs `proxyBase` https and a key, else hidden with reason `NO_PROXY`), others direct. userCountry US: everything direct.
+Tests: `og16_02_routing_table`; `og16_02_missing_proxy_hides_us`.
+
+#### OG-16-03: proxiedUrl(url, proxyBase, key) and proxy health
+`proxiedUrl` builds `<proxyBase>/hls?u=<encoded>&k=<key>`. `async proxyHealthy(fetchFn, proxyBase)` calls `/health` (5 s timeout), caches the answer for 60 s. If the proxy is down, US channels show "US proxy is offline" and stay listed; Canadian channels are never affected.
+Tests: `og16_03_builds_proxied_url`; `og16_03_health_cached_and_offline_message`.
+
+#### OG-16-04: Separate US heading
+The home screen shows Canadian channels first, then a separate heading **"US channels"** with its own row/grid, only when "Enable US Content Access" is on. US channels never mix into the Canadian grid, category chips filter both sections, search results mark US items "US". Settings: the toggle (default off), proxy address and key (entered once, or by scanning a QR code later), and a "Test US proxy" button showing the health result.
+Tests: `og16_04_sections_split_by_geo`; `og16_04_us_section_hidden_when_off`.
+
+#### OG-16-05: "Proxy Active" badge and attribution
+US cards and the player show a "Proxy Active" badge while playing through the proxy; attribution reads "Stream from <service> (US, via your proxy)". Player failover for US channels: proxy error -> try the next US source through the proxy -> OG-8 error screen.
+Tests: `og16_05_badge_and_attribution_text`; `og16_05_failover_stays_on_proxy`.
