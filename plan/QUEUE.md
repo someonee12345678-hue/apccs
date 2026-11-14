@@ -5666,3 +5666,92 @@ Tests: `og11_04_reset_once_then_fallback_then_give_up`; `og11_04_network_error_s
 Tests: `og11_05_detects_frozen_and_no_picture`; `og11_05_needs_four_samples`.
 
 **Owner's test cases (added to the OG-7 self-test checklist as a sixth row "Region"):** with Canada selected, "CBC News" from any source plays; a US-only channel such as "ABC News" is absent or marked "Plays only when you're in United States".
+
+## OmniGuide addendum 4: Batches OG-12 to OG-14 — filters, search, badges, channel IDs, Trending Now (Claude, 2026-11-13)
+
+Owner's "Version 2.0 Addendum Update" and "OmniStream Core" scripts, 2026-11-13 17:30 ("add these new features in. And start building"). Status: ready to build, in order, after OG-11. All earlier OmniGuide rules apply.
+
+**Not built (architect, Entry 0373):** the US proxy swarm and "Enable US Content Access" routing, proxy IP rotation (Bright Data, Smartproxy, VPS pools), the OmniStream proxy health engine, Nginx relays, and proxy-level ad stripping (Pi-hole / AdGuard). Routing US-only streams through US servers and rotating IPs when a service blocks them gets around the services' region locks; stripping ads removes what pays for the free streams. The "Proxy Active" badge and "US Channels" filter are dropped with them. React Native / Flutter are not used: neither runs on LG webOS; the shared web app already covers phones, browsers, LG and Android.
+
+### Batch OG-12: Categories, source filter, badges, dark and high-contrast themes, disclaimer
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: FILTER = NEWS -> sports`. **Build only after:** OG-11 is merged.
+**Files:** new `webapp/src/filters.js`, `webapp/src/theme.js`, `webapp/src/filters_view.js`. Tests: `webapp/test/og12.test.js`.
+
+#### OG-12-01: categoryOf(channel) -> "news" | "sports" | "entertainment" | "kids" | "movies" | "other"
+From the channel's `groups` (and iptv-org categories from OG-13), case-insensitive: news/business/weather -> news; sports -> sports; kids/family/animation -> kids; movies/film -> movies; comedy/entertainment/lifestyle/music/reality/series -> entertainment; else other.
+Tests: `og12_01_maps_groups_to_categories`; `og12_01_unknown_is_other`.
+
+#### OG-12-02: applyFilters(channels, {category, hiddenSources}) -> channels
+`category` "all" or one of the above; `hiddenSources` = sources the user turned off. A channel stays when its category matches and at least one of its sources is not hidden; hidden sources are removed from its `sources` so playback never uses them. Settings saved under `og:filters`.
+Tests: `og12_02_filters_by_category_and_source`; `og12_02_channel_with_only_hidden_sources_is_dropped`.
+
+#### OG-12-03: badgesFor(channel, plan) -> ["Ad-supported", "HD" | "SD", "Locked"?]
+Every free channel gets "Ad-supported"; "HD" when the chosen source's quality is hd/fhd/uhd, else "SD"; "Locked" when parental controls block it (OG-9). Shown as small pills on grid cards and in the info overlay.
+Tests: `og12_03_badges_for_hd_and_sd`; `og12_03_locked_badge_when_blocked`.
+
+#### OG-12-04: themes
+`themeVars(name)` for "dark" (default) and "high-contrast" (white text on black, yellow focus outline 6 px, no transparency, text at least 1.25× size). Applied as CSS custom properties on `:root`; saved under `og:theme`. A top bar on the grid shows category chips (All, News, Sports, Entertainment, Kids, Movies) reachable with the Up key.
+Tests: `og12_04_dark_and_high_contrast_vars`; `og12_04_refuses_unknown_theme`.
+
+#### OG-12-05: first-run disclaimer
+`disclaimerText()` returns: "OmniGuide shows free channels from the services named on each stream. Streams come from those services; OmniGuide doesn't host any video." Shown once on first start (stored `og:disclaimer-seen`) and in Settings > About, with the list of services from `sourceLabel`.
+Tests: `og12_05_disclaimer_names_services`; `og12_05_shown_only_once`.
+
+---
+
+### Batch OG-13: Shared channel IDs from iptv-org and universal search
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: SEARCH = ALL -> one`. **Build only after:** OG-12 is merged.
+**Files:** new `webapp/src/iptvorg.js`, `webapp/src/search.js`, `webapp/src/search_view.js`. Tests: `webapp/test/og13.test.js`.
+
+The open-source iptv-org project publishes channel metadata (`https://iptv-org.github.io/api/channels.json`: id, name, alt_names, country, categories, logo). OmniGuide uses it only as a shared dictionary of channel names, IDs, logos and categories — never for stream URLs; streams come only from the eight services' own published lists.
+
+#### OG-13-01: parseIptvOrgChannels(jsonText, country = "CA") -> Map(id -> {id, name, altNames, categories, logo})
+Keeps channels whose country is `country` or that appear in a source list; skips entries without id or name; bad JSON throws `OG_BAD_IPTVORG`.
+Tests: `og13_01_parses_and_filters_country`; `og13_01_refuses_bad_json`.
+
+#### OG-13-02: matchToIptvOrg(record, dictionary) -> id | null
+Matches by the record's `epgId` when it equals an iptv-org id, else by normalized name against name and alt names (OG-2-02). When matched, OG-2-03 dedupe uses `iptv:<id>` as the key (before `epg:`/`name:`), and missing logos/categories are filled from the dictionary.
+Tests: `og13_02_matches_by_id_then_name`; `og13_02_unmatched_returns_null`.
+
+#### OG-13-03: async loadIptvOrg(fetchFn, cache, nowMs)
+Fetches channels.json at most once per 24 h (cache key `og:iptvorg`), 15 s timeout, falls back to cache, and works without it (dedupe falls back to OG-2 rules).
+Tests: `og13_03_caches_for_a_day`; `og13_03_works_offline_with_cache`.
+
+#### OG-13-04: search(index, query) -> results
+`buildSearchIndex(channels, programmes, titles)` indexes channel names, now/next programme titles and on-demand titles (OG-14). `search` lowercases, strips accents, matches all words as prefixes, ranks channel-name matches first, then programmes airing now, then others; at most 50 results, each `{kind: "channel" | "programme" | "title", key, label, source}`. Empty query returns [].
+Tests: `og13_04_finds_across_kinds_and_ranks`; `og13_04_empty_query`.
+
+#### OG-13-05: search screen
+`search_view.js`: an on-screen keyboard (letters, space, delete, arrow keys + OK) on TVs, the system keyboard on phones; results update as you type (debounced 250 ms); OK on a result opens the channel, programme's channel, or title.
+Tests: `og13_05_debounce_constant_is_250ms`; `og13_05_result_action_for_each_kind`.
+
+---
+
+### Batch OG-14: Trending Now (on-demand) with genre filter
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: TREND = FRESH -> daily`. **Build only after:** OG-13 is merged.
+**Files:** new `webapp/src/vod.js`, `webapp/src/vod_view.js`. Tests: `webapp/test/og14.test.js`.
+
+Titles follow the universal library schema in `docs/specs/universal_library.schema.json`. Feeds are injected adapters; which services publish usable title feeds is decided in the "real sources" stage — this batch builds and tests the engine with made-up feeds.
+
+#### OG-14-01: normalizeTitle(raw, source) -> library item
+Maps a feed item `{title, year, type, genres, rating, description, poster, runtimeMin, rank, url, region}` to the library schema (`content_type` movie/series, `match_keys.normalized_title`, `availability` with `access` "stream" for https HLS/MP4 URLs or "deep_link" otherwise). Refuses items without title or url (`OG_BAD_TITLE`).
+Tests: `og14_01_normalizes_feed_item`; `og14_01_refuses_missing_url`.
+
+#### OG-14-02: mergeTitles(items) -> items
+Same title when normalized title and year match (or TMDB/IMDb id when present); merges `availability` lists; keeps the best poster and longest description.
+Tests: `og14_02_merges_across_sources`; `og14_02_keeps_different_years_apart`.
+
+#### OG-14-03: trendingNow(itemsBySource, perSource = 50, total = 60) -> items
+Takes each source's top `perSource` by `rank`, merges (OG-14-02), scores each title by its best rank plus 5 points per extra service carrying it, returns the top `total`, region `CA` only.
+Tests: `og14_03_ranks_and_rewards_many_sources`; `og14_03_drops_non_canada`.
+
+#### OG-14-04: genre filter
+`GENRES` = Action, Drama, Comedy, Horror, Documentary, Family, Sci-Fi, Thriller; `filterByGenre(items, genre)` matches case-insensitively on the item's genres (mapping "science fiction" -> Sci-Fi); "All" returns everything; parental controls (OG-9) apply to titles too.
+Tests: `og14_04_filters_by_genre`; `og14_04_parental_controls_apply`.
+
+#### OG-14-05: daily refresh and the Trending screen
+`trendingRefreshDue(lastMs, nowMs)` true after 24 h (refresh runs with the nightly guide refresh, OG-7-04). `vod_view.js`: a "Trending Now" row of posters on the home screen and a full screen with genre chips; OK opens playback (stream) or the service's app/page (deep link), with the OG-11 attribution shown. Resume position saved in `sync_state`.
+Tests: `og14_05_refresh_due_after_a_day`; `og14_05_resume_position_saved`.
