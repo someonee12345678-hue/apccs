@@ -5852,3 +5852,44 @@ The newest item watched on another device within the last 24 hours, with positio
 
 #### OG-17-05: resume_view.js
 On start, if `resumeOffer` returns an item, a banner over the grid: "Resume <label> — watched on your <device> at <time>" with buttons Resume (focused) and Not now; OK resumes at `positionS` (on-demand) or tunes the channel. Dismissed offers aren't shown again for that item. Tests: `og17_05_banner_text`; `og17_05_dismissed_not_shown_again`.
+
+## OmniGuide addendum 7: Google Drive as the sync store — Batch OG-18 and corrections to OG-6 and OG-17 (Claude, 2026-11-13)
+
+Owner's request 2026-11-13 18:04: use his Google Drive for resume, favourites and logs; sign-in must be one click, or a tap on the phone to sign in the TV; with fallbacks. Where this differs from addendum 6, this section wins. Status: ready. Order: OG-18 after OG-6 and OG-12; OG-17 after OG-18 (its proxy `/sync` becomes the second fallback).
+
+### Sync order (all devices)
+1. **Google Drive** (when signed in) — the main store.
+2. **The owner's US proxy `/sync`** (OG-17-01) — only if Drive isn't signed in or is unreachable and a proxy is set up.
+3. **This device only** — always kept; queued changes upload when 1 or 2 comes back.
+
+### Batch OG-18: Google Drive sign-in and sync
+
+Target repository: someonee12345678-hue/omniguide. Canary: `Canary check: DRIVE = ONE -> tap`. **Build only after:** OG-6 and OG-12 are merged.
+**Files:** new `webapp/src/drive_auth.js`, `webapp/src/drive_sync.js`, `webapp/src/drive_view.js`; `webapp/src/config.js` gains `GOOGLE_CLIENT_ID` (empty string by default; filled in by the owner's one-time setup, it is a public ID, not a secret). Tests: `webapp/test/og18.test.js` (fake `fetchFn`, fake clock, no network).
+
+Google's sign-in for TVs ("OAuth 2.0 for TV and limited-input devices") is used on every device: the TV shows a short code and a QR code; the owner scans it with his phone, taps Allow, and the TV is signed in. Scope: `https://www.googleapis.com/auth/drive.file` only (OmniGuide sees only files it created, in a visible "OmniGuide" folder).
+
+#### OG-18-01: startDeviceSignIn(fetchFn, clientId) and pollSignIn(...)
+POST `https://oauth2.googleapis.com/device/code` with `client_id` and the drive.file scope -> `{device_code, user_code, verification_url, expires_in, interval}`. `pollSignIn` POSTs `https://oauth2.googleapis.com/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code` every `interval` seconds (injected clock), handles `authorization_pending`, `slow_down` (+5 s), `access_denied`, `expired_token`; returns `{accessToken, refreshToken, expiresAtMs}`. Empty `clientId` throws `OG_DRIVE_NOT_SET_UP`.
+Tests: `og18_01_device_flow_until_approved`; `og18_01_handles_slow_down_and_denied`.
+
+#### OG-18-02: tokens
+`refreshAccessToken(fetchFn, clientId, refreshToken)`; `tokenStore(storage)` saves tokens under `og:drive-token` (Android app: through the bridge into the Keystore-encrypted store; webOS/browser: storage). Tokens are never logged, never put in the ledger, never sent anywhere but Google. `signOut` revokes (`https://oauth2.googleapis.com/revoke`) and deletes them.
+Tests: `og18_02_refreshes_before_expiry`; `og18_02_tokens_never_in_ledger_payloads`.
+
+#### OG-18-03: Drive files
+`driveFiles(fetchFn, tokenFn)` with `ensureFolder("OmniGuide")`, then sub-folders `Resume`, `Logs`; `readJson(name, folderId)`, `writeJson(name, folderId, obj)` (create or update by name via the Drive v3 API: `files.list` with `q` name + parent + `trashed=false`, `files.create`/`files.update` multipart). Layout: `OmniGuide/Resume/<itemKey>.json` = `{"key","kind","positionS","channelKey","label","device","watchedAt"}` (ISO time); `OmniGuide/Favorites.json` = `{"channels": [ids], "updatedAt"}`; `OmniGuide/Logs/ledger-YYYY-MM-DD.jsonl` (that day's sealed entries, one per line, appended by rewriting the day's file).
+Tests: `og18_03_creates_folders_once`; `og18_03_write_then_read_round_trip`.
+
+#### OG-18-04: driveSync(state, net, nowMs)
+While playing: write the current item's Resume file every 30 seconds (only if position changed) and on pause, channel change and exit (`visibilitychange`/`pagehide`, Android `onStop` through the bridge). Favourites on change. Ledger day file every 10 minutes and on exit. Offline or Drive errors: changes go into a local queue `og:sync-queue` (newest per file wins) and upload when the device is online again; after 3 failed uploads the proxy `/sync` is used for resume items if set up (OG-17). On start: read Resume files changed in the last 24 h and Favorites, merge with local (newest `watchedAt` wins), and pass to OG-17's `resumeOffer`. Recovery (OG-6-03) gets `remoteDaysFn` from the Logs folder.
+Tests: `og18_04_writes_every_30s_and_on_exit`; `og18_04_queues_offline_and_flushes`.
+
+#### OG-18-05: drive_view.js — the slick sign-in
+Settings and first-run show "Sync with Google Drive": on the TV, a large `user_code`, the URL `google.com/device`, and a QR code of `https://www.google.com/device?user_code=<code>` (QR drawn by a small built-in encoder, no dependency); on a phone (or the Android app), one button that opens the same page in the browser and the app polls in the background. After sign-in: "Signed in. Resume, favourites and logs sync to your Drive." with "Sign out" and "Sync now". If `GOOGLE_CLIENT_ID` is empty, the screen says Drive sync isn't set up yet and the app keeps working with fallbacks 2 and 3.
+Tests: `og18_05_qr_url_contains_user_code`; `og18_05_not_set_up_message`.
+
+### Corrections
+- **OG-17** keeps `/sync` on the proxy as fallback 2 only; `resumeOffer` and the banner use the merged result from OG-18-04 whatever the store.
+- **OG-6** local snapshot and ledger stay as they are (fallback 3).
+- **Owner's one-time setup (not a batch):** create a free Google Cloud project, turn on the Google Drive API, make an OAuth client of type "TVs and Limited Input devices", publish the consent screen (the drive.file scope needs no Google review), and give the client ID to Claude, who puts it in `config.js`. Claude sends these as numbered steps when OG-18 is merged.
