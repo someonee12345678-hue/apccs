@@ -226,3 +226,199 @@ def score_memory(memory: object, facts: list, questions: list) -> dict:
             "found_right_fact": f"{found}/{count}", "stale_answers": stale,
             "case_leaks": leaks, "tokens_per_lookup": round(chars / 4 / count),
             "recovers_after_rebuild": before == after, "source_on_every_fact": sourced}
+
+
+def build_legal_style_fixture() -> tuple:
+    """Made-up legal-style facts and questions for the same scorer.
+
+    Inputs: none.
+    Outputs: a pair (facts, questions) with a superseded rule, an amendment, two look-alike
+    cases and a question about what applied on an earlier date. No real law, names or cases.
+    Errors: none.
+    """
+    facts = []
+
+    def _add(namespace: str, time: int, text: str, topic: str, supersedes: str | None = None) -> str:
+        fact_id = f"L{len(facts) + 1}"
+        fact = make_memory_fact(fact_id, namespace, time, text, f"doc:{fact_id}", supersedes)
+        fact["topic"] = topic
+        facts.append(fact)
+        return fact_id
+
+    rule = _add("case:101", 1, "Filing rule: claims must be filed within 30 days of notice", "filing_rule")
+    fee = _add("case:101", 3, "Filing fee is 50 dollars per claim", "fee")
+    _add("case:101", 4, "Hearing is held in room B on the first Monday", "hearing")
+    _add("case:101", 10, "Filing rule: claims must be filed within 60 days of notice", "filing_rule", rule)
+    _add("case:101", 11, "Amendment: filing fee is now 75 dollars per claim", "fee", fee)
+    _add("case:102", 2, "Filing rule: claims must be filed within 15 days of notice", "filing_rule")
+    _add("case:102", 5, "Filing fee is 20 dollars per claim", "fee")
+    for i in range(10):
+        _add("case:101", 12 + i, f"Routine diary entry {i} about unrelated errand number {i}", "filler")
+    questions = [
+        ("filing rule claims days notice", "case:101", None, "filing_rule", "30 days"),
+        ("filing rule claims days notice", "case:101", 5, "filing_rule", "60 days"),
+        ("filing fee dollars claim", "case:101", None, "fee", "50 dollars"),
+        ("filing rule claims days notice", "case:102", None, "filing_rule", "30 days"),
+        ("filing fee dollars claim", "case:102", None, "fee", "75 dollars"),
+        ("hearing room Monday", "case:101", None, "hearing", None),
+    ]
+    return facts, questions
+
+
+_KIND_ORDER = ("owner_correction", "signed_review", "source_document", "model_summary")
+
+
+def resolve_conflict(facts: list) -> dict:
+    """Pick the winning fact when facts about one topic disagree.
+
+    Inputs: facts that each carry a kind: owner_correction, signed_review, source_document or
+    model_summary. Order of strength is that order; a tie goes to the newer fact.
+    Outputs: {"winner": the fact, "reasons": plain-English lines}.
+    Errors: ValueError for an empty list, an unknown kind or facts from different namespaces.
+    """
+    if not isinstance(facts, list) or not facts:
+        raise ValueError("facts must be a non-empty list")
+    for fact in facts:
+        _check_fact(fact)
+        if fact.get("kind") not in _KIND_ORDER:
+            raise ValueError(f"unknown kind: {fact.get('kind')!r}")
+    if len({fact["namespace"] for fact in facts}) != 1:
+        raise ValueError("facts must come from one namespace")
+    winner = min(facts, key=lambda f: (_KIND_ORDER.index(f["kind"]), -f["time"]))
+    reasons = [f"Winner {winner['id']} is a {winner['kind']} (strongest kind present)."]
+    rivals = [f for f in facts if f is not winner]
+    tied = [f for f in rivals if f["kind"] == winner["kind"]]
+    if tied:
+        reasons.append("Same kind as the winner, so the newer fact wins.")
+    for fact in rivals:
+        reasons.append(f"{fact['id']} ({fact['kind']}) lost.")
+    return {"winner": winner, "reasons": reasons}
+
+
+_LESSON_STATES = ("proposed", "tested", "approved", "retired")
+
+
+def make_lesson(lesson_id: str, namespace: str, what_failed: str, evidence_ids: list,
+                proposed_rule: str, state: str = "proposed", test_id: str | None = None,
+                owner_approval_id: str | None = None) -> dict:
+    """Record one lesson learned from a mistake.
+
+    Inputs: id, namespace, what failed, evidence ids, proposed rule, a state, and the passing
+    test id and Owner approval id (both needed for approved).
+    Outputs: one lesson dict.
+    Errors: ValueError for empty text or evidence, an unknown state, or approved without both ids.
+    """
+    for label, value in (("id", lesson_id), ("what_failed", what_failed), ("rule", proposed_rule)):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"lesson {label} must be a non-empty string")
+    if not isinstance(namespace, str) or not namespace.startswith(_NAMESPACE_PREFIXES):
+        raise ValueError("namespace must start with 'project:' or 'case:'")
+    if not isinstance(evidence_ids, list) or not evidence_ids or not all(
+            isinstance(e, str) and e.strip() for e in evidence_ids):
+        raise ValueError("a lesson needs at least one evidence id")
+    if state not in _LESSON_STATES:
+        raise ValueError(f"state must be one of {_LESSON_STATES}")
+    if state == "approved" and not (test_id and owner_approval_id):
+        raise ValueError("approved needs a passing test id and an Owner approval id")
+    return {"id": lesson_id, "namespace": namespace, "what_failed": what_failed,
+            "evidence_ids": list(evidence_ids), "proposed_rule": proposed_rule, "state": state,
+            "test_id": test_id, "owner_approval_id": owner_approval_id}
+
+
+def change_lesson_state(lesson: dict, state: str, test_id: str | None = None,
+                        owner_approval_id: str | None = None) -> dict:
+    """Move a lesson to a new state and return the new record; the old record is kept as it was.
+
+    Inputs: a lesson, the new state, and the ids that approval needs.
+    Outputs: a new lesson dict (retiring one is how an approval is undone).
+    Errors: ValueError as in make_lesson.
+    """
+    return make_lesson(lesson["id"], lesson["namespace"], lesson["what_failed"],
+                       lesson["evidence_ids"], lesson["proposed_rule"], state,
+                       test_id or lesson.get("test_id"),
+                       owner_approval_id or lesson.get("owner_approval_id"))
+
+
+def lessons_for_builder(lessons: list, namespace: str) -> list:
+    """Return only the approved lessons of one namespace.
+
+    Inputs: lessons and a namespace.
+    Outputs: the approved lessons in that namespace; proposed, tested and retired ones stay hidden.
+    Errors: none.
+    """
+    return [x for x in lessons if x["state"] == "approved" and x["namespace"] == namespace]
+
+
+def score_lessons(failures: list, lessons: list) -> dict:
+    """Count later failures that repeat a mistake an approved lesson already covers.
+
+    Inputs: failures {"time", "namespace", "what_failed"} in time order, and lessons.
+    Outputs: total failures, repeats, repeats an approved lesson covered, and uncovered repeats.
+    Errors: ValueError for failures not in time order or a failure missing a field.
+    """
+    seen, repeats, covered = set(), 0, 0
+    last = None
+    for failure in failures:
+        time = failure.get("time")
+        if isinstance(time, bool) or not isinstance(time, int):
+            raise ValueError("failure time must be an integer")
+        if last is not None and time < last:
+            raise ValueError("failures must be in time order")
+        last = time
+        key = (failure.get("namespace"), failure.get("what_failed"))
+        if not all(key):
+            raise ValueError("failure needs a namespace and what_failed")
+        if key in seen:
+            repeats += 1
+            if any(x["what_failed"] == key[1] for x in lessons_for_builder(lessons, key[0])):
+                covered += 1
+        seen.add(key)
+    return {"failures": len(failures), "repeats": repeats,
+            "repeats_covered_by_approved_lesson": covered,
+            "repeats_not_covered": repeats - covered}
+
+
+_SCORE_FIELDS = ("found_right_fact", "stale_answers", "case_leaks", "tokens_per_lookup",
+                 "recovers_after_rebuild", "source_on_every_fact")
+
+
+def _strength_line(result: dict) -> str:
+    good, bad = [], []
+    found = result["found_right_fact"].split("/")
+    (good if found[0] == found[1] else bad).append("finds the right fact")
+    (good if result["stale_answers"] == 0 else bad).append("avoids old answers")
+    (good if result["case_leaks"] == 0 else bad).append("keeps cases apart")
+    (good if result["recovers_after_rebuild"] else bad).append("recovers after rebuild")
+    (good if result["source_on_every_fact"] else bad).append("shows a source")
+    return (f"{result['system']}: best at: {', '.join(good) or 'nothing'}; "
+            f"worst at: {', '.join(bad) or 'nothing'}.")
+
+
+def build_bakeoff_report(results: list) -> str:
+    """Build the plain-English table of every memory scored.
+
+    Inputs: results, each the dict from score_memory, or {"system": name} alone for a real
+    tool that has not been run.
+    Outputs: a text table plus one line per system on what it did best and worst.
+    Errors: ValueError for an empty list or a result with only some of the score fields.
+    """
+    if not isinstance(results, list) or not results:
+        raise ValueError("results must be a non-empty list")
+    rows, notes = [], []
+    for result in results:
+        if not isinstance(result, dict) or not result.get("system"):
+            raise ValueError("each result needs a system name")
+        present = [f for f in _SCORE_FIELDS if f in result]
+        if present and len(present) != len(_SCORE_FIELDS):
+            raise ValueError(f"result for {result['system']} is missing score fields")
+        if not present:
+            rows.append(f"| {result['system']} | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |")
+            notes.append(f"{result['system']}: NOT RUN. No score is made up for it.")
+            continue
+        rows.append("| {system} | {found_right_fact} | {stale_answers} | {case_leaks} | "
+                    "{tokens_per_lookup} | {recovers_after_rebuild} | {source_on_every_fact} |"
+                    .format(**result))
+        notes.append(_strength_line(result))
+    head = ["| System | Right fact found | Old answers | Case mix-ups | Tokens per lookup | "
+            "Recovers after rebuild | Source kept |", "|---|---|---|---|---|---|---|"]
+    return "\n".join(head + rows + [""] + notes) + "\n"
