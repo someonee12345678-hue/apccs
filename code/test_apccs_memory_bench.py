@@ -138,5 +138,151 @@ class MemoryBenchBatchMB1Tests(unittest.TestCase):
             mb.score_memory(mb.EvidenceMemory(), facts, [])
 
 
+def _kind_fact(fact_id: str, namespace: str, time: int, kind: str) -> dict:
+    fact = _fact(fact_id, namespace, time, f"Answer from {fact_id}")
+    fact["kind"] = kind
+    return fact
+
+
+def _lesson(lesson_id: str = "ls1", what: str = "skipped the readability check", **extra) -> dict:
+    return mb.make_lesson(lesson_id, "project:demo", what, ["ev1"], "Run the check first", **extra)
+
+
+class MemoryBenchBatchMB2Tests(unittest.TestCase):
+    canary_shown = False
+
+    def _start_case(self) -> None:
+        """Inputs: none. Outputs: prints the canary line once. Errors: none."""
+        if not MemoryBenchBatchMB2Tests.canary_shown:
+            MemoryBenchBatchMB2Tests.canary_shown = True
+            print("Canary check: CORRECTION = WINS -> memory")
+
+    def test_mb_2_01_fixture_shape(self) -> None:
+        """Inputs: the fixed fixture. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        facts, questions = mb.build_legal_style_fixture()
+        self.assertEqual(len(questions), 6)
+        ids = [f["id"] for f in facts]
+        self.assertEqual(len(ids), len(set(ids)))
+        for fact in facts:
+            self.assertTrue(fact["source"] and fact["topic"])
+            self.assertEqual(fact, mb.make_memory_fact(fact["id"], fact["namespace"], fact["time"],
+                                                       fact["text"], fact["source"], fact["supersedes"]) | {"topic": fact["topic"]})
+
+    def test_mb_2_01_has_supersession_and_two_cases(self) -> None:
+        """Inputs: the fixed fixture scored three ways. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        facts, questions = mb.build_legal_style_fixture()
+        self.assertEqual({f["namespace"] for f in facts}, {"case:101", "case:102"})
+        self.assertGreaterEqual(sum(1 for f in facts if f["supersedes"]), 2)
+        self.assertTrue(any(q[2] is not None for q in questions))
+        evidence = mb.score_memory(mb.EvidenceMemory(), facts, questions)
+        keyword = mb.score_memory(mb.KeywordMemory(), facts, questions)
+        self.assertEqual((evidence["stale_answers"], evidence["case_leaks"]), (0, 0))
+        self.assertEqual(evidence["found_right_fact"], "6/6")
+        self.assertGreater(keyword["stale_answers"], 0)
+
+    def test_mb_2_02_owner_beats_model_summary(self) -> None:
+        """Inputs: made-up facts. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        ns = "project:demo"
+        mixed = [_kind_fact("m", ns, 9, "model_summary"), _kind_fact("d", ns, 5, "source_document"),
+                 _kind_fact("r", ns, 3, "signed_review"), _kind_fact("o", ns, 1, "owner_correction")]
+        result = mb.resolve_conflict(mixed)
+        self.assertEqual(result["winner"]["id"], "o")
+        self.assertTrue(result["reasons"])
+        self.assertEqual(mb.resolve_conflict(mixed[:3])["winner"]["id"], "r")
+        tie = [_kind_fact("a", ns, 2, "source_document"), _kind_fact("b", ns, 8, "source_document")]
+        self.assertEqual(mb.resolve_conflict(tie)["winner"]["id"], "b")
+
+    def test_mb_2_02_rejects_mixed_namespaces(self) -> None:
+        """Inputs: made-up facts. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        with self.assertRaises(ValueError):
+            mb.resolve_conflict([_kind_fact("a", "case:1", 1, "owner_correction"),
+                                 _kind_fact("b", "case:2", 2, "model_summary")])
+        with self.assertRaises(ValueError):
+            mb.resolve_conflict([_kind_fact("a", "case:1", 1, "gossip")])
+        with self.assertRaises(ValueError):
+            mb.resolve_conflict([])
+
+    def test_mb_2_03_blocks_unapproved_lesson(self) -> None:
+        """Inputs: made-up lessons. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        proposed = _lesson("a")
+        approved = mb.change_lesson_state(_lesson("b"), "approved", "test_x", "owner_ok_1")
+        other = mb.make_lesson("c", "case:5", "mixed cases", ["ev"], "Keep cases apart", "approved", "t", "o")
+        shown = mb.lessons_for_builder([proposed, approved, other], "project:demo")
+        self.assertEqual([x["id"] for x in shown], ["b"])
+        retired = mb.change_lesson_state(approved, "retired")
+        self.assertEqual(mb.lessons_for_builder([retired], "project:demo"), [])
+        self.assertEqual(approved["state"], "approved")
+
+    def test_mb_2_03_requires_test_and_owner(self) -> None:
+        """Inputs: made-up lessons. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        with self.assertRaises(ValueError):
+            _lesson(state="approved")
+        with self.assertRaises(ValueError):
+            _lesson(state="approved", test_id="t1")
+        with self.assertRaises(ValueError):
+            _lesson(state="approved", owner_approval_id="o1")
+        with self.assertRaises(ValueError):
+            mb.make_lesson("x", "project:demo", "failed", [], "rule")
+        with self.assertRaises(ValueError):
+            _lesson(state="deleted")
+
+    def test_mb_2_04_counts_repeats(self) -> None:
+        """Inputs: made-up failures. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        approved = mb.change_lesson_state(_lesson(), "approved", "t1", "o1")
+        failures = [{"time": 1, "namespace": "project:demo", "what_failed": "skipped the readability check"},
+                    {"time": 2, "namespace": "project:demo", "what_failed": "wrong date"},
+                    {"time": 3, "namespace": "project:demo", "what_failed": "skipped the readability check"},
+                    {"time": 4, "namespace": "project:demo", "what_failed": "wrong date"}]
+        result = mb.score_lessons(failures, [approved])
+        self.assertEqual((result["failures"], result["repeats"]), (4, 2))
+        self.assertEqual((result["repeats_covered_by_approved_lesson"], result["repeats_not_covered"]), (1, 1))
+        self.assertEqual(mb.score_lessons(failures, [_lesson()])["repeats_covered_by_approved_lesson"], 0)
+
+    def test_mb_2_04_rejects_unordered(self) -> None:
+        """Inputs: made-up failures. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        a = {"time": 5, "namespace": "project:demo", "what_failed": "x"}
+        b = {"time": 2, "namespace": "project:demo", "what_failed": "x"}
+        with self.assertRaises(ValueError):
+            mb.score_lessons([a, b], [])
+        with self.assertRaises(ValueError):
+            mb.score_lessons([{"time": "1", "namespace": "project:demo", "what_failed": "x"}], [])
+        with self.assertRaises(ValueError):
+            mb.score_lessons([{"time": 1, "namespace": "project:demo"}], [])
+
+    def test_mb_2_05_marks_not_run(self) -> None:
+        """Inputs: made-up scores. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        facts, questions = mb.prototype_dataset()
+        scored = [mb.score_memory(mb.EvidenceMemory(), facts, questions),
+                  mb.score_memory(mb.StatePacketMemory(), facts, questions)]
+        text = mb.build_bakeoff_report(scored + [{"system": "ai-memory"}])
+        self.assertIn("| ai-memory | NOT RUN |", text)
+        self.assertIn("evidence_fts: best at:", text)
+        self.assertIn("state_packet: best at:", text)
+        self.assertIn("worst at: avoids old answers", text)
+        self.assertNotIn("NOT RUN", text.split("| evidence_fts")[1].split("\n")[0])
+
+    def test_mb_2_05_rejects_incomplete_result(self) -> None:
+        """Inputs: made-up scores. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        facts, questions = mb.prototype_dataset()
+        full = mb.score_memory(mb.EvidenceMemory(), facts, questions)
+        broken = {k: v for k, v in full.items() if k != "case_leaks"}
+        with self.assertRaises(ValueError):
+            mb.build_bakeoff_report([broken])
+        with self.assertRaises(ValueError):
+            mb.build_bakeoff_report([])
+        with self.assertRaises(ValueError):
+            mb.build_bakeoff_report([{"found_right_fact": "1/1"}])
+
+
 if __name__ == "__main__":
     unittest.main()
