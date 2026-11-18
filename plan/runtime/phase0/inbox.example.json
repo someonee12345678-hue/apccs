@@ -1,0 +1,28 @@
+{
+  "note": "Synthetic example only. Nothing here was observed on a phone; AutoPie is NOT CHECKED.",
+  "share_receipt": {
+    "route": "file_import_fallback",
+    "app": "Example file manager",
+    "package": "example.synthetic.files",
+    "version": "0.0-example",
+    "destination": "inbox-folder-example",
+    "delivery_evidence": "synthetic trial: one file appeared in the chosen folder",
+    "delivered_file_count": 1,
+    "synthetic": true,
+    "synthetic_sample": "batch\ntitle: Fictional garden board\n",
+    "source_sha256": "8e3a49e5279711fc28bf936f70ab35756996504e8a2c53260ab265bf2a3d1eeb",
+    "received_at": "2026-11-18T09:00:00+00:00"
+  },
+  "trigger_rules": [
+    {
+      "rule_id": "rule-1",
+      "source_kind": "local_share",
+      "shape_id": "batch",
+      "event": "words",
+      "repository": "someonee12345678-hue/apccs",
+      "batch_id": "EXAMPLE-1",
+      "task_type": "build",
+      "authorized": true
+    }
+  ]
+}
