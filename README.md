@@ -2,6 +2,18 @@
 
 APCCS is the builder line for the owner's projects: the rules, checks and tests that every new piece of code has to pass before it is accepted.
 
+## Start here: the owner's projects are SEPARATE
+
+This repository builds more than one project. Never report them as one. Read `PROJECTS.md` (the master list) first, then the project map in the Claude Project "Unified TV Channel App", doc `claude/00_START_HERE_project_map.md`.
+
+| Project | Repository | One line |
+|---|---|---|
+| OmniGuide | `omniguide` | The free TV channel app. Not legal. |
+| UCLRCDE | `uclrcde` | Canadian (BC) legal research engine. Not part of the TV app. |
+| APCCS | `apccs` | This builder bot and control panel. |
+
+Every scheduled run starts with no memory. Status notes (issue #71, the daily email) must give one line per project, with that project's own "waiting on the owner" items.
+
 ## How a batch of work goes through
 
 1. The architect (Gemini) writes the next batches of instructions. They are kept, word for word, in `plan/QUEUE.md`.
