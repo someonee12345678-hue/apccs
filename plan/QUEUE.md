@@ -6332,3 +6332,27 @@ Known operations blockers remain explicit: K2 Muse private-repo access, K3 share
 Muse verifies the plan/build facts under current Q002/Q022 and records any gaps; Claude's gap audit follows the actual Phase 0 exit demonstration. No self-audit and no manual merge. The existing server gate handles ordinary plan/code PRs; protected changes still require the Owner's tap. The plan PR is not a build dispatch and changes no persistent automation.
 
 Undo this plan through a later add-only section marking the P0 wording superseded/held; preserve the original queue prefix and decision history. Runtime undo is batch-specific: disable only its new flow/adapter, restore the prior configuration/snapshot, retain originals and receipts, and never disable the standing webhook automation merely because a run is blocked or complete.
+
+---
+
+## Owner's ruling 2026-11-18: model-route rule changed (add-only; Claude, at the Owner's live request)
+
+**DECIDED BY OWNER (2026-11-18, in his own words, paraphrased):** the sentence "No browser automation of AI apps" in the Shared batch contract above (Phase 0, P0-1 to P0-8) is lifted. His reasons: the API route costs more than the project can pay; he does not accept that the companies enforce a ban; the project is building its own middleman around the AI tools. This section overrides that one sentence. It overrides nothing else. It changes no code and no workflow.
+
+**Order of routes (Owner's instruction: natural route first, then fallback):**
+
+1. **Natural route first.** Use the vendor's own terminal or agent tools (command-line agent or program mode, such as the Claude, Codex, Gemini and opencode tools already on the trial list) the way the vendor offers them, with our software as the wrapper around them.
+2. **Fallback, authorized by the Owner.** If the natural route cannot do what is needed (cost, quota, missing function, or it cannot be wrapped), a browser or terminal window of our own may drive the vendor's chat app. This is allowed by this ruling; it is no longer excluded.
+
+**Kept as written (this ruling does not touch them):**
+
+- AI switch OFF for every Phase 0 instruction; the P0 controller decides routes, approvals and readiness in plain code.
+- The model has no credentials, tools or permissions of its own. Our software is the only actor and denies by default anything not on a task's allowed list; an out-of-scope reply is rejected and stops the run (STOP).
+- Made-up data only for any new route until that route's record (below) exists. No case files, secrets or personal details go through any route.
+- A missing or failing worker is `blocked`, never a fabricated completion. Worker interfaces stay swappable adapters.
+
+**Route record (new, add-only):** before a route carries anything but made-up test data, a record is saved with the vendor, the route, the date, what the vendor's published terms say about it, and who checked. If the terms are unchecked the record says NOT CHECKED. The Owner may still choose to use a NOT CHECKED route; the account risk is then the Owner's, and the record says so.
+
+**Not decided here:** which vendors and routes are used first; the pass-rate tests per model; the wrapper and permissions design note. Those wait for the design pack.
+
+UNDO: a later add-only section can restore the old sentence. Nothing has changed at runtime.
