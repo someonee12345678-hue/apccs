@@ -6370,3 +6370,133 @@ Written by Claude (architect) on 2026-11-18, America/Vancouver. The Owner wants 
 4. After CO-3 merges, the Progress comment tells Micah to install CorollaOBD_Latest.apk from corolla-obd's "latest" release for a read-only car test (don't tap Clear codes).
 
 UNDO: a later add-only section can hold these batches.
+
+## Batches MB-1 to MB-3 — Memory bake-off and the limited-edition memory core (Claude, architect, 2026-11-18)
+
+Written by Claude (architect) on 2026-11-18, America/Vancouver, at the Owner's live request. Reason (Owner's words, paraphrased): the control panel and the legal research engine both need one central memory, so that switching tools or AIs never means starting over and he never has to learn a new system each time. Memory is built and tested early as a small "limited edition" core, then widened. Source: MASTER_TOOL_TABLE_V3 (ai-memory, OmniMem, Hindsight, GBrain, Rta-Smriti Brain, ClickMem/Loom, claude-mem, Mobile Memory, Infinite Brain OS), BUILD_PLAN_V1 (Phase 1 trial T2; Phase 2 B1/B3/B4), and the prototype saved in the Universal Builder project as memory_bench_prototype_2026-11-18.py (three stand-in memories and a six-check scorer; made-up data).
+
+**Status: MB-1 to MB-3 are fully worded, ready to build in order.** Target repository: `someonee12345678-hue/apccs`. New files only: `code/apccs_memory_bench.py` and `code/test_apccs_memory_bench.py` (test classes `MemoryBenchBatchMB1Tests`, `MemoryBenchBatchMB2Tests`, `MemoryBenchBatchMB3Tests`), plus `plan/MEMORY_BENCH.md`. Standard library only, AI switch OFF, made-up data only. Each batch appends to the end of the same module and test file.
+
+### Rules for all MB batches
+1. No real tool is installed or called by these batches. Real memory systems plug in later through the adapter in MB-3; until then each is reported `NOT RUN`, never a made-up score.
+2. Originals are append-only. Every index is rebuildable from the originals.
+3. Every stored fact carries: id, namespace, time, text, source, and an optional `supersedes` id.
+4. No private data. Namespaces (`project:` and `case:`) never mix.
+
+## Batch MB-1: Memory contract and the three stand-in memories
+**Canary check: MEMORY = ONE -> brain**
+
+### MB-1-01: DEFINE_MEMORY_FACT_AND_CONTRACT
+Function: `make_memory_fact(fact_id, namespace, time, text, source, supersedes=None) -> dict`.
+Does: Build one fact record with the fields in rule 3. The contract is three calls any memory must offer: `write(fact)`, `recall(query, namespace, as_of=None, k=3)`, `rebuild()`.
+Refuses: empty id, text or source; a namespace not starting `project:` or `case:`; a non-integer time.
+Tests: `test_mb_1_01_builds_fact`; `test_mb_1_01_rejects_bad_fact`.
+Done means: Every memory test uses one fact shape.
+
+### MB-1-02: STAND_IN_STATE_PACKET
+Function: `class StatePacketMemory`.
+Does: Keeps all facts per namespace and returns the whole namespace on recall. It is the baseline.
+Refuses: recall of an unknown namespace returns an empty list.
+Tests: `test_mb_1_02_returns_whole_namespace`; `test_mb_1_02_unknown_namespace_empty`.
+Done means: A baseline exists to beat.
+
+### MB-1-03: STAND_IN_KEYWORD_MEMORY
+Function: `class KeywordMemory`.
+Does: Append-only log plus an in-memory SQLite FTS5 index; recall returns the top k facts by keyword rank inside one namespace; `rebuild()` recreates the index from the log.
+Refuses: empty query; k outside 1–50.
+Tests: `test_mb_1_03_finds_by_keyword`; `test_mb_1_03_rejects_bad_query_or_k`.
+Done means: A search-only baseline exists.
+
+### MB-1-04: STAND_IN_EVIDENCE_MEMORY
+Function: `class EvidenceMemory(KeywordMemory)`.
+Does: Same index, but recall hides any fact that a newer fact supersedes and ignores facts newer than `as_of`; every returned fact keeps its source.
+Refuses: a `supersedes` id that does not exist in the same namespace.
+Tests: `test_mb_1_04_hides_corrected_fact`; `test_mb_1_04_answers_as_of_date`.
+Done means: Corrections and history are handled in plain code.
+
+### MB-1-05: SCORE_ONE_MEMORY
+Function: `score_memory(memory, facts, questions) -> dict`.
+Does: Write the facts, ask each question `(query, namespace, as_of, topic, must_not_contain)`, and report: found the right fact, stale answers, case leaks, estimated tokens per lookup (characters ÷ 4), recovery after `rebuild()`, and source on every fact. Include the six-question made-up set from the prototype.
+Refuses: an empty fact list or question list.
+Tests: `test_mb_1_05_scores_all_three_stand_ins`; `test_mb_1_05_rejects_empty_input`.
+Done means: The three stand-ins produce the same numbers as the prototype (evidence memory: 0 stale answers, 0 leaks).
+Not checked: Any real memory tool.
+
+## Batch MB-2: Legal-style tests and the correction-precedence rule
+**Canary check: CORRECTION = WINS -> memory**
+
+### MB-2-01: ADD_LEGAL_STYLE_FACT_SET
+Function: `build_legal_style_fixture() -> (facts, questions)`.
+Does: Made-up facts and questions with rule changes (old rule superseded on a date), amendments, two cases with look-alike facts, and a "what applied on this earlier date" question.
+Refuses: none; the fixture is fixed data. No real law, names or cases.
+Tests: `test_mb_2_01_fixture_shape`; `test_mb_2_01_has_supersession_and_two_cases`.
+Done means: The legal engine's memory needs are tested with the same scorer.
+
+### MB-2-02: OWNER_CORRECTION_OUTRANKS_SUMMARY
+Function: `resolve_conflict(facts) -> dict`.
+Does: When two facts about one topic disagree, pick by this order: Owner correction, then signed human review, then source document, then model summary; ties go to the newer. Return the winner and the reasons. Facts carry a `kind` field with one of those four values.
+Refuses: an unknown `kind`; facts from different namespaces.
+Tests: `test_mb_2_02_owner_beats_model_summary`; `test_mb_2_02_rejects_mixed_namespaces`.
+Done means: A model's summary can never override the Owner.
+
+### MB-2-03: LESSON_CAPTURE_RECORD
+Function: `make_lesson(lesson_id, namespace, what_failed, evidence_ids, proposed_rule, state="proposed") -> dict`.
+Does: Record a proposed lesson. States are `proposed`, `tested`, `approved`, `retired`. Only `approved` lessons may be returned by recall to a builder; moving to `approved` needs a passing test id and an Owner approval id.
+Refuses: moving to `approved` without both ids; empty evidence.
+Tests: `test_mb_2_03_blocks_unapproved_lesson`; `test_mb_2_03_requires_test_and_owner`.
+Done means: Learning from mistakes is gated, logged and reversible.
+
+### MB-2-04: SCORE_REPEAT_MISTAKES
+Function: `score_lessons(failures, lessons) -> dict`.
+Does: Given a made-up list of failure events and the approved lessons, report how many later failures repeat a mistake that an approved lesson already covers.
+Refuses: failures not in time order.
+Tests: `test_mb_2_04_counts_repeats`; `test_mb_2_04_rejects_unordered`.
+Done means: "Does it stop making the same mistake" is a number.
+
+### MB-2-05: BAKE_OFF_REPORT
+Function: `build_bakeoff_report(results) -> str`.
+Does: Plain-English table of every memory scored, with `NOT RUN` for any real tool without a result, and one line per system saying what it did best and worst. Write the same text to `plan/MEMORY_BENCH.md` only through the batch's pull request, never at runtime.
+Refuses: a result missing a required score field.
+Tests: `test_mb_2_05_marks_not_run`; `test_mb_2_05_rejects_incomplete_result`.
+Done means: The Owner can read one table, no jargon.
+
+## Batch MB-3: One handoff packet and the adapter for real tools
+**Canary check: SWITCH = KEEP -> context**
+
+### MB-3-01: BUILD_HANDOFF_PACKET
+Function: `build_handoff_packet(memory, namespace, task, token_budget) -> dict`.
+Does: Ask the memory for the current facts and approved lessons for the task, trim to the token budget (characters ÷ 4), and return a packet with sources. Any AI or tool, whichever the Owner switches to, starts from this one packet.
+Refuses: a budget under 100; an unknown namespace.
+Tests: `test_mb_3_01_packet_has_sources_and_budget`; `test_mb_3_01_rejects_small_budget`.
+Done means: Switching tools does not mean starting over.
+
+### MB-3-02: REAL_TOOL_ADAPTER_SLOT
+Function: `class MemoryAdapterSlot`.
+Does: Wraps a real memory tool behind the three calls. With no tool configured, every call returns `{"status": "NOT RUN", "reason": "tool not installed"}`. Slots named for the trial list: `ai_memory`, `omnimem`, `hindsight`, `gbrain`, `rta_smriti`, `clickmem`, `claude_mem`.
+Refuses: an unknown slot name; any attempt to run a configured tool whose route record is missing (see the 2026-11-18 route-record rule).
+Tests: `test_mb_3_02_not_run_without_tool`; `test_mb_3_02_blocks_without_route_record`.
+Done means: A real tool can be scored later with no change to the scorer.
+
+### MB-3-03: CASE_WALL_CHECK
+Function: `check_case_walls(memory, namespaces) -> dict`.
+Does: Write a look-alike fact into each case namespace and prove a recall in one never returns another's fact, including after `rebuild()`.
+Refuses: fewer than two namespaces.
+Tests: `test_mb_3_03_no_leak`; `test_mb_3_03_detects_a_leaky_memory`.
+Done means: Case privacy is proved, not assumed.
+
+### MB-3-04: RECOVERY_FROM_ORIGINALS
+Function: `prove_recovery(memory) -> dict`.
+Does: Record answers, delete the index, rebuild from the originals only, and report identical answers or the differences.
+Refuses: a memory with no rebuild call.
+Tests: `test_mb_3_04_rebuild_matches`; `test_mb_3_04_reports_difference`.
+Done means: Loss of the index loses nothing.
+
+### MB-3-05: FRONT_END_PANEL_FEED
+Function: `build_brain_panel_status(report) -> dict`.
+Does: Reduce the bake-off report to the fields a phone "Brain" panel shows: systems tested, best per check, `NOT RUN` list, repeat-mistake count. No secrets, no case text.
+Refuses: a report containing any text field longer than 200 characters.
+Tests: `test_mb_3_05_panel_fields_only`; `test_mb_3_05_rejects_long_text`.
+Done means: The panel can show memory health with no extra work.
+Not checked: Real tools, real devices, real legal data.
+
+UNDO: a later add-only section can retire these batches. Nothing here touches runtime or the existing modules.
