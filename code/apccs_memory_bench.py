@@ -422,3 +422,189 @@ def build_bakeoff_report(results: list) -> str:
     head = ["| System | Right fact found | Old answers | Case mix-ups | Tokens per lookup | "
             "Recovers after rebuild | Source kept |", "|---|---|---|---|---|---|---|"]
     return "\n".join(head + rows + [""] + notes) + "\n"
+
+
+def build_handoff_packet(memory: object, namespace: str, task: str, token_budget: int,
+                         lessons: list | None = None) -> dict:
+    """Build the one packet any AI or tool starts from after a switch.
+
+    Inputs: a memory, a namespace, the task text, a token budget (characters / 4) of at least
+    100, and optionally the lesson list (only approved lessons of that namespace are used).
+    Outputs: {"namespace", "task", "facts" (id, time, text, source), "lessons", "tokens_used",
+    "token_budget", "trimmed"}; facts come first and nothing past the budget is included.
+    Errors: ValueError for a budget under 100, or a namespace the memory knows nothing about.
+    """
+    if isinstance(token_budget, bool) or not isinstance(token_budget, int) or token_budget < 100:
+        raise ValueError("token_budget must be a whole number of at least 100")
+    found = memory.recall(task, namespace, None, 10)
+    if not found:
+        raise ValueError("unknown namespace: the memory holds no facts for it")
+    wanted = [("fact", f) for f in found]
+    wanted += [("lesson", x) for x in lessons_for_builder(lessons or [], namespace)]
+    packet = {"namespace": namespace, "task": task, "facts": [], "lessons": [],
+              "tokens_used": 0, "token_budget": token_budget, "trimmed": False}
+    chars = 0
+    for kind, item in wanted:
+        text = item["text"] if kind == "fact" else item["proposed_rule"]
+        if (chars + len(text)) / 4 > token_budget:
+            packet["trimmed"] = True
+            break
+        chars += len(text)
+        if kind == "fact":
+            packet["facts"].append({"id": item["id"], "time": item["time"],
+                                    "text": item["text"], "source": item["source"]})
+        else:
+            packet["lessons"].append({"id": item["id"], "rule": text,
+                                      "evidence_ids": item["evidence_ids"]})
+    packet["tokens_used"] = round(chars / 4)
+    return packet
+
+
+ADAPTER_SLOTS = ("ai_memory", "omnimem", "hindsight", "gbrain", "rta_smriti", "clickmem",
+                 "claude_mem")
+_ROUTE_FIELDS = ("vendor", "route", "date", "terms", "checked_by")
+
+
+class MemoryAdapterSlot:
+    """Holds a place for one real memory tool behind the three memory calls."""
+
+    def __init__(self, slot: str, tool: object = None, route_record: dict | None = None) -> None:
+        """Inputs: a slot name from ADAPTER_SLOTS, optionally a tool and its route record.
+
+        Outputs: nothing. Errors: ValueError for an unknown slot name.
+        """
+        if slot not in ADAPTER_SLOTS:
+            raise ValueError(f"unknown slot {slot!r}; use one of {ADAPTER_SLOTS}")
+        self.name = slot
+        self._tool = tool
+        self._route_record = route_record
+
+    def _ready_tool(self) -> object:
+        if self._tool is None:
+            return None
+        record = self._route_record
+        if not isinstance(record, dict) or not all(
+                isinstance(record.get(f), str) and record[f].strip() for f in _ROUTE_FIELDS):
+            raise ValueError("route record missing: vendor, route, date, terms and checked_by "
+                             "are needed before this tool runs (terms may say NOT CHECKED)")
+        return self._tool
+
+    def _not_run(self) -> dict:
+        return {"status": "NOT RUN", "reason": "tool not installed"}
+
+    def remember(self, fact: dict) -> object:
+        """Inputs: one fact dict. Outputs: NOT RUN without a tool, else the tool's answer. Errors: ValueError without a route record."""
+        tool = self._ready_tool()
+        return self._not_run() if tool is None else tool.remember(fact)
+
+    write = remember
+
+    def recall(self, query: str, namespace: str, as_of: int | None = None, k: int = 3) -> object:
+        """Inputs: query, namespace, date and count. Outputs: NOT RUN without a tool, else the tool's answer. Errors: ValueError without a route record."""
+        tool = self._ready_tool()
+        return self._not_run() if tool is None else tool.recall(query, namespace, as_of, k)
+
+    def rebuild(self) -> object:
+        """Inputs: none. Outputs: NOT RUN without a tool, else the tool's answer. Errors: ValueError without a route record."""
+        tool = self._ready_tool()
+        return self._not_run() if tool is None else tool.rebuild()
+
+
+def check_case_walls(memory: object, namespaces: list) -> dict:
+    """Prove a recall in one case never returns another case's fact, also after a rebuild.
+
+    Inputs: a memory and at least two case: namespaces.
+    Outputs: {"namespaces_checked", "leaks", "passed"}; each namespace gets one look-alike fact.
+    Errors: ValueError for fewer than two distinct namespaces.
+    """
+    if not isinstance(namespaces, list) or len(set(namespaces)) < 2:
+        raise ValueError("at least two different namespaces are needed")
+    for index, namespace in enumerate(namespaces):
+        memory.remember(make_memory_fact(f"wall-check-{index}", namespace, 1,
+                                         "Wall check look-alike fact about the quartz deadline",
+                                         f"wall:{index}"))
+    leaks = 0
+    for _round in range(2):
+        for namespace in namespaces:
+            got = memory.recall("wall check look-alike quartz deadline", namespace, None, 50)
+            leaks += sum(1 for f in got if f["namespace"] != namespace)
+        memory.rebuild()
+    return {"namespaces_checked": len(namespaces), "leaks": leaks, "passed": leaks == 0}
+
+
+def prove_recovery(memory: object, probes: list | None = None) -> dict:
+    """Record answers, rebuild the index from the originals only, and compare the answers.
+
+    Inputs: a memory that already holds facts, and optional (query, namespace) probes
+    (the prototype questions by default).
+    Outputs: {"checked", "identical", "differences"}; each difference lists the fact ids
+    before and after.
+    Errors: ValueError for a memory with no rebuild call, or one that answers no probe at all.
+    """
+    try:
+        rebuild_call = memory.rebuild
+    except AttributeError:
+        raise ValueError("memory has no rebuild call") from None
+    if not callable(rebuild_call):
+        raise ValueError("memory has no rebuild call")
+    if probes is None:
+        probes = [(q[0], q[1]) for q in prototype_dataset()[1]]
+    before = [[f["id"] for f in memory.recall(q, ns, None, 3)] for q, ns in probes]
+    if not any(before):
+        raise ValueError("memory holds nothing to compare; write facts first")
+    memory.rebuild()
+    after = [[f["id"] for f in memory.recall(q, ns, None, 3)] for q, ns in probes]
+    differences = [{"query": probes[i][0], "namespace": probes[i][1],
+                    "before": before[i], "after": after[i]}
+                   for i in range(len(probes)) if before[i] != after[i]]
+    return {"checked": len(probes), "identical": not differences, "differences": differences}
+
+
+def _long_text(value: object) -> bool:
+    if isinstance(value, str):
+        return len(value) > 200
+    if isinstance(value, dict):
+        return any(_long_text(k) or _long_text(v) for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(_long_text(v) for v in value)
+    return False
+
+
+def build_brain_panel_status(report: dict) -> dict:
+    """Reduce the bake-off results to the few fields a phone Brain panel shows.
+
+    Inputs: {"results": score dicts or {"system": name} for tools not run, "lessons": optional
+    score_lessons dict}.
+    Outputs: {"systems_tested", "best_per_check", "not_run", "repeat_mistakes"}: names and
+    numbers only, no case text.
+    Errors: ValueError for a report that is not a dict with results, a result with only some
+    score fields, or any text field longer than 200 characters.
+    """
+    if not isinstance(report, dict) or not isinstance(report.get("results"), list):
+        raise ValueError("report needs a results list")
+    if _long_text(report):
+        raise ValueError("report has a text field longer than 200 characters")
+    scored, not_run = [], []
+    for result in report["results"]:
+        if not isinstance(result, dict) or not result.get("system"):
+            raise ValueError("each result needs a system name")
+        present = [f for f in _SCORE_FIELDS if f in result]
+        if present and len(present) != len(_SCORE_FIELDS):
+            raise ValueError(f"result for {result['system']} is missing score fields")
+        (scored if present else not_run).append(result)
+
+    def _best(field: str, pick) -> list:
+        values = [pick(r[field]) for r in scored]
+        top = min(values) if field in ("stale_answers", "case_leaks", "tokens_per_lookup") else max(values)
+        return [r["system"] for r, v in zip(scored, values) if v == top] if scored else []
+
+    best = {"found_right_fact": _best("found_right_fact", lambda v: int(v.split("/")[0])),
+            "stale_answers": _best("stale_answers", int),
+            "case_leaks": _best("case_leaks", int),
+            "tokens_per_lookup": _best("tokens_per_lookup", int),
+            "recovers_after_rebuild": [r["system"] for r in scored if r["recovers_after_rebuild"]],
+            "source_on_every_fact": [r["system"] for r in scored if r["source_on_every_fact"]]}
+    lessons = report.get("lessons") or {}
+    return {"systems_tested": len(scored), "best_per_check": best,
+            "not_run": [r["system"] for r in not_run],
+            "repeat_mistakes": lessons.get("repeats")}
