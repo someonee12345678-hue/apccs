@@ -1,0 +1,582 @@
+[
+  {
+    "id": "p02tab",
+    "type": "tab",
+    "label": "P0-2 Mission Control phone view",
+    "disabled": false,
+    "info": "Phase 0 Batch P0-2 Dashboard 2 package. Pinned: @flowfuse/node-red-dashboard@1.37.0 (record the exact version you install; do not use the deprecated original dashboard). Reads only the controller snapshot; approval buttons send guarded requests, never approvals. NOT CHECKED: import, render and Android use. No credentials are stored here."
+  },
+  {
+    "id": "p02base",
+    "type": "ui-base",
+    "name": "Mission Control",
+    "path": "/dashboard",
+    "includeClientData": false,
+    "acceptsClientConfig": [
+      "ui-notification",
+      "ui-control"
+    ],
+    "showPathInSidebar": false,
+    "navigationStyle": "default",
+    "titleBarStyle": "default"
+  },
+  {
+    "id": "p02theme",
+    "type": "ui-theme",
+    "name": "Mission Control theme",
+    "colors": {
+      "surface": "#ffffff",
+      "primary": "#0b5fff",
+      "bgPage": "#f5f6f8",
+      "groupBg": "#ffffff",
+      "groupOutline": "#cccccc"
+    },
+    "sizes": {
+      "pagePadding": "12px",
+      "groupGap": "12px",
+      "groupBorderRadius": "6px",
+      "density": "default"
+    }
+  },
+  {
+    "id": "p02page_home",
+    "type": "ui-page",
+    "name": "Home",
+    "ui": "p02base",
+    "path": "/home",
+    "icon": "home",
+    "layout": "grid",
+    "theme": "p02theme",
+    "breakpoints": [
+      {
+        "name": "Default",
+        "px": 0,
+        "cols": 3
+      }
+    ],
+    "order": 1,
+    "className": ""
+  },
+  {
+    "id": "p02grp_home",
+    "type": "ui-group",
+    "name": "Home group",
+    "page": "p02page_home",
+    "width": 6,
+    "height": 1,
+    "order": 1,
+    "showTitle": true,
+    "className": "",
+    "visible": true,
+    "disabled": false
+  },
+  {
+    "id": "p02page_approvals",
+    "type": "ui-page",
+    "name": "Approvals",
+    "ui": "p02base",
+    "path": "/approvals",
+    "icon": "home",
+    "layout": "grid",
+    "theme": "p02theme",
+    "breakpoints": [
+      {
+        "name": "Default",
+        "px": 0,
+        "cols": 3
+      }
+    ],
+    "order": 2,
+    "className": ""
+  },
+  {
+    "id": "p02grp_approvals",
+    "type": "ui-group",
+    "name": "Approvals group",
+    "page": "p02page_approvals",
+    "width": 6,
+    "height": 1,
+    "order": 1,
+    "showTitle": true,
+    "className": "",
+    "visible": true,
+    "disabled": false
+  },
+  {
+    "id": "p02page_flows",
+    "type": "ui-page",
+    "name": "Flows",
+    "ui": "p02base",
+    "path": "/flows",
+    "icon": "home",
+    "layout": "grid",
+    "theme": "p02theme",
+    "breakpoints": [
+      {
+        "name": "Default",
+        "px": 0,
+        "cols": 3
+      }
+    ],
+    "order": 3,
+    "className": ""
+  },
+  {
+    "id": "p02grp_flows",
+    "type": "ui-group",
+    "name": "Flows group",
+    "page": "p02page_flows",
+    "width": 6,
+    "height": 1,
+    "order": 1,
+    "showTitle": true,
+    "className": "",
+    "visible": true,
+    "disabled": false
+  },
+  {
+    "id": "p02page_agents",
+    "type": "ui-page",
+    "name": "Agents",
+    "ui": "p02base",
+    "path": "/agents",
+    "icon": "home",
+    "layout": "grid",
+    "theme": "p02theme",
+    "breakpoints": [
+      {
+        "name": "Default",
+        "px": 0,
+        "cols": 3
+      }
+    ],
+    "order": 4,
+    "className": ""
+  },
+  {
+    "id": "p02grp_agents",
+    "type": "ui-group",
+    "name": "Agents group",
+    "page": "p02page_agents",
+    "width": 6,
+    "height": 1,
+    "order": 1,
+    "showTitle": true,
+    "className": "",
+    "visible": true,
+    "disabled": false
+  },
+  {
+    "id": "p02inj",
+    "type": "inject",
+    "z": "p02tab",
+    "name": "poll snapshot",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "30",
+    "crontab": "",
+    "once": true,
+    "onceDelay": 1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 120,
+    "y": 80,
+    "wires": [
+      [
+        "p02get"
+      ]
+    ]
+  },
+  {
+    "id": "p02get",
+    "type": "http request",
+    "z": "p02tab",
+    "name": "GET /snapshot",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:8765/snapshot",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "bearer",
+    "senderr": true,
+    "headers": [],
+    "x": 320,
+    "y": 80,
+    "wires": [
+      [
+        "p02remember"
+      ]
+    ]
+  },
+  {
+    "id": "p02remember",
+    "type": "change",
+    "z": "p02tab",
+    "name": "Remember revision",
+    "rules": [
+      {
+        "t": "set",
+        "p": "snapshot_sha256",
+        "pt": "flow",
+        "to": "payload.snapshot_sha256",
+        "tot": "msg"
+      },
+      {
+        "t": "set",
+        "p": "revision",
+        "pt": "flow",
+        "to": "payload.revision",
+        "tot": "msg"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "to": "",
+    "reg": false,
+    "x": 520,
+    "y": 80,
+    "wires": [
+      [
+        "p02home",
+        "p02flows",
+        "p02agents",
+        "p02stale"
+      ]
+    ],
+    "from": ""
+  },
+  {
+    "id": "p02catch",
+    "type": "catch",
+    "z": "p02tab",
+    "name": "Controller unreachable",
+    "scope": null,
+    "uncaught": false,
+    "x": 140,
+    "y": 140,
+    "wires": [
+      [
+        "p02offline"
+      ]
+    ]
+  },
+  {
+    "id": "p02home",
+    "type": "ui-text",
+    "z": "p02tab",
+    "name": "Home summary",
+    "group": "p02grp_home",
+    "order": 1,
+    "width": 6,
+    "height": 1,
+    "x": 760,
+    "y": 40,
+    "wires": [],
+    "label": "Jobs and problems",
+    "layout": "row-left",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#717171"
+  },
+  {
+    "id": "p02offline",
+    "type": "ui-text",
+    "z": "p02tab",
+    "name": "Offline and reconnect state",
+    "group": "p02grp_home",
+    "order": 1,
+    "width": 6,
+    "height": 1,
+    "x": 760,
+    "y": 80,
+    "wires": [],
+    "label": "Offline and reconnect",
+    "layout": "row-left",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#717171"
+  },
+  {
+    "id": "p02stale",
+    "type": "ui-text",
+    "z": "p02tab",
+    "name": "Stale data state",
+    "group": "p02grp_home",
+    "order": 1,
+    "width": 6,
+    "height": 1,
+    "x": 760,
+    "y": 120,
+    "wires": [],
+    "label": "Stale data",
+    "layout": "row-left",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#717171"
+  },
+  {
+    "id": "p02flows",
+    "type": "ui-table",
+    "z": "p02tab",
+    "name": "Flows table",
+    "group": "p02grp_flows",
+    "order": 1,
+    "width": 6,
+    "height": 1,
+    "x": 760,
+    "y": 160,
+    "wires": [],
+    "label": "Flows and dependencies",
+    "maxrows": 10,
+    "autocols": true,
+    "action": "replace",
+    "selectionType": "none",
+    "columns": [],
+    "mobileBreakpoint": "sm",
+    "mobileBreakpointType": "defaults"
+  },
+  {
+    "id": "p02agents",
+    "type": "ui-table",
+    "z": "p02tab",
+    "name": "Agents table",
+    "group": "p02grp_agents",
+    "order": 1,
+    "width": 6,
+    "height": 1,
+    "x": 760,
+    "y": 200,
+    "wires": [],
+    "label": "Agents and availability",
+    "maxrows": 10,
+    "autocols": true,
+    "action": "replace",
+    "selectionType": "none",
+    "columns": [],
+    "mobileBreakpoint": "sm",
+    "mobileBreakpointType": "defaults"
+  },
+  {
+    "id": "p02btn0",
+    "type": "ui-button",
+    "z": "p02tab",
+    "name": "Request owner approval",
+    "group": "p02grp_approvals",
+    "order": 1,
+    "width": 4,
+    "height": 1,
+    "x": 140,
+    "y": 240,
+    "wires": [
+      [
+        "p02bind0"
+      ]
+    ],
+    "label": "Request owner approval",
+    "tooltip": "Ask the Owner to approve this job. This sends a request only.",
+    "buttonColor": "#0b5fff",
+    "payload": "",
+    "payloadType": "str",
+    "topic": "topic",
+    "topicType": "msg",
+    "emulateClick": false,
+    "className": "",
+    "icon": "",
+    "iconPosition": "left",
+    "iconInnerPosition": "left",
+    "enabled": true,
+    "visible": true
+  },
+  {
+    "id": "p02bind0",
+    "type": "change",
+    "z": "p02tab",
+    "name": "Bind request_owner_approval",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{}",
+        "tot": "json"
+      },
+      {
+        "t": "set",
+        "p": "payload.action",
+        "pt": "msg",
+        "to": "request_owner_approval",
+        "tot": "str"
+      },
+      {
+        "t": "set",
+        "p": "payload.snapshot_sha256",
+        "pt": "msg",
+        "to": "snapshot_sha256",
+        "tot": "flow"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "to": "",
+    "reg": false,
+    "x": 340,
+    "y": 240,
+    "wires": [
+      [
+        "p02guard"
+      ]
+    ],
+    "from": ""
+  },
+  {
+    "id": "p02btn1",
+    "type": "ui-button",
+    "z": "p02tab",
+    "name": "Request retry",
+    "group": "p02grp_approvals",
+    "order": 1,
+    "width": 4,
+    "height": 1,
+    "x": 140,
+    "y": 320,
+    "wires": [
+      [
+        "p02bind1"
+      ]
+    ],
+    "label": "Request retry",
+    "tooltip": "Ask for a retry of this job. This sends a request only.",
+    "buttonColor": "#0b5fff",
+    "payload": "",
+    "payloadType": "str",
+    "topic": "topic",
+    "topicType": "msg",
+    "emulateClick": false,
+    "className": "",
+    "icon": "",
+    "iconPosition": "left",
+    "iconInnerPosition": "left",
+    "enabled": true,
+    "visible": true
+  },
+  {
+    "id": "p02bind1",
+    "type": "change",
+    "z": "p02tab",
+    "name": "Bind request_retry",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{}",
+        "tot": "json"
+      },
+      {
+        "t": "set",
+        "p": "payload.action",
+        "pt": "msg",
+        "to": "request_retry",
+        "tot": "str"
+      },
+      {
+        "t": "set",
+        "p": "payload.snapshot_sha256",
+        "pt": "msg",
+        "to": "snapshot_sha256",
+        "tot": "flow"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "to": "",
+    "reg": false,
+    "x": 340,
+    "y": 320,
+    "wires": [
+      [
+        "p02guard"
+      ]
+    ],
+    "from": ""
+  },
+  {
+    "id": "p02guard",
+    "type": "switch",
+    "z": "p02tab",
+    "name": "Guard: bound to current revision",
+    "property": "payload.snapshot_sha256",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "nnull"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 560,
+    "y": 280,
+    "wires": [
+      [
+        "p02post"
+      ]
+    ]
+  },
+  {
+    "id": "p02post",
+    "type": "http request",
+    "z": "p02tab",
+    "name": "POST approval request",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:8766/approval-requests",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "bearer",
+    "senderr": true,
+    "headers": [],
+    "x": 780,
+    "y": 280,
+    "wires": [
+      [
+        "p02notify"
+      ]
+    ]
+  },
+  {
+    "id": "p02notify",
+    "type": "ui-notification",
+    "z": "p02tab",
+    "name": "Request sent notice",
+    "group": "p02grp_approvals",
+    "order": 1,
+    "width": 6,
+    "height": 1,
+    "x": 980,
+    "y": 280,
+    "wires": [],
+    "position": "top right",
+    "displayTime": "4",
+    "highlight": "",
+    "sendall": true,
+    "outputs": 0,
+    "ok": "OK",
+    "cancel": "",
+    "raw": false,
+    "className": ""
+  }
+]
