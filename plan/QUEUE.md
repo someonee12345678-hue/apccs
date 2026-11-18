@@ -6356,3 +6356,17 @@ Undo this plan through a later add-only section marking the P0 wording supersede
 **Not decided here:** which vendors and routes are used first; the pass-rate tests per model; the wrapper and permissions design note. Those wait for the design pack.
 
 UNDO: a later add-only section can restore the old sentence. Nothing has changed at runtime.
+
+## Batches CO-1 to CO-3 — Corolla OBD Reader tests (Claude, 2026-11-18)
+
+Written by Claude (architect) on 2026-11-18, America/Vancouver. The Owner wants the Corolla OBD Reader built on the existing server scheduler with no taps (14 Nov 08:28, 18 Nov 04:11). The Drive inbox route (GEMINI_INBOX job CO-001, 14 Nov) never ran: nothing watches that folder.
+
+**Status: CO-1 to CO-3 are ready to build, in order.** Architect file: `plan/QUEUE.md` in `someonee12345678-hue/corolla-obd` (sections "## Batch CO-1", "## Batch CO-2", "## Batch CO-3"); build each word for word from there. The "Build and test" check in corolla-obd (Android unit tests + debug APK) is the gate; its auto-merge gate merges green pull requests.
+
+### Rules for all Corolla batches
+1. Target repository: `someonee12345678-hue/corolla-obd`. Follow its `AGENTS.md`. It is an Android app that can't be compiled in the builder session: write the code, push, and treat its GitHub "Build and test" check as the test run.
+2. Done means the batch's test class exists on corolla-obd main in `app/src/test/java/com/drunkenfeud/corollaobd/`.
+3. Pull request title `Batch CO-<N>: <a few words>`, label `apccs-batch`. Never send OBD mode 04 from any code path a test or automation runs.
+4. After CO-3 merges, the Progress comment tells Micah to install CorollaOBD_Latest.apk from corolla-obd's "latest" release for a read-only car test (don't tap Clear codes).
+
+UNDO: a later add-only section can hold these batches.
