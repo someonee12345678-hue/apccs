@@ -1,0 +1,147 @@
+[
+  {
+    "id": "p03tab",
+    "type": "tab",
+    "label": "P0-3 Termux offline flow",
+    "disabled": false,
+    "info": "Phase 0 Batch P0-3. Local-only flow for the phone: every step is followed by a checkpoint call to 127.0.0.1 before the next step runs. No public listener, no shell, no provider address, no credentials. NOT CHECKED: Termux, Node.js and Node-RED versions and behaviour on the phone."
+  },
+  {
+    "id": "p03start",
+    "type": "inject",
+    "z": "p03tab",
+    "name": "Start local run",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"status\":\"pending_intent\",\"next_step\":\"validate\"}",
+    "payloadType": "json",
+    "x": 130,
+    "y": 120,
+    "wires": [
+      [
+        "p03step1"
+      ]
+    ]
+  },
+  {
+    "id": "p03step1",
+    "type": "change",
+    "z": "p03tab",
+    "name": "Step 1: validate",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.status",
+        "pt": "msg",
+        "to": "completed",
+        "tot": "str"
+      },
+      {
+        "t": "set",
+        "p": "payload.next_step",
+        "pt": "msg",
+        "to": "local_search",
+        "tot": "str"
+      }
+    ],
+    "x": 300,
+    "y": 60,
+    "wires": [
+      [
+        "p03cp1"
+      ]
+    ]
+  },
+  {
+    "id": "p03cp1",
+    "type": "http request",
+    "z": "p03tab",
+    "name": "Checkpoint 1",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:1881/checkpoint",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 500,
+    "y": 120,
+    "wires": [
+      [
+        "p03step2"
+      ]
+    ]
+  },
+  {
+    "id": "p03step2",
+    "type": "change",
+    "z": "p03tab",
+    "name": "Step 2: local search",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload.next_step",
+        "pt": "msg",
+        "to": "checkpoint_inspect",
+        "tot": "str"
+      }
+    ],
+    "x": 520,
+    "y": 60,
+    "wires": [
+      [
+        "p03cp2"
+      ]
+    ]
+  },
+  {
+    "id": "p03cp2",
+    "type": "http request",
+    "z": "p03tab",
+    "name": "Checkpoint 2",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:1881/checkpoint",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 700,
+    "y": 120,
+    "wires": [
+      [
+        "p03done"
+      ]
+    ]
+  },
+  {
+    "id": "p03done",
+    "type": "debug",
+    "z": "p03tab",
+    "name": "Local run recorded",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "x": 760,
+    "y": 120,
+    "wires": []
+  }
+]
