@@ -1,0 +1,275 @@
+[
+  {
+    "id": "p0tab",
+    "type": "tab",
+    "label": "P0-1 controller probes",
+    "disabled": false,
+    "info": "Manual probes of the loopback controller. Authentication credentials are set in the Node-RED editor, never in this file."
+  },
+  {
+    "id": "p0note",
+    "type": "comment",
+    "z": "p0tab",
+    "name": "Replace the inject payloads with upstream nodes when P0-2 and later batches wire them",
+    "info": "",
+    "x": 330,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "p0inj_jobs",
+    "type": "inject",
+    "z": "p0tab",
+    "name": "probe jobs",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{}",
+    "payloadType": "json",
+    "x": 150,
+    "y": 100,
+    "wires": [
+      [
+        "p0req_jobs"
+      ]
+    ]
+  },
+  {
+    "id": "p0req_jobs",
+    "type": "http request",
+    "z": "p0tab",
+    "name": "POST /jobs",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:8765/jobs",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "bearer",
+    "senderr": false,
+    "headers": [],
+    "x": 370,
+    "y": 100,
+    "wires": [
+      [
+        "p0dbg_jobs"
+      ]
+    ]
+  },
+  {
+    "id": "p0dbg_jobs",
+    "type": "debug",
+    "z": "p0tab",
+    "name": "jobs reply",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 580,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "p0inj_claim",
+    "type": "inject",
+    "z": "p0tab",
+    "name": "probe claim",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{}",
+    "payloadType": "json",
+    "x": 150,
+    "y": 180,
+    "wires": [
+      [
+        "p0req_claim"
+      ]
+    ]
+  },
+  {
+    "id": "p0req_claim",
+    "type": "http request",
+    "z": "p0tab",
+    "name": "POST /claim",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:8765/claim",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "bearer",
+    "senderr": false,
+    "headers": [],
+    "x": 370,
+    "y": 180,
+    "wires": [
+      [
+        "p0dbg_claim"
+      ]
+    ]
+  },
+  {
+    "id": "p0dbg_claim",
+    "type": "debug",
+    "z": "p0tab",
+    "name": "claim reply",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 580,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "p0inj_dispatch",
+    "type": "inject",
+    "z": "p0tab",
+    "name": "probe dispatch",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{}",
+    "payloadType": "json",
+    "x": 150,
+    "y": 260,
+    "wires": [
+      [
+        "p0req_dispatch"
+      ]
+    ]
+  },
+  {
+    "id": "p0req_dispatch",
+    "type": "http request",
+    "z": "p0tab",
+    "name": "POST /dispatch",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:8765/dispatch",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "bearer",
+    "senderr": false,
+    "headers": [],
+    "x": 370,
+    "y": 260,
+    "wires": [
+      [
+        "p0dbg_dispatch"
+      ]
+    ]
+  },
+  {
+    "id": "p0dbg_dispatch",
+    "type": "debug",
+    "z": "p0tab",
+    "name": "dispatch reply",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 580,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "p0inj_snapshot",
+    "type": "inject",
+    "z": "p0tab",
+    "name": "probe snapshot",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 150,
+    "y": 340,
+    "wires": [
+      [
+        "p0req_snapshot"
+      ]
+    ]
+  },
+  {
+    "id": "p0req_snapshot",
+    "type": "http request",
+    "z": "p0tab",
+    "name": "GET /snapshot",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:8765/snapshot",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "bearer",
+    "senderr": false,
+    "headers": [],
+    "x": 370,
+    "y": 340,
+    "wires": [
+      [
+        "p0dbg_snapshot"
+      ]
+    ]
+  },
+  {
+    "id": "p0dbg_snapshot",
+    "type": "debug",
+    "z": "p0tab",
+    "name": "snapshot reply",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 580,
+    "y": 340,
+    "wires": []
+  }
+]
