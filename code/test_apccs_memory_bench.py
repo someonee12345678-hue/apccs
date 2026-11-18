@@ -284,5 +284,187 @@ class MemoryBenchBatchMB2Tests(unittest.TestCase):
             mb.build_bakeoff_report([{"found_right_fact": "1/1"}])
 
 
+class _LeakyMemory(mb.StatePacketMemory):
+    """A memory that ignores namespaces on purpose, to prove the wall check can fail."""
+
+    def recall(self, query: str, namespace: str, as_of: int | None = None, k: int = 3) -> list:
+        """Inputs: a query. Outputs: every fact in every namespace. Errors: none."""
+        return [f for facts in self._facts.values() for f in facts]
+
+
+class _ForgetfulMemory(mb.EvidenceMemory):
+    """A memory that loses its newest fact when rebuilt, to prove recovery can fail."""
+
+    def rebuild(self) -> None:
+        """Inputs: none. Outputs: nothing; drops the last logged fact. Errors: none."""
+        self._log = self._log[:-1]
+        super().rebuild()
+
+
+class _FakeTool:
+    """A made-up real tool: it keeps facts in a list."""
+
+    def __init__(self) -> None:
+        self.facts = []
+
+    def remember(self, fact: dict) -> str:
+        """Inputs: a fact. Outputs: "kept". Errors: none."""
+        self.facts.append(fact)
+        return "kept"
+
+    def recall(self, query: str, namespace: str, as_of: int | None = None, k: int = 3) -> list:
+        """Inputs: a query. Outputs: the kept facts of that namespace. Errors: none."""
+        return [f for f in self.facts if f["namespace"] == namespace][:k]
+
+    def rebuild(self) -> str:
+        """Inputs: none. Outputs: "rebuilt". Errors: none."""
+        return "rebuilt"
+
+
+_ROUTE = {"vendor": "ExampleCo", "route": "command line", "date": "2026-11-18",
+          "terms": "NOT CHECKED", "checked_by": "nobody yet"}
+
+
+def _loaded(memory_class: type = mb.EvidenceMemory) -> object:
+    memory = memory_class()
+    for fact in mb.prototype_dataset()[0]:
+        memory.remember(fact)
+    return memory
+
+
+class MemoryBenchBatchMB3Tests(unittest.TestCase):
+    canary_shown = False
+
+    def _start_case(self) -> None:
+        """Inputs: none. Outputs: prints the canary line once. Errors: none."""
+        if not MemoryBenchBatchMB3Tests.canary_shown:
+            MemoryBenchBatchMB3Tests.canary_shown = True
+            print("Canary check: SWITCH = KEEP -> context")
+
+    def test_mb_3_01_packet_has_sources_and_budget(self) -> None:
+        """Inputs: made-up facts. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        approved = mb.change_lesson_state(
+            mb.make_lesson("ls1", "project:apccs", "wrong cap", ["f1"], "Check the cap first"),
+            "approved", "t1", "o1")
+        draft = mb.make_lesson("ls2", "project:apccs", "other", ["f1"], "Unapproved rule")
+        packet = mb.build_handoff_packet(_loaded(), "project:apccs", "builder pull request cap",
+                                         200, [approved, draft])
+        self.assertTrue(packet["facts"])
+        self.assertTrue(all(f["source"] for f in packet["facts"]))
+        self.assertEqual([x["id"] for x in packet["lessons"]], ["ls1"])
+        self.assertLessEqual(packet["tokens_used"], 200)
+        small = mb.build_handoff_packet(_loaded(mb.StatePacketMemory), "project:apccs", "cap", 100)
+        self.assertTrue(small["trimmed"])
+        self.assertLessEqual(small["tokens_used"], 100)
+
+    def test_mb_3_01_rejects_small_budget(self) -> None:
+        """Inputs: made-up facts. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        memory = _loaded()
+        for budget in (99, 0, -5, "200", True):
+            with self.assertRaises(ValueError):
+                mb.build_handoff_packet(memory, "project:apccs", "cap", budget)
+        with self.assertRaises(ValueError):
+            mb.build_handoff_packet(memory, "case:nobody", "cap", 200)
+
+    def test_mb_3_02_not_run_without_tool(self) -> None:
+        """Inputs: slot names. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        expected = {"status": "NOT RUN", "reason": "tool not installed"}
+        for name in mb.ADAPTER_SLOTS:
+            slot = mb.MemoryAdapterSlot(name)
+            self.assertEqual(slot.recall("q", "case:1"), expected)
+            self.assertEqual(slot.rebuild(), expected)
+            self.assertEqual(slot.remember({}), expected)
+        self.assertEqual(len(mb.ADAPTER_SLOTS), 7)
+        with self.assertRaises(ValueError):
+            mb.MemoryAdapterSlot("mystery_tool")
+
+    def test_mb_3_02_blocks_without_route_record(self) -> None:
+        """Inputs: a made-up tool. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        fact = mb.make_memory_fact("a", "case:1", 1, "Text", "log:a")
+        with self.assertRaises(ValueError):
+            mb.MemoryAdapterSlot("hindsight", _FakeTool()).remember(fact)
+        incomplete = dict(_ROUTE, terms=" ")
+        with self.assertRaises(ValueError):
+            mb.MemoryAdapterSlot("hindsight", _FakeTool(), incomplete).recall("q", "case:1")
+        slot = mb.MemoryAdapterSlot("hindsight", _FakeTool(), _ROUTE)
+        self.assertEqual(slot.remember(fact), "kept")
+        self.assertEqual(slot.recall("q", "case:1"), [fact])
+        self.assertEqual(slot.rebuild(), "rebuilt")
+
+    def test_mb_3_03_no_leak(self) -> None:
+        """Inputs: made-up namespaces. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        for memory_class in (mb.KeywordMemory, mb.EvidenceMemory):
+            result = mb.check_case_walls(memory_class(), ["case:1", "case:2", "case:3"])
+            self.assertEqual(result, {"namespaces_checked": 3, "leaks": 0, "passed": True})
+        with self.assertRaises(ValueError):
+            mb.check_case_walls(mb.EvidenceMemory(), ["case:1"])
+        with self.assertRaises(ValueError):
+            mb.check_case_walls(mb.EvidenceMemory(), ["case:1", "case:1"])
+
+    def test_mb_3_03_detects_a_leaky_memory(self) -> None:
+        """Inputs: a memory that leaks on purpose. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        result = mb.check_case_walls(_LeakyMemory(), ["case:1", "case:2"])
+        self.assertFalse(result["passed"])
+        self.assertGreater(result["leaks"], 0)
+
+    def test_mb_3_04_rebuild_matches(self) -> None:
+        """Inputs: made-up facts. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        for memory_class in (mb.KeywordMemory, mb.EvidenceMemory, mb.StatePacketMemory):
+            result = mb.prove_recovery(_loaded(memory_class))
+            self.assertTrue(result["identical"])
+            self.assertEqual((result["differences"], result["checked"]), ([], 6))
+
+    def test_mb_3_04_reports_difference(self) -> None:
+        """Inputs: a forgetful memory. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        memory = _loaded(_ForgetfulMemory)
+        memory.remember(mb.make_memory_fact("z9", "project:apccs", 99, "Backups run nightly to the free server again", "log:z9"))
+        result = mb.prove_recovery(memory, [("backups nightly", "project:apccs")])
+        self.assertFalse(result["identical"])
+        self.assertEqual(len(result["differences"]), 1)
+        self.assertIn("z9", result["differences"][0]["before"])
+        self.assertNotIn("z9", result["differences"][0]["after"])
+        with self.assertRaises(ValueError):
+            mb.prove_recovery(object())
+        with self.assertRaises(ValueError):
+            mb.prove_recovery(mb.EvidenceMemory())
+
+    def test_mb_3_05_panel_fields_only(self) -> None:
+        """Inputs: made-up scores. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        facts, questions = mb.prototype_dataset()
+        results = [mb.score_memory(c(), facts, questions)
+                   for c in (mb.StatePacketMemory, mb.KeywordMemory, mb.EvidenceMemory)]
+        lessons = mb.score_lessons([], [])
+        panel = mb.build_brain_panel_status({"results": results + [{"system": "omnimem"}],
+                                             "lessons": lessons})
+        self.assertEqual(set(panel), {"systems_tested", "best_per_check", "not_run", "repeat_mistakes"})
+        self.assertEqual(panel["systems_tested"], 3)
+        self.assertEqual(panel["not_run"], ["omnimem"])
+        self.assertEqual(panel["best_per_check"]["stale_answers"], ["evidence_fts"])
+        self.assertEqual(panel["best_per_check"]["tokens_per_lookup"], ["evidence_fts"])
+        self.assertEqual(panel["repeat_mistakes"], 0)
+        self.assertNotIn("Limitation", str(panel))
+
+    def test_mb_3_05_rejects_long_text(self) -> None:
+        """Inputs: made-up reports. Outputs: checked results. Errors: AssertionError."""
+        self._start_case()
+        with self.assertRaises(ValueError):
+            mb.build_brain_panel_status({"results": [{"system": "x" * 201}]})
+        with self.assertRaises(ValueError):
+            mb.build_brain_panel_status({"results": [{"system": "ok"}], "note": ["y" * 250]})
+        with self.assertRaises(ValueError):
+            mb.build_brain_panel_status({"results": [{"system": "ok", "found_right_fact": "1/1"}]})
+        with self.assertRaises(ValueError):
+            mb.build_brain_panel_status([])
+
+
 if __name__ == "__main__":
     unittest.main()
