@@ -206,3 +206,35 @@ The order of work is W1, W6, W2, W3, W4, W5. This line replaces the order given 
 
 - **W1 is DONE.** It was done through the ChatGPT route at 12:05, apccs draft PR #162. It audited all 14 builds: 8 FAIL and 6 PASS WITH NOTES. It drafted the correction batches PAF-1, MAF-1, UAF-1 and CAF-1, in plan/architect/W1_AUDIT_CORRECTIONS_2026-11-19.md. Issue #163 hands that wording to the auditor. Runners treat W1 as done and don't redo it, even though its Drive copy (AUDIT_BUILDS_…) doesn't exist yet.
 - Next, in order: W6, W2, W3, W4, W5.
+
+## W6 changed, and new standing order W7 (2026-11-19 12:40, Owner's ruling Q056)
+
+The Owner doesn't want to answer yes or no item by item. The architect assembles; he reviews only the final compilation. The product structure is now in plan/PRODUCT_MAP.md: 12 main features, their branches, their dependencies, and the overlap decisions.
+
+**W6 (replaces W6's steps 3–7; steps 1–2 stay).**
+- **Done when:** FULL_LOG_AUDIT_2026-11-19 (Drive folder 1y37q1ZTvjLMe4qxc9YJx9hCQAFz3Tqrl) holds a Doc titled PRODUCT_COMPILATION_2026-11-19 and a Sheet titled PRODUCT_MAP_DETAIL_2026-11-19.
+- **Who:** ChatGPT or the work-order runner, whichever runs first. Muse verifies afterwards (job file JOB_PRODUCT_COMPILATION_VERIFY in MUSE_INBOX).
+- **Steps:**
+  1. **Place every ability.** Take every ability found in MASTER_TOOL_TABLE_V3 and the requalify reports that serves one of the Owner's 21 objectives (plan/RESEARCH_LEDGER.csv), and put it under exactly one feature and branch of plan/PRODUCT_MAP.md.
+  2. **Sheet:** one row per ability, with these columns:
+     - Feature
+     - Branch
+     - Ability in plain words
+     - Comes from (tool and its V3 row)
+     - Fits the Owner's preferences? (phone/free · plain code · licence)
+     - Overlaps with
+     - Fits together or competes
+     - Decision (Adopt now / Adopt later / Borrow the idea / Not used, with one plain reason)
+     - Status (✅ / 🛠 / ⬜ / ⏸)
+  3. **Decide overlaps yourself** with the rule in PRODUCT_MAP.md ("Things that do the same job"). Don't ask the Owner item by item.
+  4. **Doc:** the Owner's final compilation, kept simple, built from the big picture down to the parts:
+     - the three sentences and the diagram;
+     - then each of the 12 features in two to four plain lines (what it does, what it's made of, what it depends on, what's built and what's next), with the adopted abilities named under it;
+     - then a short "What I decided where tools overlap" list;
+     - then "What changes in the plan": the new items that go into "Approved features waiting for wording", with the feature each one belongs to.
+  5. **Plan PR:** add those new items as an add-only section in plan/QUEUE.md, "## Approved features waiting for wording — from the product compilation". Keep the Owner's rule: he reviews the compilation, and anything he rejects is withdrawn by a later section.
+  6. **Email him once:** "Your product compilation is ready: <Doc link>. It shows how all your research fits into one product. Tell me anything you'd change; otherwise it goes into the build queue."
+
+**W7 (standing order, never finished).** On every runner pass, check plan/RESEARCH_LEDGER.csv for rows newer than the last PRODUCT_MAP.md "Changes to this map" note. Place each new item on the map, add a dated note, and update the compilation's Sheet. If nothing is new, skip it. Never email for W7 unless a new item changes a decision.
+
+The order of work is W1, W6, W2, W3, W4, W5, W7.

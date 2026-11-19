@@ -1,0 +1,149 @@
+# Product map — what Micah is building, from the big picture down to the parts
+
+Written by Claude (architect), 2026-11-19 12:40, America/Vancouver. This is the structure that every research finding, feature and batch hangs on. Agents fill in the detail (work order W6) and keep it current (W7). The Owner reviews only the finished compilation (ledger Q056).
+
+Status marks: ✅ built as code · 🛠 worded or scheduled · ⬜ gap (nothing planned yet) · ⏸ later phase.
+
+## The whole thing in three sentences
+
+1. **The Builder (APCCS)** is one control panel on Micah's phone. A **main brain** runs a team of AI helpers and plain code to build and run any software from a zip, with no taps, $0 extra, and rules and memory so nobody repeats themselves.
+2. **The Legal Engine (UCLRCDE)** is the first big product built with it: a phone-first legal information tool for self-represented people in BC. It never invents a source, never predicts outcomes, and walks the person through procedure step by step.
+3. **Everything else** (OmniGuide, Corolla OBD) is an app the Builder makes the same way.
+
+```
+                      ┌──────────── THE BUILDER (APCCS) ─────────────┐
+   You (phone) ──►    │ 6 Screens & install                          │
+                      │     │                                        │
+                      │ 1 MAIN BRAIN ──► 2 Helpers (AI + plain code) │
+                      │     │   ▲                                    │
+                      │ 3 Memory & rules   4 Checks & safety         │
+                      │ 5 Research         7 Storage & recovery      │
+                      └──────────────┬───────────────────────────────┘
+                                     │ builds and runs
+                      ┌──────────────▼── THE LEGAL ENGINE (UCLRCDE) ──┐
+                      │ 8 Sources ─► 9 Answers ─► 10 Procedure        │
+                      │                 │            & deadlines      │
+                      │            11 Case workspace (screens)        │
+                      │            12 Privacy wall (case files stay   │
+                      │               on the phone)                   │
+                      └───────────────────────────────────────────────┘
+```
+
+Shared parts: memory (3), checks (4) and storage (7) are built once, in the Builder, and the Legal Engine uses them. Neither project imports the other's code (Constitution Amendment 1).
+
+## The 12 main features, each with its branches
+
+### 1. Main brain — decides, splits the work, keeps everyone busy
+- Queue, leases and a plain-code logic gate (P0-1) ✅
+- Plain code first, AI only when needed: the 90% rule (Q046), measured by GS-1 🛠
+- Model route ladder: phone model → own machine → free cloud → paid. Never pick a paid route silently ⬜
+- Swarm: up to 20 helpers under one coordinator (1 Nov item 28) ⬜
+- Session guard: token limits and handoffs (SG-1) 🛠
+- Approval cards: the brain asks only for real decisions (from MausBot and Paperclip ideas) ⬜
+- **Depends on:** 2 Helpers, 3 Memory, 4 Checks.
+
+### 2. Helpers — who does the work
+- Claude builder, ChatGPT/Codex, Muse (checker), the free light model on GitHub ✅ (running)
+- Worker adapters that can be swapped; a route record for each vendor (18 Nov ruling, Q049) ✅ / ⬜
+- Vendor command-line tools first (Codex CLI, Gemini CLI, opencode); a browser or terminal as fallback (trial T6) ⏸
+- A separate code copy per job (Worktrunk, T3) ⏸; skill packs vetted before use (T5) ⏸
+- **Depends on:** 1 Brain (gives orders), 4 Checks (grades the work).
+
+### 3. Memory and rules — never repeat yourself
+- Rulings ledger, rulebook with the Owner's preferences, system map, work orders ✅
+- Logs in his format, one file per exchange ✅; log viewer in the panel ⬜
+- One central memory that survives switching AIs: MB-1 to MB-3 test bench ✅; real tool trial T2 ⏸
+- Lessons: only tested and approved lessons are reused (MB-2) ✅
+- **Depends on:** 7 Storage.
+
+### 4. Checks and safety — nothing is "done" without proof
+- Tests plus the server merge gate ✅; independent audit of every build (W1 found 8 failures; fixes queued) 🛠
+- No invented blocks (Q052); no fixture shown as live; "built" labels checked against real tests (CP-2) 🛠
+- Readability gate, slop gate, fake-work check ✅
+- Failure loop: diagnose why an agent failed, fix the cause (AQuA idea) ⬜
+- Secrets scan, privacy filter, timestamped log chain (S1, S2, S4) ⏸
+- **Depends on:** 3 Memory (records), 2 Helpers (a different helper audits).
+
+### 5. Research — look things up, and "has this been made before?"
+- Research agent: brief, fit checker, loop, scoring, helpers (RA1–RA3) ✅ (code, not live)
+- Prior-art check, "has this app been made before" (FreeSerp, free news and search APIs) ⬜
+- Feature harvest: every link the Owner gives is placed on this map (W6, W7) 🛠
+- **Depends on:** 1 Brain, 2 Helpers, 4 Checks (official sources only, NOT CHECKED otherwise).
+
+### 6. Screens and install — what Micah touches
+- One-zip installer, home-screen icon, finds the other projects on a fresh phone (CP-1) 🛠
+- Project switcher with batch history, logs and predicted finish (CP-2) 🛠
+- Mission Control dashboard: Home, Approvals, Flows, Agents (P0-2 code ✅; install ⬜)
+- Welcome walkthrough and slash commands ⬜ (slice 2)
+- Flow editor, n8n-style menus (via Node-RED) ⏸
+- Voice, wake word and phone control (Jarvis ideas) ⏸
+- **Depends on:** 1 Brain (shows its state), 7 Storage (runs on the phone).
+
+### 7. Storage and recovery — built to last 50 years
+- Plain files, Git, SQLite; originals never edited ✅
+- Snapshots and restore (P0-6 ✅); server backups (P0-7 code ✅, no server)
+- Vault and one-way copies (A5) ✅; encrypted case vault (Cryptomator, T7) ⏸
+- Fresh-phone recovery: scan the phone and Drive, rebuild ✅ partly / ⬜ tool finding
+- **Depends on:** nothing. This is the bottom layer.
+
+### 8. Sources — the legal truth layer
+- Locked originals with fingerprints and in-force dates ✅; quote and citation checks ✅
+- Legal library pilot (Indigo/Peachjam, Akoma Ntoso) ⏸; BC forms licence check (LS-J, research W3) 🛠
+- OCR that catches stamps and exhibits (research W3) 🛠
+- **Depends on:** 7 Storage, 4 Checks.
+
+### 9. Answers — the legal brain
+- Search manager and answer gate: VERIFIED / NEEDS VALIDATION / CAN'T ANSWER (BR-1) 🛠
+- Term catalog / ontology with human sign-off (BR-1; auto-ontology idea) 🛠
+- Oracle engine O1–O7, case-law gate, "clerk, not judge" ✅
+- Gold test set and the 90%-software meter (GS-1) 🛠
+- **Depends on:** 8 Sources, 1 Brain (when AI is allowed), 4 Checks.
+
+### 10. Procedure and deadlines — A to Z
+- Procedure maps as plain decision tables, and a step checker (PE-1) 🛠
+- Court route map, flowchart, filing assistant, service proofs (UI-4, slice 2) 🛠
+- Official BC court days. Nothing counts dates until the table is VERIFIED (research W3) 🛠
+- Interview-style forms (Docassemble) ⏸
+- **Depends on:** 8 Sources, 9 Answers.
+
+### 11. Case workspace — the legal screens
+- One unified page, document creator, question generators, help guide, lawyer side panel, binder, exhibits (UI-1 to UI-5, slice 2) 🛠
+- **Depends on:** 9 Answers, 10 Procedure, 6 Screens pattern.
+
+### 12. Privacy wall
+- Case files never leave the phone; case walls (MB-3) ✅; local-only search ✅
+- Ask before anything leaves the phone (A5) ✅; privacy filter (Presidio, S4) ⏸
+- **Depends on:** 7 Storage.
+
+## Things that do the same job: do they fit together or compete?
+
+Rule used for every decision: the Owner's preferences (plan/RULEBOOK.md), in this order: works on the phone or free; plain code first; open licence or an idea we can borrow; don't reinvent the wheel; one source of truth.
+
+| Same job | Candidates from the research | Fit together or compete? | Architect's decision |
+|---|---|---|---|
+| Wiring steps into flows | n8n, Node-RED, Activepieces, Zapier-style | **Compete:** only one engine can run the flows | Node-RED runs the flows (approved 17 Nov). n8n's menus and features are copied as ideas into our screens. |
+| Being the boss of the agents | Our main brain, Paperclip, Multica, agent-room, Goose | **Compete** for control | Our brain stays the boss. Borrow Paperclip's org chart, tickets, budgets and heartbeats as brain features. |
+| Memory | ai-memory, OmniMem, claude-mem, GBrain, Hindsight, Infinite Brain OS | **Compete:** one truth only | Git text files are the truth. One tool wins trial T2; the others' good ideas are borrowed. |
+| Legal search | Vane, RAGFlow, legal RAG projects | **Compete** for the search core; **fit** under our answer gate | Trial T8 picks one. Our answer gate (BR-1) always sits on top and labels every answer. |
+| Rules and procedure | DMN tables, Catala, Docassemble, XState, Flowable | **Fit** when each does its own job | Plain JSON decision tables first (PE-1). Docassemble later for form interviews. XState on the phone; Flowable only if a server exists. |
+| Databases | SQLite, PostgreSQL, DuckDB, DocumentDB | SQLite and PostgreSQL **fit** (phone and server). DocumentDB **competes** with PostgreSQL. DuckDB **fits** for reports | SQLite now; PostgreSQL if a server appears. DuckDB for read-only reports later. Not DocumentDB. |
+| Phone automation | AutoPie, Tasker, droidclaw, Jarvis phone control, PokeClaw | **Fit** in layers | AutoPie for plain triggers (no AI). A Jarvis-style AI phone control later, always under the brain's STOP. |
+| Driving AI apps | Vendor command-line tools, agent-browser, MausBot | **Fit** as first choice plus fallback | Command-line tools first; a browser only as fallback, with a route record (Q049). |
+| Saving tokens | Focus Pack, token-saver, compaction tools, rightsize router | **Fit:** different stages | Focus Pack packs the input; token-saver trims the output; a rightsize-style router picks the cheapest model that can do the job (⬜). |
+| Skill packs | Pocock, Osmani, superpowers, android/skills | **Fit**, but can clash in their instructions | SkillEvaluator vets each one (T5); one pack per job type. |
+| Chat front end | Our panel, Ember, OpenMausBot chat, Jarvis | **Compete** for "the screen" | Our panel is the screen. Their features (channels, model picker, voice) are borrowed into it. |
+| Web and news search | FreeSerp, free news API | **Fit:** web plus news | Both feed the prior-art check (feature 5). |
+| Ontology | NVIDIA auto-ontology, Palantir, Databricks Genie | **Fit** as ideas | They shape the term catalog (feature 9). No platform is adopted. |
+| Jailbreak prompt | G0DM0D3 | — | Claude won't build it (said once, 15 Nov). |
+
+## How the parts depend on each other (bottom up)
+
+- **Storage (7)** sits at the bottom.
+- **Memory (3), Checks (4) and Privacy (12)** sit on Storage.
+- The **Main brain (1)** uses Memory and Checks to direct the **Helpers (2)** and **Research (5)**.
+- **Screens (6)** show the Brain.
+- On the legal side, **Sources (8)** feed **Answers (9)**, which feed **Procedure (10)**. All three show in the **Case workspace (11)** behind the **Privacy wall (12)**.
+
+Build order follows this: the bottom layers first (mostly built), then the answering layer (slice 1, today), then the screens (slice 2).
+
+Changes to this map: none yet. W6 fills each branch with the specific abilities found in the research; W7 keeps it current.
