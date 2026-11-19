@@ -162,3 +162,42 @@ Why this file exists: until 19 Nov these jobs lived only inside Claude's schedul
 Updated only by add-only notes below.
 
 - 2026-11-19 11:55: W1–W5 open. W1 failed once (Claude usage limit at 10:41).
+
+## W6 — Feature harvest from all research, so you can choose (added 2026-11-19 12:20)
+
+The order of work is W1, W6, W2, W3, W4, W5. This line replaces the order given at the top of this file.
+
+- **Why:** on 19 Nov at 12:04 the Owner asked what became of everything he asked to have researched.
+  - plan/RESEARCH_LEDGER.csv now lists all 225 requests (207 distinct items) under his 21 objectives, O01–O21, in his own words.
+  - The research produced verdicts on tools: MASTER_TOOL_TABLE_V3, 352 rows, Muse GREEN.
+  - Only about 22 items reached the plan, mostly as tool names.
+  - The features he wanted harvested for his objectives were never turned into a list for him to choose from, which he asked for on 14 Nov 19:03 (ledger Q055).
+- **After:** nothing.
+- **Done when:** Drive folder 1y37q1ZTvjLMe4qxc9YJx9hCQAFz3Tqrl (FULL_LOG_AUDIT_2026-11-19) holds a Sheet titled FEATURE_CHOICE_LIST_2026-11-19, AND apccs plan/QUEUE.md on main has a section headed “## Feature choices waiting for the Owner”.
+- **Steps:**
+  1. **Read these sources:**
+     - plan/RESEARCH_LEDGER.csv: every item, with its objective O01–O21 and “What came of that objective”.
+     - MASTER_TOOL_TABLE_V3_2026-11-17 (Drive Sheet 15lAdE2uQeVT6QW-euTUaRP4b0RQ3Ngwv8BfyQPs4E2w). Export it as CSV through the Drive tool, which gives the Tools tab, or read it in parts.
+     - TOOL_REQUALIFY_2026-11-14 (1bl17fmVnKu_gsA4c2qGylFoMWTPaxHoTew5yOAx0StU) and TOOL_REQUALIFY_2026-11-17 (1kozO0l3baupPghxF2wHrR78yjh8ETOTLSbOsiuKjUgM).
+     - The “Universal Builder — Design Decision Pack” artifact (e984cec3-09f3-4f9a-ab7b-0b531b8a9a98), if your tools can read it.
+  2. **Research the two items never researched**, with official sources only and anything else marked NOT CHECKED:
+     - arXiv 2611.18856;
+     - the X post by @KirkDBorne from 18 Nov (R-items in O21).
+  3. **For each objective O01–O21, list the abilities found** in the researched tools that serve it. One row per ability:
+     - Objective;
+     - Ability in plain words;
+     - Comes from (tool, with its V3 row ID);
+     - Licence (from V3);
+     - Phone / free server / both;
+     - Plain code possible? (yes/no);
+     - Already in the plan? (where, or No);
+     - Recommendation (Yes, No or Later, with one plain reason);
+     - Owner's choice (left empty).
+  4. **Judge only by the Owner's criteria** (Q043, Q045, Q046):
+     - price is ignored;
+     - terms of service are flagged, never used as a reason;
+     - “doesn't work natively” or “hard to do” is never a reason;
+     - ideas can be copied if the licence allows borrowing the idea.
+  5. **Write no batch wording** for these until the Owner chooses (Q055; his 14 Nov rule).
+  6. **Create the Sheet** from CSV. Add a short section at the end of plan/QUEUE.md, “## Feature choices waiting for the Owner”, through a plan PR. It holds one line per objective: how many abilities were found, how many are recommended, and the Sheet link.
+  7. **Email the Owner once:** “Feature choice list is ready: <n> abilities for your 21 research objectives. Reply ‘yes to recommended’ to adopt every ‘Yes’, or name the ones you want.” Then his reply is recorded as ledger rows, and each chosen ability is added to “Approved features waiting for wording”.
