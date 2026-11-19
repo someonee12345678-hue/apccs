@@ -6536,3 +6536,381 @@ The Owner asked on 2026-11-19 11:43 how the blocks were decided, because he neve
 Correction to the section "Approved features waiting for wording": its bullet "Waiting on people (2 items)" repeated the first two withdrawn blocks. That bullet is void. No approved work waits on a person.
 
 UNDO: a later add-only section can restore any line, quoting the Owner's words.
+
+
+## Post-merge audit corrections (independent)
+
+Source: work order W1, 2026-11-19. These batches address verified deviations in PRs #147 and #155–#157, UCLRCDE #27 and Corolla OBD #2–#4. Build wording requires independent wording audit before dispatch. Existing modules stay intact. Use made-up data; tests only use temporary storage. Python targets use Python 3.11 standard library and Inputs:/Outputs:/Errors: docstrings. Corolla follows its Java 17/JUnit 4 project rules.
+
+### Batch PAF-1 — Bind Phase 0 exit to independently checked results
+
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged and independent wording audit passes.
+**New files:** `code/apccs_p0_audit_fix.py` and `code/test_apccs_p0_audit_fix.py`. Test class `PAF1Tests`.
+**Canary:** `Canary check: PAF1 = AUDITED -> correction`.
+
+#### PAF-1-01: CHECK_EXIT_INPUT (source: W1 independent audit)
+Function: `check_exit_input(evidence)`.
+Does: Validate mapping/list types, including nested implementation refs and stage entries, before reading them. Return a structured refusal for malformed shapes.
+Refuses: A string or list in implementation refs is blocked.
+Tests: `test_paf1_01_normal` (A complete mapping is accepted); `test_paf1_01_bad_input` (A string or list in implementation refs is blocked).
+Done means: A complete mapping is accepted, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### PAF-1-02: BIND_RESTORE_RESULT (source: W1 independent audit)
+Function: `bind_exit_restore(evidence, foundation_result)`.
+Does: Require the independently validated foundation result for the same revision, with live proof and distinct verifier references. Keep missing or fixture-only results NOT_CHECKED.
+Refuses: A standalone original-preserved flag or wrong revision is rejected.
+Tests: `test_paf1_02_normal` (Matching independently verified proof is accepted); `test_paf1_02_bad_input` (A standalone original-preserved flag or wrong revision is rejected).
+Done means: Matching independently verified proof is accepted, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### PAF-1-03: VERIFY_STAGE_REFERENCES (source: W1 independent audit)
+Function: `check_exit_stage_references(evidence, observed_references)`.
+Does: Verify required implementation, host, phone and trace references against supplied authoritative observations for the same revision. Unavailable observations remain NOT_CHECKED.
+Refuses: An unresolvable reference leaves a gap.
+Tests: `test_paf1_03_normal` (All matching references resolve); `test_paf1_03_bad_input` (An unresolvable reference leaves a gap).
+Done means: All matching references resolve, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### PAF-1-04: COMPOSE_EXIT_RESULT (source: W1 independent audit)
+Function: `build_checked_p0_exit(evidence, foundation_result, observed_references)`.
+Does: Run the new input and proof checks before calling the existing exit evaluator. Keep an eight-line record, gaps and undo references. Never authorize Phase 1.
+Refuses: Missing restore proof never produces a live PASS.
+Tests: `test_paf1_04_normal` (Complete inputs produce the success shape); `test_paf1_04_bad_input` (Missing restore proof never produces a live PASS).
+Done means: Complete inputs produce the success shape, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### PAF-1-05: RECORD_TEST_SCOPE (source: W1 independent audit)
+Function: `check_exit_evidence_scope(result, test_scope)`.
+Does: Keep synthetic regression fixtures distinct from live operational acceptance. Verify output records both evidence scope and any remaining gaps.
+Refuses: A fixture marked live is refused.
+Tests: `test_paf1_05_normal` (A fixture is explicitly labelled); `test_paf1_05_bad_input` (A fixture marked live is refused).
+Done means: A fixture is explicitly labelled, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+### Batch MAF-1 — Memory originals, lesson approval and handoff proof
+
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged and independent wording audit passes; MB-1 through MB-3 remain on main.
+**New files:** `code/apccs_memory_audit_fix.py` and `code/test_apccs_memory_audit_fix.py`. Test class `MAF1Tests`.
+**Canary:** `Canary check: MAF1 = AUDITED -> correction`.
+
+#### MAF-1-01: ISOLATE_ORIGINALS (source: W1 independent audit)
+Function: `make_isolated_memory(memory)`.
+Does: Provide a wrapper for the existing stand-ins that makes independent copies on recording and recall. Preserve namespace and indexes and support rebuild.
+Refuses: A malformed fact is refused before recording.
+Tests: `test_maf1_01_normal` (Changing the input and returned copies leaves the recorded answer unchanged); `test_maf1_01_bad_input` (A malformed fact is refused before recording).
+Done means: Changing the input and returned copies leaves the recorded answer unchanged, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### MAF-1-02: VERIFY_APPROVED_LESSONS (source: W1 independent audit)
+Function: `select_approved_lessons(lessons, namespace, passing_tests, owner_approvals)`.
+Does: Return only current same-namespace lessons whose test and approval IDs bind to that lesson in supplied records. Retired lessons stay hidden.
+Refuses: A label without linked evidence is excluded.
+Tests: `test_maf1_02_normal` (A lesson with matching evidence is recalled); `test_maf1_02_bad_input` (A label without linked evidence is excluded).
+Done means: A lesson with matching evidence is recalled, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### MAF-1-03: BUDGET_WHOLE_PACKET (source: W1 independent audit)
+Function: `build_budgeted_handoff(memory, namespace, task, token_budget, verified_lessons)`.
+Does: Measure the exact canonical JSON payload including metadata, task and sources. Trim only complete facts or lessons. Return a structured refusal if the envelope alone is too large.
+Refuses: An oversized task envelope is refused.
+Tests: `test_maf1_03_normal` (The serialized packet is within four characters per token); `test_maf1_03_bad_input` (An oversized task envelope is refused).
+Done means: The serialized packet is within four characters per token, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### MAF-1-04: PROVE_CASE_RECALL (source: W1 independent audit)
+Function: `check_case_recall_with_controls(memory, namespaces)`.
+Does: For each synthetic case require a known own-case hit and zero foreign hits before and after rebuilding. Use an isolated test memory.
+Refuses: An empty recall fails proof.
+Tests: `test_maf1_04_normal` (Both own-case controls survive rebuild); `test_maf1_04_bad_input` (An empty recall fails proof).
+Done means: Both own-case controls survive rebuild, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### MAF-1-05: PROVE_RECOVERY_CONTENT (source: W1 independent audit)
+Function: `check_memory_recovery_content(memory, probes)`.
+Does: Require callable rebuild and compare the returned fact content, source, order and identifiers before and after. Require at least one known hit.
+Refuses: An unchanged ID with changed text fails.
+Tests: `test_maf1_05_normal` (Identical recovered facts pass); `test_maf1_05_bad_input` (An unchanged ID with changed text fails).
+Done means: Identical recovered facts pass, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+### Batch UAF-1 — Independent restore search probe
+
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** this plan is merged and independent wording audit passes.
+**New files:** `code/uclrcde_p0_audit_fix.py` and `code/test_uclrcde_p0_audit_fix.py`. Test class `UAF1Tests`.
+**Canary:** `Canary check: UAF1 = AUDITED -> correction`.
+
+#### UAF-1-01: DEFINE_RESTORE_PROBE (source: W1 independent audit)
+Function: `build_restore_probe(fixture_case_id, fixture_doc_id, query, expected_source_sha256)`.
+Does: Validate a known made-up case, locked document, literal query and expected content hash supplied independently of the restore target.
+Refuses: A missing expected hash is refused.
+Tests: `test_uaf1_01_normal` (A complete synthetic probe is accepted); `test_uaf1_01_bad_input` (A missing expected hash is refused).
+Done means: A complete synthetic probe is accepted, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### UAF-1-02: VERIFY_EXPECTED_FIXTURE (source: W1 independent audit)
+Function: `check_restore_fixture_input(probe, original_evidence)`.
+Does: Bind the expected hit to caller-supplied pre-restore fixture evidence. Keep production and device-recovery claims outside this test.
+Refuses: A probe built from post-restore output is refused.
+Tests: `test_uaf1_02_normal` (Known synthetic fixture is linked); `test_uaf1_02_bad_input` (A probe built from post-restore output is refused).
+Done means: Known synthetic fixture is linked, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### UAF-1-03: MATCH_RESTORED_HIT (source: W1 independent audit)
+Function: `check_expected_restore_hit(restored_conn, probe)`.
+Does: Query the restored locked-source index within the fixture case. Require the expected document and exact source digest.
+Refuses: A different document or digest fails.
+Tests: `test_uaf1_03_normal` (Restored fixture finds its expected hit); `test_uaf1_03_bad_input` (A different document or digest fails).
+Done means: Restored fixture finds its expected hit, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### UAF-1-04: COMBINE_RESTORE_EVIDENCE (source: W1 independent audit)
+Function: `build_checked_restore(snapshot_conn, restored_conn, manifest, probe, original_evidence)`.
+Does: Reuse existing isolated restore checks and require the independent expected-hit check before reporting synthetic restore proof. Preserve originals.
+Refuses: An occupied destination blocks.
+Tests: `test_uaf1_04_normal` (Manifest and fixed search both pass); `test_uaf1_04_bad_input` (An occupied destination blocks).
+Done means: Manifest and fixed search both pass, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### UAF-1-05: LIMIT_RESTORE_RECEIPT (source: W1 independent audit)
+Function: `build_restore_audit_status(result, public_run_id)`.
+Does: Reuse the existing minimal public status boundary. Exclude query, identifiers and digests and report device acceptance as unverified.
+Refuses: A case identifier in public metadata is rejected.
+Tests: `test_uaf1_05_normal` (Public status includes only authorized fields); `test_uaf1_05_bad_input` (A case identifier in public metadata is rejected).
+Done means: Public status includes only authorized fields, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+### Batch CAF-1 — Parser fixtures, numeric canaries and clear eligibility contract
+
+**Target repository:** `someonee12345678-hue/corolla-obd`.
+**Build only after:** this plan is merged and independent wording audit passes.
+**New files:** `app/src/main/java/com/drunkenfeud/corollaobd/ObdAuditChecks.java` and `app/src/test/java/com/drunkenfeud/corollaobd/ObdAuditChecksTest.java`. Test class `ObdAuditChecksTest`.
+**Canary:** `Canary check: CAF1 = AUDITED -> correction`.
+
+#### CAF-1-01: CHECK_LINE_ENDINGS (source: W1 independent audit)
+Function: `ObdAuditChecks.splitReplyLines(String)`.
+Does: Add plain-Java parsing support for CR, LF and CRLF. Verify preserved ordering and that the existing decoder receives separate lines.
+Refuses: Malformed fragments do not become trouble codes.
+Tests: `testcaf101Normal` (Four- and seven-code CR-only fixtures decode to the expected codes); `testcaf101BadInput` (Malformed fragments do not become trouble codes).
+Done means: Four- and seven-code CR-only fixtures decode to the expected codes, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### CAF-1-02: RECORD_NUMERIC_CANARIES (source: W1 independent audit)
+Function: `ObdAuditChecks.formatCanary(String,int,int)`.
+Does: Format CO-1 through CO-3 passed/total counts from observed JUnit results. Require links to the underlying test evidence in the PR description.
+Refuses: Unknown suite or impossible counts are refused.
+Tests: `testcaf102Normal` (Observed counts format as specified); `testcaf102BadInput` (Unknown suite or impossible counts are refused).
+Done means: Observed counts format as specified, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### CAF-1-03: CHECK_LOOKUP_WIRING (source: W1 independent audit)
+Function: `ObdAuditChecks.checkLookupInput(String)`.
+Does: Reuse CodeInput and add independent assertions for its accepted and rejected examples and preserved manual-lookup message.
+Refuses: Invalid code stays invalid.
+Tests: `testcaf103Normal` (Spaced lowercase code normalizes); `testcaf103BadInput` (Invalid code stays invalid).
+Done means: Spaced lowercase code normalizes, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### CAF-1-04: BIND_SAVED_REPORT (source: W1 independent audit)
+Function: `ObdAuditChecks.checkSavedReport(String,int,int,boolean)`.
+Does: Check the full report prefix, current generation and connected state without sending commands. Keep the intended queue contract explicit next to the existing ticket API.
+Refuses: A stale or partial report does not unlock eligibility.
+Tests: `testcaf104Normal` (A current connected full report is eligible); `testcaf104BadInput` (A stale or partial report does not unlock eligibility).
+Done means: A current connected full report is eligible, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+#### CAF-1-05: RECHECK_BEFORE_OPERATION (source: W1 independent audit)
+Function: `ObdAuditChecks.checkCurrentEligibility(boolean,boolean,int,int)`.
+Does: Prove in pure Java that confirmation becomes invalid after a new read or disconnect and must be checked again at the point of use. Record the legacy UI wiring gap for separately authorized integration. Never send mode 04 in tests.
+Refuses: A stale confirmation is rejected.
+Tests: `testcaf105Normal` (Unchanged eligible state passes); `testcaf105BadInput` (A stale confirmation is rejected).
+Done means: Unchanged eligible state passes, with the bad-input result covered by an assertion.
+Not checked: live deployment or production data.
+
+### Gaps
+
+No live Phase 0, phone, PostgreSQL or car acceptance is inferred from the audits. The Corolla UI still needs separate follow-through to adopt the new parser and recheck helpers at its existing entry points because these batches add new files only. Until then the existing UI is not accepted for clear-code use.
+
+### UNDO
+
+Before merge, discard the plan branch. After merge, append a hold or superseding correction for the affected batch. Do not edit historical wording.
+
+### Independent wording audit of PAF-1, MAF-1, UAF-1 and CAF-1 (Claude, wording auditor, 2026-11-19)
+
+Written by a separate Claude run that did not write the wording above, under ledger Q039. Checked against AGENTS.md of both repositories, BUILDER_RUNBOOK.md, plan/RULEBOOK.md, the ledger (Q014, Q022, Q036–Q038, Q046, Q052), the W1 audit comments on apccs PRs #147 and #155–#157 and uclrcde PR #27, and the merged code on main (`code/apccs_p0_architecture.py`, `code/apccs_memory_bench.py`, `code/apccs_readability_gate.py`, uclrcde `code/uclrcde_p0_search.py` and `code/uclrcde_core.py`).
+
+**This section replaces the wording of PAF-1, MAF-1 and UAF-1 above.** It is their latest full wording; build each word for word from here. File names, function names, test names and canaries are unchanged unless a line below says otherwise. What was wrong:
+
+- PAF-1: the "existing exit evaluator" and "foundation result" were not named; the shapes of `foundation_result` and `observed_references` were left open; "distinct verifier references", "eight-line record" and the result status of each refusal were undefined.
+- MAF-1: the wrapper's methods, the shape of `passing_tests` and `owner_approvals`, the meaning of "current" lesson, how JSON length is measured (the packet holds its own token count), whether refusals raise or return, and how the control fact is found were left open. The readability gate refuses `.write(` and `getattr` calls; the wording now says to avoid them.
+- UAF-1: the test class name broke uclrcde AGENTS.md rule 4 (`UclrcdeBatch<NN>Tests`); it is now `UclrcdeBatchUAF1Tests`. "Made-up case", "post-restore output", the query form and the result shape were undefined.
+- CAF-1: held. See "Held by the auditor" below.
+
+#### Rules for PAF-1, MAF-1 and UAF-1
+
+1. New files only. Never change an existing file. Python 3.11 standard library only. Made-up data only. Tests use only memory or temporary folders. No network, paid key or AI model.
+2. Every public function has a docstring with `Inputs:`, `Outputs:` and `Errors:` lines.
+3. Readability gate (Q036–Q038): no function or method name starting `export`, `write_`, `save`, `persist`, `serialize` or `to_`, and none named `dump`. No call written as `.write(`, `json.dump(`, `getattr(` or `setattr(`. No file written anywhere. Results are returned.
+4. Canonical JSON means `json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)`.
+5. Inputs are never changed in place; copy with `copy.deepcopy` before changing anything.
+6. A fixture or test result is never reported as live. Nothing here authorizes Phase 1 or any later work.
+
+#### Batch PAF-1 — Bind Phase 0 exit to independently checked results (replacement wording)
+
+**Status:** Ready to build.
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged.
+**New files:** `code/apccs_p0_audit_fix.py` and `code/test_apccs_p0_audit_fix.py`. Test class `PAF1Tests`.
+**Reuse, by exact name:** `apccs_p0_architecture.check_p0_exit(evidence)` and the result shape of `apccs_p0_architecture.check_p0_foundation_proofs(...)` (`{"status": "OK", "kind": "foundation_proofs", "revision", "evidence_kind": "live", "live_proof": True, "verifier_refs": [...]}`; a fixture gives `NOT_CHECKED`). Import the module as `import apccs_p0_architecture as arch`.
+**Result shape:** every function returns a dict with `status` `OK`, `BLOCKED` or `NOT_CHECKED`, plus `reason` when not `OK`. Nothing raises for bad input.
+**Section names:** `implementation:P0-1` … `implementation:P0-8`, `host_security`, `phone_dashboard`, `trace`, `restore` (the same names `check_p0_exit` uses).
+**Canary:** `Canary check: PAF1 = AUDITED -> correction`.
+
+##### PAF-1-01: CHECK_EXIT_INPUT (source: W1 audit of PR #147, `apccs_p0_architecture.py:349`)
+Function: `check_exit_input(evidence) -> dict`.
+Does: Check the shape before anything reads it. `evidence` must be a dict. If present, `implementation_refs` must be a dict whose keys are only `P0-1` … `P0-8` and whose values are dicts; `host_security`, `phone_dashboard`, `trace` and `restore` must each be a dict; `verifier_refs` must be a list of strings; `trace["actors"]` and `trace["steps"]` must be lists. Missing sections are allowed here (`check_p0_exit` reports them as gaps). Return `{"status": "OK", "kind": "exit_input"}`, or `BLOCKED` with `reason` and `field` naming the first bad field.
+Refuses: a non-dict `evidence`; `implementation_refs` given as a string or a list; an unknown stage key; a non-dict stage entry. None of these raises.
+Tests: `test_paf1_01_normal` (a complete made-up mapping returns OK); `test_paf1_01_bad_input` (`implementation_refs` as `"P0-1"` and as `["P0-1"]` each return BLOCKED with `field` `implementation_refs`, and calling `arch.check_p0_exit` is never reached).
+Done means: malformed evidence gives a refusal dict instead of an exception.
+Not checked: live deployment or production data.
+
+##### PAF-1-02: BIND_RESTORE_RESULT (source: W1 audit of PR #147, `apccs_p0_architecture.py:295,383`)
+Function: `bind_exit_restore(evidence, foundation_result) -> dict`.
+Does: Accept restore proof only from a foundation result, never from the `restore` section's `local_original_preserved` or `server_original_preserved` flags on their own. Return `OK` (`{"status": "OK", "kind": "exit_restore", "revision", "verifier_refs"}`) only when `foundation_result` is a dict with `status` `OK`, `kind` `foundation_proofs`, `evidence_kind` `live`, `live_proof` True, `revision` equal to `evidence["revision"]`, and `verifier_refs` a non-empty list of strings none of which equals `evidence["builder_ref"]`. A missing (`None`) foundation result, or one whose status is `NOT_CHECKED`, gives `NOT_CHECKED` with `live_proof` False.
+Refuses: a different revision gives BLOCKED ("wrong revision"); a verifier equal to the builder gives BLOCKED; a malformed foundation result gives BLOCKED.
+Tests: `test_paf1_02_normal` (a made-up live foundation result dict with the same revision and an independent verifier returns OK); `test_paf1_02_bad_input` (evidence whose `restore` section has both preserved flags True but `foundation_result=None` returns NOT_CHECKED; a foundation result for another 40-character revision returns BLOCKED).
+Done means: a preserved-original flag alone never counts as restore proof.
+Not checked: live deployment or production data.
+
+##### PAF-1-03: VERIFY_STAGE_REFERENCES (source: W1 audit; P0-8-05 wording "observed evidence for every stage")
+Function: `check_exit_stage_references(evidence, observed_references) -> dict`.
+Does: For each section name except `restore`, the evidence item must carry a `ref` string of 1–96 characters. `observed_references` is a dict from section name to `{"ref", "revision", "observed_by"}` supplied by the caller. A section resolves when its observation exists, has the same `ref`, the same `revision` as `evidence["revision"]`, and an `observed_by` that is not `evidence["builder_ref"]`. Return `{"status", "resolved": [...], "gaps": [...], "not_checked": [...]}` with names sorted: `OK` when every section resolves; `BLOCKED` when any section has no `ref` or its observation disagrees (those go in `gaps`); otherwise `NOT_CHECKED` when some observations are simply absent (those go in `not_checked`).
+Refuses: an observation with a different `ref` or revision leaves that section in `gaps`; a non-dict `observed_references` gives BLOCKED.
+Tests: `test_paf1_03_normal` (all eleven sections match made-up observations and return OK); `test_paf1_03_bad_input` (one observation with a different `ref` returns BLOCKED with that section in `gaps`; removing one observation instead returns NOT_CHECKED).
+Done means: each stage reference is matched against an observation made by someone other than the builder.
+Not checked: whether the observations themselves are true; that needs the live Phase 0 demonstration.
+
+##### PAF-1-04: COMPOSE_EXIT_RESULT (source: W1 audit; P0-8-05)
+Function: `build_checked_p0_exit(evidence, foundation_result, observed_references) -> dict`.
+Does: Run, in order, `check_exit_input`, then `bind_exit_restore`, then `check_exit_stage_references`, then `arch.check_p0_exit(copy.deepcopy(evidence))`. If `check_exit_input` is not OK, return its result unchanged. Otherwise return `{"status", "outcome", "live_pass", "scope": "PHASE_0_ONLY", "authorizes_later_work": False, "gaps", "record", "undo_links", "parts"}`: `status` is BLOCKED if any part is BLOCKED, else NOT_CHECKED if any part is NOT_CHECKED, else OK; `outcome` is `PASS` and `live_pass` True only when all four parts are OK; `gaps` is the sorted union of every part's `gaps` list, plus the function name of any part that is not OK and has no `gaps` list; `record` and `undo_links` are copied from `check_p0_exit`'s result (at most 8 record lines); `parts` holds the four statuses by function name.
+Refuses: missing restore proof (`foundation_result=None`) never gives `live_pass` True, even when `check_p0_exit` alone returns OK.
+Tests: `test_paf1_04_normal` (complete made-up live inputs return OK, PASS, `live_pass` True and `authorizes_later_work` False); `test_paf1_04_bad_input` (the same inputs with `foundation_result=None` return NOT_CHECKED with `live_pass` False; `implementation_refs=[]` returns the PAF-1-01 refusal).
+Done means: the exit result depends on input, restore and reference checks, not on the exit evaluator alone.
+Not checked: live deployment or production data.
+
+##### PAF-1-05: RECORD_TEST_SCOPE (source: W1 audit honesty check; P0-8 module rule "a fixture is never live proof")
+Function: `check_exit_evidence_scope(result, test_scope) -> dict`.
+Does: `test_scope` is `"fixture"` or `"live"`. Return a copy of `result` with `evidence_scope` set to `test_scope`. For `"fixture"`, the copy always has `live_pass` False, and an OK status becomes NOT_CHECKED with reason "fixture evidence is never a live pass". For `"live"`, the copy is returned only when `result` has `live_pass` True, an empty `fixture_only` list (or none) and a `gaps` list.
+Refuses: `test_scope` `"live"` for a result whose `live_pass` is not True or whose `fixture_only` is non-empty gives BLOCKED ("a fixture cannot be marked live"); a result without a `gaps` list, or any other `test_scope`, gives BLOCKED.
+Tests: `test_paf1_05_normal` (an OK PASS result labelled `"fixture"` comes back NOT_CHECKED, `live_pass` False, `evidence_scope` `"fixture"`, gaps kept); `test_paf1_05_bad_input` (a result with `fixture_only` `["trace"]` labelled `"live"` returns BLOCKED).
+Done means: every exit result says whether it is fixture or live evidence.
+Not checked: live deployment or production data.
+
+#### Batch MAF-1 — Memory originals, lesson approval and handoff proof (replacement wording)
+
+**Status:** Ready to build.
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged; MB-1 through MB-3 remain on main.
+**New files:** `code/apccs_memory_audit_fix.py` and `code/test_apccs_memory_audit_fix.py`. Test class `MAF1Tests`.
+**Reuse, by exact name:** `apccs_memory_bench.make_memory_fact`, `StatePacketMemory`, `KeywordMemory`, `EvidenceMemory`, `make_lesson`, `change_lesson_state`. Import the module as `import apccs_memory_bench as mb`. Call memories through `remember`, `recall` and `rebuild` only.
+**Errors:** MAF-1-01, -02, -04 and -05 raise `ValueError` for bad input, like `apccs_memory_bench`. MAF-1-03 returns a refusal dict instead.
+**Canary:** `Canary check: MAF1 = AUDITED -> correction`.
+
+##### MAF-1-01: ISOLATE_ORIGINALS (source: W1 audit of PR #155, `apccs_memory_bench.py:60,69,95`)
+Function: `make_isolated_memory(memory)`, returning an instance of a new class `IsolatedMemory`.
+Does: Wrap any object with callable `remember`, `recall` and `rebuild` (check with `callable(memory.remember)` inside `try/except AttributeError`). `IsolatedMemory.remember(fact)` validates the fact with `mb.make_memory_fact(fact.get("id"), fact.get("namespace"), fact.get("time"), fact.get("text"), fact.get("source"), fact.get("supersedes"))` (after checking it is a dict) and passes `copy.deepcopy(fact)` to the wrapped memory. `recall(query, namespace, as_of=None, k=3)` returns `copy.deepcopy` of the wrapped result. `rebuild()` calls the wrapped `rebuild()`. The class also has `write = remember` and `name` equal to the wrapped memory's `name` with `isolated_` in front.
+Refuses: an object without the three calls (ValueError at wrap time); a malformed fact (ValueError, and nothing is recorded).
+Tests: `test_maf1_01_normal` (for each of the three stand-ins: record a made-up fact, change the input dict's text, recall, change the returned dict's text, recall again; the answer still has the original text, also after `rebuild()`); `test_maf1_01_bad_input` (a fact with an empty source raises ValueError and a later recall returns no such fact; wrapping `object()` raises ValueError).
+Done means: callers can no longer change a recorded fact through a shared reference.
+Not checked: real memory tools.
+
+##### MAF-1-02: VERIFY_APPROVED_LESSONS (source: W1 audit of PR #156, `apccs_memory_bench.py:321,342`)
+Function: `select_approved_lessons(lessons, namespace, passing_tests, owner_approvals) -> list`.
+Does: `passing_tests` is a list of `{"test_id", "lesson_id", "result"}`; `owner_approvals` is a list of `{"approval_id", "lesson_id"}`. The current record of a lesson is the last record with that `id` in `lessons` (later records come from `change_lesson_state`). Return deep copies of current records, in list order, whose `state` is `approved`, whose `namespace` equals `namespace`, whose `test_id` appears in `passing_tests` with the same `lesson_id` and `result` `"pass"`, and whose `owner_approval_id` appears in `owner_approvals` with the same `lesson_id`. A lesson whose current record is `retired` is never returned, even if an older record was approved.
+Refuses: non-list inputs or a lesson that is not a dict raise ValueError. An approved label whose ids are not linked to that lesson in the supplied records is left out.
+Tests: `test_maf1_02_normal` (a made-up approved lesson with a matching passing test and approval is returned); `test_maf1_02_bad_input` (an approved lesson whose test record names another lesson is left out; a lesson approved then retired is left out).
+Done means: the builder only sees lessons with linked test and Owner-approval evidence.
+Not checked: whether the supplied approval records came from the Owner; that is checked where they are recorded.
+
+##### MAF-1-03: BUDGET_WHOLE_PACKET (source: W1 audit of PR #157, `apccs_memory_bench.py:427,446`)
+Function: `build_budgeted_handoff(memory, namespace, task, token_budget, verified_lessons) -> dict`.
+Does: Build the same packet keys as `mb.build_handoff_packet` (`namespace`, `task`, `facts` with id, time, text, source, `lessons` with id, rule, evidence_ids, `tokens_used`, `token_budget`, `trimmed`), but measure the whole packet. `verified_lessons` is the list from `select_approved_lessons`. Check in this order: the budget, then the envelope size, then recall. Facts come from `memory.recall(task, namespace, None, 10)`; then lessons. Size of a packet = `math.ceil(len(canonical JSON) / 4)` measured with `tokens_used` set to `token_budget`. Start from the empty envelope; add each fact, then each lesson, whole, only if the size stays within `token_budget`; at the first item that does not fit, stop and set `trimmed` True. Set `tokens_used` to the final size. Return `{"status": "OK", "packet": packet}`.
+Refuses (as `{"status": "BLOCKED", "reason"}`, nothing raises): `token_budget` not a whole number of at least 100; a namespace for which recall returns nothing; an envelope (no facts, no lessons) whose size is already over the budget.
+Tests: `test_maf1_03_normal` (with made-up facts and a 100-token budget, `math.ceil(len(canonical JSON of the returned packet) / 4) <= packet["tokens_used"] <= 100`, and no fact is cut part way); `test_maf1_03_bad_input` (a 500-character task with a 100-token budget returns BLOCKED).
+Done means: the token budget covers the whole packet, not only its body text.
+Not checked: real model tokenizers; four characters per token is the plan's estimate.
+
+##### MAF-1-04: PROVE_CASE_RECALL (source: W1 audit of PR #157, `apccs_memory_bench.py:516,532`)
+Function: `check_case_recall_with_controls(memory, namespaces) -> dict`.
+Does: The caller passes a fresh memory used only for this check (the docstring says so). Wrap it with `make_isolated_memory`. For each namespace, at position `i`, record a control fact with id `control-<i>`, time 1, text `Control fact quartz ledger <i>` and source `control:<i>`. Then, before and after `rebuild()`, recall `quartz ledger control` with k 50 in each namespace. Count `own_missing` (rounds where the namespace's own control id is absent) and `leaks` (facts from another namespace). Return `{"namespaces_checked", "own_missing", "leaks", "passed"}`, with `passed` True only when both counts are 0.
+Refuses: fewer than two distinct namespaces, or a namespace not starting `case:`, raises ValueError.
+Tests: `test_maf1_04_normal` (an `EvidenceMemory` with two made-up case namespaces passes before and after rebuild); `test_maf1_04_bad_input` (a test-only memory whose `recall` always returns `[]` gives `passed` False with `own_missing` 4).
+Done means: an empty recall can no longer pass the case-wall proof.
+Not checked: real memory tools.
+
+##### MAF-1-05: PROVE_RECOVERY_CONTENT (source: W1 audit of PR #157; MB-3 recovery proof)
+Function: `check_memory_recovery_content(memory, probes) -> dict`.
+Does: `probes` is a non-empty list of `(query, namespace)` pairs. Require a callable `rebuild` (checked with `try/except AttributeError`, not `getattr`). Before and after `rebuild()`, recall each probe with k 3 and keep, in order, `(id, namespace, time, text, source)` for each fact. Return `{"checked", "identical", "differences"}`; each difference lists the query, namespace and both lists.
+Refuses: no callable rebuild, an empty probe list, or no probe answered before the rebuild raises ValueError. A fact with the same id but changed text after rebuild makes `identical` False.
+Tests: `test_maf1_05_normal` (a `KeywordMemory` holding made-up facts gives `identical` True); `test_maf1_05_bad_input` (a test-only memory whose `rebuild()` changes one stored fact's text but keeps its id gives `identical` False).
+Done means: recovery is proved on content and source, not ids alone.
+Not checked: real memory tools.
+
+#### Batch UAF-1 — Independent restore search probe (replacement wording)
+
+**Status:** Ready to build.
+**Target repository:** `someonee12345678-hue/uclrcde`. Follow its AGENTS.md; never import any `apccs` module.
+**Build only after:** this plan is merged.
+**New files:** `code/uclrcde_p0_audit_fix.py` and `code/test_uclrcde_p0_audit_fix.py`. Test class `UclrcdeBatchUAF1Tests` (uclrcde AGENTS.md rule 4; this replaces `UAF1Tests`).
+**Reuse, by exact name:** `uclrcde_p0_search.check_p0_sqlite_restore(snapshot_conn, restored_conn, manifest)`, `uclrcde_p0_search.build_p0_sqlite_snapshot(...)` (tests only), `uclrcde_p0_search.build_p0_search_control_receipt(result, destination, public_run_id)`, `uclrcde_core.ingest_and_lock_legal_source_document(...)` (tests only), the `source_documents` and `source_documents_fts` tables. Import as `import uclrcde_p0_search as p0`.
+**Result shape:** every function returns a dict with `status` `OK` or `BLOCKED`, `operation`, and `reason` when blocked. Nothing raises for bad input. No legal text is generated; this is a restore check only.
+**Canary:** `Canary check: UAF1 = AUDITED -> correction`.
+
+##### UAF-1-01: DEFINE_RESTORE_PROBE (source: W1 audit of uclrcde PR #27; P0-6-04 "known synthetic locked-source search fixture")
+Function: `build_restore_probe(fixture_case_id, fixture_doc_id, query, expected_source_sha256) -> dict`.
+Does: Build `{"status": "OK", "operation": "probe", "probe": {"case_id", "doc_id", "query", "expected_sha256"}}`. `fixture_case_id` must start `MATTER-SYNTH-` (made-up matters only); `fixture_doc_id` is 1–64 letters, digits, dot, dash or underscore; `query` is one line of 1–200 characters; `expected_source_sha256` is 64 lowercase hex characters.
+Refuses: a missing or malformed expected hash; a case id without the `MATTER-SYNTH-` prefix; an empty or multi-line query.
+Tests: `test_uaf1_01_normal` (a complete made-up probe is accepted); `test_uaf1_01_bad_input` (`expected_source_sha256=None` is BLOCKED; case id `MATTER-0001` is BLOCKED).
+Done means: the restore probe is fixed before the restore runs.
+Not checked: production matters; only synthetic ones are accepted.
+
+##### UAF-1-02: VERIFY_EXPECTED_FIXTURE (source: W1 audit of uclrcde PR #27, `uclrcde_p0_search.py:239,250`)
+Function: `check_restore_fixture_input(probe, original_evidence) -> dict`.
+Does: `probe` is the `probe` dict from UAF-1-01. `original_evidence` is caller-supplied `{"stage": "pre_restore", "case_id", "doc_id", "sha256"}` recorded from the original fixture before the snapshot is taken. Return `{"status": "OK", "operation": "probe_binding"}` when `stage` is `pre_restore` and its case id, doc id and hash equal the probe's.
+Refuses: `stage` other than `pre_restore` (for example `post_restore`, meaning the probe was built from the restored copy); any mismatch; a non-dict input.
+Tests: `test_uaf1_02_normal` (evidence taken from the made-up source database before the snapshot is linked); `test_uaf1_02_bad_input` (the same values with `stage` `post_restore` are BLOCKED; a different hash is BLOCKED).
+Done means: the expected hit comes from the original, not from the restored copy.
+Not checked: device recovery claims; they stay outside this test.
+
+##### UAF-1-03: MATCH_RESTORED_HIT (source: W1 audit of uclrcde PR #27)
+Function: `check_expected_restore_hit(restored_conn, probe) -> dict`.
+Does: On the restored `sqlite3.Connection`, run `SELECT doc_id FROM source_documents_fts WHERE source_documents_fts MATCH ? AND case_id = ?` with the probe query as a quoted phrase (`'"' + query.replace('"', '""') + '"'`) and the probe case id. Require the probe's doc id among the hits; then read `raw_text` and `sha256` from `source_documents` for that doc id and require SHA-256 of `raw_text` (UTF-8) to equal both the stored `sha256` and `expected_sha256`. Return `{"status": "OK", "operation": "restore_probe", "hit": True}`.
+Refuses: the expected document missing from the hits; a different digest; a non-connection input; an SQLite error (as BLOCKED, never raised).
+Tests: `test_uaf1_03_normal` (a restored made-up fixture finds its expected document); `test_uaf1_03_bad_input` (a probe naming another made-up document, and one with a different expected hash, are BLOCKED).
+Done means: the restored copy answers a search fixed in advance.
+Not checked: corpus-wide recall.
+
+##### UAF-1-04: COMBINE_RESTORE_EVIDENCE (source: W1 audit of uclrcde PR #27; P0-6-04)
+Function: `build_checked_restore(snapshot_conn, restored_conn, manifest, probe, original_evidence) -> dict`.
+Does: Run `check_restore_fixture_input(probe, original_evidence)` first; if not OK, return it. Record the logical content of `snapshot_conn` (each table's rows as canonical JSON). Run `p0.check_p0_sqlite_restore(snapshot_conn, restored_conn, manifest)`; if not OK, return it. Run `check_expected_restore_hit(restored_conn, probe)`; if not OK, return it. Require the snapshot content unchanged. Return `{"status": "OK", "operation": "restore", "evidence_kind": "fixture", "live_proof": False, "restored_digests", "probe_hit": True, "probe"}`, where `probe` is a copy of the probe (it stays on the device; UAF-1-05 strips it).
+Refuses: an occupied restore target (from `check_p0_sqlite_restore`); a failed probe binding; a missed expected hit; a changed snapshot.
+Tests: `test_uaf1_04_normal` (snapshot a made-up database, restore into an empty in-memory connection; manifest and fixed search both pass and `live_proof` is False); `test_uaf1_04_bad_input` (a restore target that already holds a table is BLOCKED and that table is left as it was).
+Done means: synthetic restore proof needs the independent probe; it is never called live.
+Not checked: actual-device crash recovery and production data.
+
+##### UAF-1-05: LIMIT_RESTORE_RECEIPT (source: P0-6-05; W1 audit)
+Function: `build_restore_audit_status(result, public_run_id) -> dict`.
+Does: Return `p0.build_p0_search_control_receipt(result, "server-control", public_run_id)` with one extra key, `"device_acceptance": "NOT_CHECKED"`, added to a copy when that call is OK. The receipt holds only public run id, operation and outcome: no query, case or document identifiers, digests or counts.
+Refuses: a run id that contains the case id or another private result string (BLOCKED by the reused function); a result that is not a result dict.
+Tests: `test_uaf1_05_normal` (the UAF-1-04 result gives a receipt whose canonical JSON contains none of the made-up case id, doc id, query words or hashes, and has `device_acceptance` `NOT_CHECKED`); `test_uaf1_05_bad_input` (public run id `RUN-MATTER-SYNTH-0001` is BLOCKED).
+Done means: the server sees a status only; case data stays on the device.
+Not checked: device-network enforcement beyond this library.
+
+## Held by the auditor
+
+- **CAF-1 is HELD. Builders skip it.** Reason: its target repository `someonee12345678-hue/corolla-obd` was outside this auditor run's access, so the names it reuses (`CodeInput`, "the existing decoder", "the existing ticket API", the report prefix and generation counter) could not be checked against corolla-obd main. Its wording also leaves choices open: CAF-1-02 asks a code helper to require links in a pull request description, CAF-1-04 does not say what "keep the intended queue contract explicit" produces, and CAF-1-05 asks a pure function to "record the legacy UI wiring gap". Fix route: an auditor run with corolla-obd access re-words CAF-1 in a new add-only section, quoting the exact existing class and method names. Until then the Gaps note above stands: the Corolla clear-code path is not accepted.
+
+UNDO: before merge, drop this section's commit. After merge, a later add-only section can replace any batch wording here.
