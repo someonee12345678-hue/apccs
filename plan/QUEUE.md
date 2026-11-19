@@ -7298,3 +7298,45 @@ Not checked: wiring into the daily status email; that is a later batch.
 8. **Backups.** BR-1, PE-1 and GS-1 add tables to the same UCLRCDE database, so P0-6's `uclrcde_p0_search.build_p0_sqlite_snapshot`, which copies the whole database with SQLite's backup API, already covers them. No slice 1 test proves a restore of these tables (NOT CHECKED).
 
 UNDO: before merge, close the draft pull request. After merge, a later add-only section can hold, correct or replace any batch here. Nothing in this section changes code, runtime or any existing text.
+
+### Independent wording audit of SG-1, AM-1, BR-1, PE-1 and GS-1 (Claude, wording auditor, 2026-11-19)
+
+Written by a separate Claude run that did not write the wording above, under ledger Q039. Checked against `AGENTS.md` of both repositories, `BUILDER_RUNBOOK.md`, `plan/RULEBOOK.md`, the ledger (Q036–Q056), `PROJECTS.md`, Drive `NOV1_CONTROL_PANEL_UPGRADE_LIST` (items 2, 6, 16, 17, 27 read in full) and `BUILD_PLAN_V1_2026-11-17` (A1, B4, B6, B7, S5 read in full), and the merged code on apccs main `938783c` and uclrcde main `f6ac736`: every reused function and constant exists with the signature the wording gives, every new file, function and test name is unused in both repositories, and the expected numbers in the tests were recomputed (SG-1-02 401; SG-1-03 500, 650, 900, 1000; SG-1-04 883; PE-1-05 2026-12-24; GS-1-04 57 of 59 = 9661).
+
+**SG-1, AM-1, BR-1, PE-1 and GS-1 are Ready to build**, in the build order above. Build each from its wording above together with the corrections below; where they differ, the correction wins. File names, function names, test names, test classes and canaries are unchanged.
+
+#### Corrections to SG-1
+
+1. **SG-1-04 test (was not buildable).** The apccs A7 check refuses any file written to a path chosen while running, test files included, so a test cannot write a made-up `plan/RULEBOOK.md` into a temporary folder. Instead, as `test_apccs_prehandoff.py` does, the tests use the repository itself as `repo_root` (`ROOT = Path(__file__).resolve().parents[1]`), the real `plan/RULEBOOK.md` as the rule card (read only; it is over 10,000 characters and only grows), and a made-up handoff whose FILES section lists `AGENTS.md` and `plan/RULEBOOK.md`, with prehandoff settings built like that file's `_settings_dict` (C1 requires all five sections). Use `token_budget` 50000. The oversize case keeps model total 340,000: the allowance alone is 883 basis points, and any starter over 600 tokens reaches the 900 warn line. Nothing is written by the tests.
+2. **SG-1-04 BLOCKED shapes.** The "starter too big" result is `{"status": "BLOCKED", "kind": "handoff", "reason": "starter too big: the new session would start at <x>%", "start_load_percent", "gate"}`, with `<x>` written with two decimals.
+3. **SG-1-01 decimals.** "At most two decimal places" is checked as `abs(value * 100 - round(value * 100)) < 1e-9`, because `8.55 * 100` is not exactly `855.0` in floating point.
+4. **SG-1-05 line, exactly.** `Round <n>: load <p>% of the model's total (<c> counted + <h> hidden tokens). Next step: <words>.` where `<n>` is the round number, `<p>` is `load_basis_points / 100` written with two decimals, `<c>` and `<h>` use comma thousands separators (`f"{x:,}"`), and a setting percent is written with `f"{v:g}"`. `<words>` by action: `CONTINUE` → `carry on`; `PREPARE_HANDOFF` → `prepare the handoff now (warn line <warn>%)`; `HANDOFF_ROUNDS` in band `HIGH` → `hand off now (<high_load_round_limit>-round limit at <high_load>% or more)`; `HANDOFF_ROUNDS` in band `LOW` → `hand off now (<low_load_round_limit>-round limit under <high_load>%)`; `HARD_STOP` → `stop and finish the handoff (stop line <stop>%)`. When `reload_instructions` is true, ` Reload the instruction set.` is added at the end. The line is never cut short.
+
+#### Corrections to AM-1
+
+1. **Hashes.** `module_sha256` and `test_sha256` are the SHA-256 of the file text; `record_sha256`, `event_sha256` and `receipt_sha256` are the SHA-256 of the record's, event's or receipt's canonical JSON.
+2. **AM-1-01 `test_names`** are every function or method anywhere in the test file (found with `ast.walk`) whose name starts with `test_`, distinct and sorted.
+3. **AM-1-02 old record again.** A record equal to an older row of that part that is not its current row is `BLOCKED` (`this record was registered before; a new revision is needed`). A real change always has a new `revision`, so this only catches a replay.
+4. **AM-1-03 order of checks.** Shape checks first, then the duplicate check (an event whose `event_sha256` is already stored returns `already_recorded` true, even after its run ended), then the run-order rules. Times are compared as offset-aware datetimes.
+5. **AM-1-05.** `health` for a non-fixture receipt is `<result> <YYYY-MM-DD of checked_at> (<source>)`, for example `FAIL 2026-11-19 (...)`. Each `p0_map` dependency is `{"from": <this part_id>, "to": <the part_id it depends on>}`.
+6. **Refusals change nothing** (the AM-1 result shape): every AM-1 function checks its input before it creates a table or inserts a row.
+
+#### Corrections to BR-1
+
+1. **BR-1-01 `recorded_at`** is the current UTC time, ISO 8601 with its offset; "identical" means the same `entry_sha256` (SHA-256 of the entry's canonical JSON).
+2. **BR-1-04 step results**, in `steps`: keyword → `{"step": "keyword", "status": "OK" or "BLOCKED", "hit_count"}` plus `reason` when BLOCKED; catalog → BR-1-02's result plus `hit_count` (and `status` `BLOCKED` with `reason` when a catalog search stopped the request); web → BR-1-03's result or the SKIPPED dict. A stopped request also has a top-level `reason`. **A BLOCKED web step does not make the request BLOCKED**: only a BLOCKED keyword or catalog search does. With the web step OFF and nothing found, the request `status` is `OK`, `hits` and `web_items` are empty.
+3. **BR-1-05 code-built answer.** `answer_text` is the excerpts joined with `"\n"`; `quotes` are `[{"doc_id": <hit doc_id>, "quote": <its excerpt>}]`. For the web-only `NEEDS VALIDATION` case, `answer_text` is None, `quotes` and `source_doc_ids` are `[]`.
+
+#### Corrections to PE-1
+
+1. **PE-1-04 `out_of_order`** lists only earlier map steps that were done later; an earlier step never done goes in `missing`, not in `done_before`. With S1 and S3 done only, `out_of_order` is `[]`. `needs_to_confirm` is a list of `{"step_id", "need"}` in map order, then need order.
+2. **PE-1-05 entries.** Each item of `deadlines` is `{"step_id", "status"}` plus `reason` for `WAITING` (`the step it counts from is not done yet`) and `NOT_CHECKED`, or the `COUNTED` fields. A table marked `VERIFIED` whose `jurisdiction` is not the map's raises `PE_BAD_COURT_DAYS`.
+
+#### Corrections to GS-1
+
+1. **GS-1-01 re-run (was not buildable as worded).** `core.init_uclrcde_db_and_register_matter` raises when the matter already exists, so first read the `matters` row for `MATTER-SYNTH-GOLD` through `core.open_uclrcde_db`: no row → register it; a row with the same title, jurisdiction, court level and filing role → skip registration; any other row → `GS_FIXTURE_CONFLICT`. Lock each document with title `Made-up gold rule <n>` and source type `MADE_UP`. The signed term is written by `JD` on `2026-01-05` and signed by `JR` on `2026-01-06`; the unsigned term is written by `JD` on `2026-01-05`. The document texts, terms and questions are the builder's made-up choice, as long as each item gives the label and source in the table and only GS-07's question asks for a prediction and only GS-09's answer gives advice.
+2. **GS-1-03** tests call `run_gold_set` with settings `{}`.
+3. **GS-1-04 keys.** The three counts are `code`, `ai` and `person`. `line` ends `meets the target.` or `below the target.`; when CODE + AI is 0 it is `No software or AI decisions were counted; target <t>%: not checked.` The share is written with two decimals.
+4. **GS-1-05 `summary`** is exactly three lines: the score line (`Gold set <gold_id>: <both_correct> of <items> answers labelled and sourced as expected (<score_basis_points / 100, two decimals>%).`), GS-1-04's `line`, and `Change since the last run: <change_since_last>.` The test that changes the meter changes `meter["code"]` to 58.
+
+UNDO: before merge, drop this section's commit. After merge, a later add-only section can hold or replace any batch here.
