@@ -7340,3 +7340,35 @@ Written by a separate Claude run that did not write the wording above, under led
 4. **GS-1-05 `summary`** is exactly three lines: the score line (`Gold set <gold_id>: <both_correct> of <items> answers labelled and sourced as expected (<score_basis_points / 100, two decimals>%).`), GS-1-04's `line`, and `Change since the last run: <change_since_last>.` The test that changes the meter changes `meter["code"]` to 58.
 
 UNDO: before merge, drop this section's commit. After merge, a later add-only section can hold or replace any batch here.
+
+## Approved features waiting for wording — from the product compilation (Claude, work-order runner W6, 2026-11-19)
+
+Builders: this section holds no batch wording. Never build from it. Each item becomes a batch only when a later add-only section words it and the wording audit passes.
+
+Source: work order W6 (plan/WORK_ORDERS.md) and ledger Q056. The architect placed all 957 abilities of the 352 researched tools (MASTER_TOOL_TABLE_V3, both TOOL_REQUALIFY reports, the Design Decision Pack) on plan/PRODUCT_MAP.md and decided the overlaps. The Owner reviews only the final compilation; anything he rejects is withdrawn by a later add-only section.
+- Compilation: Drive › FULL_LOG_AUDIT_2026-11-19 › PRODUCT_COMPILATION_2026-11-19 (https://docs.google.com/document/d/12KK1OeAo6wc0OCUTLI1adcQKiH8PvOYWJ6tGTQEwqW8/edit)
+- Detail, one row per ability: PRODUCT_MAP_DETAIL_2026-11-19 (https://docs.google.com/spreadsheets/d/1w7-GgFWm0xkCmivUDaJ8uCM-XKAmFDKGgPaLYWEd2aY/edit)
+
+Every item: plain, reviewable standard-library code first, AI only when needed (Q046); made-up data only; $0; the tools named are sources of ideas, not dependencies.
+
+- **CMP-01 Model route ladder and router** (feature 1 Main brain, branch "model route ladder"; objectives O02, O16). Rates each job and sends it to the cheapest route that can do it: phone model, then the Owner's own machine, then free cloud. A paid route is never picked silently, only flagged. Starts watch-only: it measures proposed routes before it may change any. Ideas: rightsize [17-09], delegate-router [17-38], RouteLabs [14-055], agnostic-agent [14-116], free-tier registries [14-177].
+- **CMP-02 Usage budget ledger** (1 Main brain, "model route ladder"; O02, Q041). Before every outside call: reserve usage against a ceiling per model and route, keep a receipt, release or reconcile on failure, refuse when the budget is used up. Idea: point-of-call budget ledger [G3-13].
+- **CMP-03 Approval cards** (1 Main brain, "approval cards"; O16). Plain-code rules decide which steps truly need the Owner (can't be undone, spends money, protected file, account change). Only those make a card with approve, deny and an expiry; everything else goes ahead. Shown on the existing Approvals screen (P0-2). Ideas: Open-Dots action approvals [14-018], Suparagent approval modes [14-017], Stapler Squad approval rules and review queue [14-164].
+- **CMP-04 Failure loop** (4 Checks and safety, "failure loop"; O17). Reads run logs, groups repeated failures by cause, ties each group to the code version it ran on, opens one fix item per cause. Plain code groups; AI only to describe a group when needed. Idea: Google AQuA [17-13].
+- **CMP-05 Log viewer** (3 Memory and rules, "logs and log viewer"; O12). One screen with summary, full, milestones and timeline views of the logs in the Owner's format, searchable by tag. Belongs beside CP-2 in slice 2. Ideas: Stapler Squad [14-164]; Design Decision Pack menu map.
+- **CMP-06 Prior-art check** (5 Research, "prior-art check"; O13). Before a new app or feature is worded: search GitHub and, when the web switch is on, a free search or news source; list similar projects with licences; say how ours differs. Ideas: Craft Anything's no-AI inspection [17-32]; the Owner's O13 links (FreeSerp, freenewsapi; ledger R151–R153), whose research is outside V3: NOT CHECKED until read.
+- **CMP-07 Health watch** (4 Checks and safety, new branch "architecture manager and health watch"; O07, Q048). Every scheduled job sends a heartbeat; jobs that never ran or got stuck are caught; a plain-text status page. Extends AM-1's health receipts. Ideas: Healthchecks [B4-14], Gatus [B4-12].
+- **CMP-08 Screen accessibility and plain-language check** (4 Checks and safety, "readability gate"; O18). Checks every slice 2 screen for labels, alt text, headings, keyboard order and reading level, with written exceptions for legal terms. Ideas: axe-core rules and textstat [G3-15].
+- **CMP-09 Toolbox view** (5 Research, "feature harvest"; O01). The researched tools and abilities from the compilation, searchable by feature, decision and licence: the tool kit the Owner asked for. Reads a supplied copy of the detail sheet; never fetches it. Ideas: MCP Market / Smithery [14-180], Treasure Boxes catalog [14-093].
+- **CMP-10 Prompt brief builder** (2 Helpers, "worker adapters"; O04). Turns a rough request into a complete brief (intent, context, expectations, done-when, limits), asks only for the missing parts and estimates its size. The prompt optimizer of O04, in plain code. Ideas: ICED [14-129], OpenDone [14-131], Matt Pocock's requirements questions [17-07].
+
+Ideas added to items already approved (no new items; use them when those items are worded):
+- Swarm setting (slice 3): Paperclip org chart, budgets and heartbeats [17-01]; Agora per-agent cursors and de-duplication [14-031]; Herdr working/idle/blocked detection [14-013]; Multica squads [17-44].
+- Database management (slice 3; new map branch 7e): Sqitch-style migration plan with verify scripts [B3-07]; pgAudit-style change log [B3-08]; Datasette-style read-only view [B3-20]; per-case access roles [B3-01]; SQLCipher [B3-19].
+- Safety layers S1–S4 (slice 3): Gitleaks + SOPS/age [G3-03]; OpenTimestamps [G3-04]; Wasmtime/WASI [G3-05]; Presidio [G3-07].
+- Legal library pilot (slice 3): Indigo, Peachjam, Cobalt, Bluebell, Akoma Ntoso, SALI [B4-29–B4-33, B4-35].
+- CP-1 and CP-2 (slice 2): T3 Code and Paseo cockpit ideas [17-27, 14-005]; AiCode workspace switcher [14-120].
+
+Not checked in this pass: arXiv 2611.18856 and the @KirkDBorne X post (O21; the unattended run could not get approval to read them); 58 ledger items whose research is outside V3 and the re-check reports. W7 places them when they are read.
+
+UNDO: before merge, drop this section's commit. After merge, a later add-only section can withdraw, reorder or hold any item here.

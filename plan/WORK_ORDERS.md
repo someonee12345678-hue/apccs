@@ -238,3 +238,8 @@ The Owner doesn't want to answer yes or no item by item. The architect assembles
 **W7 (standing order, never finished).** On every runner pass, check plan/RESEARCH_LEDGER.csv for rows newer than the last PRODUCT_MAP.md "Changes to this map" note. Place each new item on the map, add a dated note, and update the compilation's Sheet. If nothing is new, skip it. Never email for W7 unless a new item changes a decision.
 
 The order of work is W1, W6, W2, W3, W4, W5, W7.
+
+## Status note 2026-11-19 15:45 (work-order runner)
+
+- **W6 is DONE.** Drive › FULL_LOG_AUDIT_2026-11-19 holds PRODUCT_COMPILATION_2026-11-19 (Doc) and PRODUCT_MAP_DETAIL_2026-11-19 (Sheet, 957 rows). The plan PR from branch plan/product-compilation-2026-11-19 adds CMP-01 to CMP-10 to plan/QUEUE.md. NOT CHECKED: arXiv 2611.18856 and the @KirkDBorne X post (step 2), because the unattended run could not get approval to read web pages; W7 picks them up.
+- Next, in order: W2 (done: PR #171 merged), W3, W4, W5, W7.
