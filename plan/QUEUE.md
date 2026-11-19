@@ -6500,3 +6500,18 @@ Done means: The panel can show memory health with no extra work.
 Not checked: Real tools, real devices, real legal data.
 
 UNDO: a later add-only section can retire these batches. Nothing here touches runtime or the existing modules.
+
+## Approved features waiting for wording (Claude, architect, 2026-11-19)
+
+Builders: this section holds no batch wording. Never build from it. Each item becomes a batch only when a later add-only section words it and the wording audit passes.
+
+Why it exists: on 2026-11-18 the queue ran out of worded batches, so the daily email said "nothing left to build" while most of the Owner's approved features had never been worded. This list makes the waiting work visible. Sources: plan/QUESTION_LEDGER.csv Q040, Q046, Q047, Q048; FEATURE_LEDGER_v2_2026-11-05; NOV1_CONTROL_PANEL_UPGRADE_LIST; BUILD_PLAN_V1_2026-11-17; Drive › Conversation and Change History › FULL_LOG_AUDIT_2026-11-19 › 04_REQUIREMENTS_AND_REALITY_REGISTER_2026-11-19.
+
+- **Slice 1, wording run scheduled 2026-11-19 13:00 America/Vancouver (5 items):** SG-1 session guard (apccs); AM-1 architecture manager registry (apccs); BR-1 search manager and answer gate (uclrcde); PE-1 procedure checker A to Z (uclrcde); GS-1 gold set and 90%-software meter (uclrcde, after BR-1).
+- **Slice 2, the screens the Owner uses, after slice 1 (10 items):** installer with home-screen icon (FEATURE_LEDGER_v2 A13); project switcher with logs, batch history and predicted finish (A14); welcome page and walkthrough with slash commands (U9, NOV1 item 29); document creator (U10); question and research generators (U11); help guide and printable checklist (U12); court-action flowchart on PE-1 (U13); filing assistant on PE-1 (U15); lawyer review side panel (U14); cross-link importance trigger (NOV1 items 6, 8).
+- **Slice 2 research jobs (3 items, no code):** R3 BC court forms licence s.8.1(a) (unblocks LS-J); a free on-phone OCR route that catches stamps and exhibits (NOV1 item 3); the official BC court-day list (BUILD_PLAN_V1 S5), which deadline counting needs before any date is counted.
+- **Slice 3 (6 items):** swarm setting, up to 20 threads under one coordinator (NOV1 item 28); research agent on a free live search; database management (BUILD_PLAN_V1 B5); legal library pilot (B2); Phase 1 trials T1 and T3–T8; safety layers S1–S4.
+- **Live work, not code (2 items):** install the Phase 0 controller and dashboard on the Owner's phone (Termux, P0-3 route), then run the Phase 0 exit test. No free server of the Owner's exists in any record (blocker K4), so the phone and the existing GitHub and scheduled-task automation are the hosts until he chooses otherwise.
+- **Waiting on people (2 items):** LS-L waits on the friend's signed T42 answer key; real BC procedure maps wait on the lawyer reviewer's sign-off (PE-1 marks unsigned maps NOT CHECKED).
+
+UNDO: a later add-only section can remove, reorder or hold any item here.
