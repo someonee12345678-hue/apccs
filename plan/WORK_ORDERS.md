@@ -201,3 +201,8 @@ The order of work is W1, W6, W2, W3, W4, W5. This line replaces the order given 
   5. **Write no batch wording** for these until the Owner chooses (Q055; his 14 Nov rule).
   6. **Create the Sheet** from CSV. Add a short section at the end of plan/QUEUE.md, “## Feature choices waiting for the Owner”, through a plan PR. It holds one line per objective: how many abilities were found, how many are recommended, and the Sheet link.
   7. **Email the Owner once:** “Feature choice list is ready: <n> abilities for your 21 research objectives. Reply ‘yes to recommended’ to adopt every ‘Yes’, or name the ones you want.” Then his reply is recorded as ledger rows, and each chosen ability is added to “Approved features waiting for wording”.
+
+## Status note 2026-11-19 12:15
+
+- **W1 is DONE.** It was done through the ChatGPT route at 12:05, apccs draft PR #162. It audited all 14 builds: 8 FAIL and 6 PASS WITH NOTES. It drafted the correction batches PAF-1, MAF-1, UAF-1 and CAF-1, in plan/architect/W1_AUDIT_CORRECTIONS_2026-11-19.md. Issue #163 hands that wording to the auditor. Runners treat W1 as done and don't redo it, even though its Drive copy (AUDIT_BUILDS_…) doesn't exist yet.
+- Next, in order: W6, W2, W3, W4, W5.
