@@ -317,3 +317,17 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
   3. Place each ability in a new supplement sheet beside PRODUCT_MAP_DETAIL_2026-11-20. Mark items that need research first as NOT CHECKED.
   4. Hand the sheet to Muse to check, as a short, plain job file.
 - No email: nothing failed that a retry can't fix, and no product-map decision changed.
+
+## Status note 2026-11-20 22:40 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225.
+- **W7, the older items: placed.** A name-by-name check against MASTER_TOOL_TABLE_V3 found 95 ledger items outside V3, not 58. All 95 are in a new sheet, PRODUCT_MAP_SUPPLEMENT_2026-11-20 (Drive › FULL_LOG_AUDIT_2026-11-19), 109 rows. Twenty stay NOT CHECKED. The dated note in plan/PRODUCT_MAP.md gives the counts.
+- **W7, Muse's returns:**
+  - Muse's check of PRODUCT_MAP_DETAIL_2026-11-20 is GREEN (MUSE_CHECK_PRODUCT_MAP_DETAIL_2026-11-20_CORRECTED).
+  - It sent C3(b) and C3(c) back for the Doc. Both are applied in PRODUCT_COMPILATION_2026-11-20, a new Doc; the 19 Nov one is unchanged.
+  - Muse refused JOB_W7A again at intake (MUSE_REPLY_JOB_W7A_READ_FOUR_LINKS_2026-11-20). The likely cause is the outside web links in the job file: W7B, with Drive links only, passed. That cause is NOT CHECKED.
+  - So the links were not re-issued. This run found R218, R222 and R224 by web search and read their own pages (Drive › Claude 2 › RESEARCH_O20_O21_LINKS_2026-11-20). R225, an X post, stays NOT CHECKED, because X can't be read from here.
+  - Muse checks the three new files: MUSE_INBOX › JOB_W7C_CHECK_SUPPLEMENT_2026-11-20 (Drive links only).
+- **Next W7 pass:** place Muse's W7C findings when MUSE_CHECK_PRODUCT_MAP_SUPPLEMENT_2026-11-20 arrives; otherwise check for new ledger rows. The supplement's ⬜ ideas wait for a wording pass that the Owner or the architect orders. W7 writes no batch wording.
+- No email: no product-map decision changed.
