@@ -278,3 +278,10 @@ This replaces the “Next” line of the 20:30 status note: the slice 1 builds a
   5. **Email only if** step 3 finds no change that keeps every rule. Then say what was tried and the options, in at most 5 lines.
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
+
+## Status note 2026-11-20 07:30 UTC (work-order runner)
+
+- **W8 step 1:** BR-1, PE-1 and GS-1 were already built and merged (uclrcde PRs #29–#31, 2026-11-20 04:47–04:57 UTC), so the builder was not fired for them again. Directed issues #172 (SG-1) and #173 (AM-1) are closed with the W8 line.
+- **W8 steps 2–4:** the ruling is the new section at the end of plan/QUEUE.md, "Ruling: apccs module limit": new apccs modules are named `code/apccs2_<name>.py`. Its proof run is SAFE TO MERGE. The draft plan PR from plan/module-limit-ruling-2026-11-20 goes to the wording auditor with "Batches in build order: SG-1, AM-1."
+- **W4's After condition now holds:** PR #171 is merged; BR-1, PE-1 and GS-1 have their tests on uclrcde main (`code/test_uclrcde_answer_gate.py`, `code/test_uclrcde_procedure.py`, `code/test_uclrcde_gold_set.py`); W3 is done. New apccs batches in W4 (CP-1, CP-2) use the ruling's file names.
+- Next, in order: W4, W7.
