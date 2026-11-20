@@ -291,3 +291,11 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
 - **W4:** slice 2 is worded, as the new section at the end of plan/QUEUE.md, "Slice 2 — the screens the Owner uses". It opens with "Batches 35 and 36 superseded". It has ten batches: CD-1 (COURT-DAYS-1), UI-1, UI-4, UI-2, LS-L, LS-J, UI-3 and UI-5 in uclrcde, and CP-1 and CP-2 in apccs. The draft plan PR from plan/slice2-2026-11-19 goes to the wording auditor with "Batches in build order: CD-1, UI-1, UI-4, UI-2, LS-L, LS-J, UI-3, UI-5 (uclrcde); CP-1, CP-2 (apccs)."
 - W3 said YES for the forms and for the 2026 court days, so LS-J and COURT-DAYS-1 are worded. 2027 is carried too: its three uncertain days are handled so that a count can come out early, never late (the section's Gaps, item 1).
 - Next: W7 (standing order).
+
+## Status note 2026-11-20 13:40 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did the standing order W7.
+- **W7:** no research-ledger rows are newer than R225. Muse's corrections C1–C8 to the product compilation are applied in a new sheet, PRODUCT_MAP_DETAIL_2026-11-20 (Drive › FULL_LOG_AUDIT_2026-11-19). The 19 Nov sheet is unchanged, because Drive files are never edited. The dated note in plan/PRODUCT_MAP.md lists the changes.
+- The four unread links (R218, R222, R224, R225) need a web read that unattended Claude runs can't do. On 20 Nov at 13:25 UTC all four page reads stopped on a permission request nobody was there to answer (PROVENANCE_REQUIRED), and a web search gave titles only. They went to Muse as Drive › MUSE_INBOX › JOB_W7_READ_O20_O21_LINKS_2026-11-20. Part B of that job checks the new sheet, so no agent checks its own work. The next W7 pass places Muse's findings once RESEARCH_O20_O21_LINKS_2026-11-20 is in Claude 2.
+- Still open for W7: the 58 research items that sit in older documents (PRODUCT_COMPILATION_2026-11-19, "Not checked").
+- Next: W7 (standing order).
