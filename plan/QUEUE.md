@@ -7412,3 +7412,17 @@ AM-1's new module would hit the same limit, and so would every later apccs modul
 4. **AM-1** under the new name has not been built or run: NOT CHECKED until it is built.
 
 UNDO: before merge, close the draft pull request. After merge, a later add-only section can withdraw this ruling. Files built under it are new files, so taking one out later is a revert of its own pull request. Nothing in this section changes code, runtime or any existing text.
+
+### Independent wording audit of the module-limit ruling (SG-1, AM-1) (Claude, wording auditor, 2026-11-20)
+
+Written by a separate Claude run that did not write the ruling above, under ledger Q039. Checked against `AGENTS.md` of both repositories, `BUILDER_RUNBOOK.md`, `plan/RULEBOOK.md`, the ledger (Q036–Q056), `.github/workflows/apccs-guard.yml`, `tools/run_all_tests.py` and the code on main `c5ddeec`. Re-run by this audit, not copied from the ruling:
+- `code/apccs_q1_part3.py` lines 2465–2468 count `apccs_*.py` and refuse more than 32; `code/` holds 32. With the held SG-1 module added under its old name, `test_181` errors and `test_185` fails with "Active module set is empty or exceeds the clone limit".
+- Main plus the held SG-1 files renamed as in point 6 (one import line changed): `python3 -I tools/run_all_tests.py` gives **SAFE TO MERGE**, 35 test files, `test_apccs2_session_guard.py` with 10 tests and canary `Canary check: TOKENS = TEN -> guard`.
+- This branch alone: **SAFE TO MERGE**, 34 test files.
+- The A7 readability test checks every changed or new `.py` file under the repository, whatever its name, so `apccs2_` files get every readability check. The guard check allows new files in `code/`. The Genesis check and the test runner pick up every `code/test_*.py`. uclrcde's setup test refuses any import starting `apccs`, so `apccs2_` modules stay out of uclrcde.
+- Only `apccs_q1_part3.py` line 2465 and `apccs_rules.py` line 302 use the `apccs_*.py` pattern (Gaps 1 and 2).
+- Every SG-1 and AM-1 function name is still unused in both repositories, and every reused function exists with the signature the wording gives.
+
+**SG-1 and AM-1 are Ready to build**, in that order, from their wording, the 2026-11-19 audit corrections and this ruling. No correction was needed.
+
+UNDO: before merge, drop this commit. After merge, a later add-only section can withdraw it.
