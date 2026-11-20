@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control panel</title>
+<meta name="theme-color" content="#1f4fa3">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+<h1>Control panel</h1>
+<p id="status" role="status">Loading.</p>
+</header>
+<nav id="tabs" aria-label="Control panel tabs">
+<button type="button" id="button-home" aria-controls="tab-home" aria-selected="true">Home</button>
+<button type="button" id="button-projects" aria-controls="tab-projects" aria-selected="false">Projects</button>
+</nav>
+<main>
+<section id="tab-home">
+<h2>Install check</h2>
+<p>This checks the install and says so. It never installs the same thing twice.</p>
+<button type="button" id="check-install">Check the install</button>
+<p id="install-line">Not checked yet.</p>
+<ul id="install-history"></ul>
+<h2>Projects</h2>
+<ul id="project-list"></ul>
+<h2>Phone tools</h2>
+<label for="tools-listing">Paste a file listing from your phone (one full path per line)</label>
+<textarea id="tools-listing" rows="6" cols="30"></textarea>
+<button type="button" id="check-tools">Check the tools</button>
+<ul id="tools-result"></ul>
+<ul id="tools-steps"></ul>
+<h2>Put the panel on your home screen</h2>
+<ol id="icon-steps">
+<li>Open this page in Chrome.</li>
+<li>Open Chrome's menu (the three dots).</li>
+<li>Tap "Add to Home screen" or "Install app".</li>
+</ol>
+</section>
+<section id="tab-projects" hidden>
+<h2>Project switcher</h2>
+<div id="screen-projects"><p>This screen is not built yet.</p></div>
+</section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
