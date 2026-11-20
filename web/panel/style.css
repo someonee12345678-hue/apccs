@@ -1,0 +1,18 @@
+/* Control panel: phone first. Every text size is 14 px or more, nothing is wider than the screen,
+   and every state is shown with words as well as colour. */
+* { box-sizing: border-box; }
+body { margin: 0; padding: 12px; font-family: sans-serif; font-size: 16px; line-height: 1.4; color: #111; background: #fff; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+h2 { font-size: 18px; margin: 16px 0 8px; }
+label, p, li, button, textarea { font-size: 16px; }
+#tabs { display: flex; gap: 8px; margin: 8px 0; }
+#tabs button { flex: 1; padding: 10px; border: 2px solid #1f4fa3; background: #fff; color: #1f4fa3; border-radius: 6px; }
+#tabs button[aria-selected="true"] { background: #1f4fa3; color: #fff; font-weight: bold; }
+button { padding: 10px; border: 2px solid #1f4fa3; background: #fff; color: #1f4fa3; border-radius: 6px; }
+textarea { display: block; width: 100%; max-width: 100%; margin: 4px 0 8px; padding: 6px; }
+ul, ol { padding-left: 20px; margin: 4px 0; }
+li { margin-bottom: 6px; overflow-wrap: anywhere; }
+#status.offline { font-weight: bold; color: #a4262c; }
+@media print {
+  button, #tabs, textarea, label { display: none; }
+}
