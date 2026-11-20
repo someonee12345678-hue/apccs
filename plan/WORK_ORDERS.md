@@ -243,3 +243,10 @@ The order of work is W1, W6, W2, W3, W4, W5, W7.
 
 - **W6 is DONE.** Drive › FULL_LOG_AUDIT_2026-11-19 holds PRODUCT_COMPILATION_2026-11-19 (Doc) and PRODUCT_MAP_DETAIL_2026-11-19 (Sheet, 957 rows). The plan PR from branch plan/product-compilation-2026-11-19 adds CMP-01 to CMP-10 to plan/QUEUE.md. NOT CHECKED: arXiv 2611.18856 and the @KirkDBorne X post (step 2), because the unattended run could not get approval to read web pages; W7 picks them up.
 - Next, in order: W2 (done: PR #171 merged), W3, W4, W5, W7.
+
+## Status note 2026-11-19 20:30 (work-order runner)
+
+- **W5 is DONE.** Drive › FULL_LOG_AUDIT_2026-11-19 holds DRIVE_INVENTORY_2026-11-19 (Sheet, 2,234 files the connector can see, titles only) and DRIVE_INVENTORY_SUMMARY_2026-11-19 (Doc: counts, scattered pieces, a proposed tidy-up and what the connector could not see). Nothing was moved or deleted; the tidy-up waits for the Owner.
+- Found: 9 files titled like keys or recovery codes sit outside "Dangerous credentials", in two folders shared with the agents' account. Moving them is the summary's first proposal.
+- W4 waits for its After condition: none of slice 1's five batches has a test on main yet (Directed issues #172–#176 are open).
+- Next, in order: W4 (when 3 slice 1 batches are built), W7.
