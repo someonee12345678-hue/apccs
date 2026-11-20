@@ -250,3 +250,31 @@ The order of work is W1, W6, W2, W3, W4, W5, W7.
 - Found: 9 files titled like keys or recovery codes sit outside "Dangerous credentials", in two folders shared with the agents' account. Moving them is the summary's first proposal.
 - W4 waits for its After condition: none of slice 1's five batches has a test on main yet (Directed issues #172–#176 are open).
 - Next, in order: W4 (when 3 slice 1 batches are built), W7.
+
+## W8 — Clear the slice 1 build stall (added 2026-11-19 20:40 by the work-order runner)
+
+This replaces the “Next” line of the 20:30 status note: the slice 1 builds are stalled for a reason no scheduled task was set to clear. Added under ledger Q024 (take the safest choice that can be undone) and Q052 (a real stop is solved or reported the same day). The Owner or the architect may withdraw it with a later note.
+
+- **Why (evidence):**
+  - The builder's note on apccs issue #71 at 2026-11-19 12:45 Vancouver: SG-1 is built and passes its own tests (branch held/SG-1-module-limit). But code/apccs_q1_part3.py stops when code/ holds more than 32 `apccs_*.py` files: `if not modules or len(modules) > 32: raise Part3Error("Active module set is empty or exceeds the clone limit")`.
+  - code/ holds 32 now, so code/apccs_session_guard.py would turn the Part 3 tests (181 and 185, per the note) red. AM-1's code/apccs_architecture_registry.py hits the same limit, and so will every later apccs batch (CP-1, CP-2, the CMP items).
+  - The note asks for an architect ruling. No scheduled task makes one. The builder takes the earliest directed issue (#172, SG-1), and its later runs ended without building (the 16:42 run took 30 seconds). So BR-1, PE-1 and GS-1 (uclrcde, not affected) have not been built either, and W4 waits on them.
+- **After:** nothing.
+- **Done when:** apccs plan/QUEUE.md on main has a heading starting “## Ruling: apccs module limit”, or an open or merged apccs PR exists from branch plan/module-limit-ruling-2026-11-20.
+- **Steps:**
+  1. **Unblock uclrcde first.**
+     - Close apccs issues #172 (SG-1) and #173 (AM-1), each with one line: “Waits for the module-limit ruling (work order W8); a new directed issue opens when it merges.”
+     - Post one comment on apccs issue #71 that answers the builder's 12:45 note: “Answer to the SG-1 note of 2026-11-19 12:45: SG-1 and AM-1 wait for the module-limit ruling (work order W8). BR-1, PE-1 and GS-1 in uclrcde are not affected; build them now.”
+     - Fire the builder, trig_01XdLR5PQ479Z8vha6j6ZKh8, with “SG-1 and AM-1 wait for the module-limit ruling; build BR-1, PE-1 and GS-1 (directed issues #174–#176).”
+  2. **Read before ruling.** Read the limit and the tests that reach it (grep “clone limit” in code/, and the Part 3 tests 181 and 185), apccs AGENTS.md (naming), code/apccs_readability_gate.py and its test, the branch held/SG-1-module-limit, and the SG-1 and AM-1 wording with its audit corrections.
+  3. **Rule.** Choose the smallest change that leaves every existing file and test byte-for-byte unchanged, keeps every rule (new files only, the readability gate, AGENTS.md naming) and also holds for every later apccs batch.
+     - One candidate: new apccs modules take a name the `apccs_*.py` glob does not count, if AGENTS.md and the readability gate allow it.
+     - Prove with the held branch that the full test run is green under the ruling. Label anything unproven NOT CHECKED. Never change the limit inside apccs_q1_part3.py (existing code).
+  4. **Word it.** Add one add-only section at the end of plan/QUEUE.md, “## Ruling: apccs module limit (SG-1, AM-1 and later apccs batches)”.
+     - Its first line tells builders that it overrides the file names, import lines and test-file names in the SG-1 and AM-1 wording.
+     - It gives the new names exactly. It ends with “Gaps” and “UNDO”.
+     - Run python3 -I tools/run_all_tests.py (SAFE TO MERGE).
+     - Open a DRAFT PR from plan/module-limit-ruling-2026-11-20 and hand it to the wording auditor (see Rules) with “Batches in build order: SG-1, AM-1.” The auditor opens new directed issues for them when it merges.
+  5. **Email only if** step 3 finds no change that keeps every rule. Then say what was tried and the options, in at most 5 lines.
+
+The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
