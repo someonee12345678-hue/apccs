@@ -8599,3 +8599,54 @@ Not checked: live data. The saved replies and listings come from a job that does
 14. **CP-245's frozen record** still says 171–180 are "built in uclrcde". The frozen code is never changed; CP-2-04 reports the claim as false.
 
 UNDO: before merge, close the draft pull request. After merge, a later add-only section can hold, correct or replace any batch here, or restore Batches 35 and 36. Nothing in this section changes code, runtime or any existing text.
+
+### Wording audit of slice 2 (independent Claude auditor run, 2026-11-20): corrections, then all ten batches Ready to build
+
+Written by a separate Claude run that did not write the wording above (ledger Q039). It checked the ten batches against the template, the readability rulings (Q036–Q038), the code on apccs main `8ed4ad8` and uclrcde main `669810f` (every reused name and signature exists; `check_step_deadlines`, `check_procedure_progress`, `pre_filing_check`, `run_search_request`, `label_answer`, `draft_point_by_point_response`, `export_lawyer_triage_brief`, `check_kpl_statement`, `parse_and_check_log_v2_record`, `CP245_EXTERNAL_RANGES` and the `evidence_map_links` columns were read), and the sources: `NOV1_CONTROL_PANEL_UPGRADE_LIST` (every quote above matches the Owner's words), `RESEARCH_SLICE2_FORMS_OCR_COURTDAYS_2026-11-19` (W3) and W4 in `plan/WORK_ORDERS.md`. All 29 court-day rows' weekdays, the Easter rule and every court-day test value (CD-1-04, CD-1-05, UI-4-03, UI-4-05) were recomputed in Python and match.
+
+**These corrections are part of the wording.** Where one differs from the text above, the correction wins. Nothing above is changed.
+
+**For every slice 2 batch (rules 19–23):**
+
+19. **Screen requests.** A `POST` body is one JSON object whose keys are exactly the parameters of the function that action calls, other than `db_path` and `config`; the server supplies `db_path` from `config["db_path"]`. `GET` query values are text; an id the function takes as a whole number (`draft_id`, `filled_id`) is parsed with `int()` on digits only. A missing key, an extra key or an id that is not digits gives 400.
+20. **Tables another batch creates** are read only, through `core.open_uclrcde_db`. When such a table does not exist yet (checked in `sqlite_master`), it is treated as empty; that is never an error. A batch creates its own tables with `CREATE TABLE IF NOT EXISTS` before its first read, so a fresh database gives the empty answer (for example CD-1-03 gives `DRAFT` with every year missing).
+21. **Reading a PE-1 map.** Any batch that needs a map's steps, step names, `jurisdiction` or newest version reads the newest row of `map_id` from `pe_procedure_maps` (`map_json`), read only, as CD-1-05 does. If the table or the map is missing, it raises `ValueError` starting `PE_UNKNOWN_MAP`, the code PE-1 itself uses. PE-1's private helpers (`_latest_map` and the rest) are never imported (slice 1 rule 9).
+22. **`recorded_at`** in a table whose function has no `at` parameter is the current UTC time, `datetime.now(timezone.utc).isoformat(timespec="seconds")`. Tests never compare it.
+23. **Reusing `uclrcde_core.export_lawyer_triage_brief`** (UI-5) is the reuse W4 names. Slice 1 rule 4 forbids *defining* functions with those names; calling this existing function by its exact name is allowed, and no new function is named `export…`.
+
+**CD-1.**
+- CD-1-05: with an empty `done_steps`, no table is built: `table_status` is `"NOT_NEEDED"`, `missing_years` is `[]`, and `procedure.check_step_deadlines` is called with `None`. `CD_BAD_COVER` is raised when the `done_on` dates fall in more than two calendar years (the cover would then pass three years); this replaces "span more than two years". An unknown map raises `PE_UNKNOWN_MAP` (rule 21) before any table is built.
+- The PR's OPEN item is confirmed: the table is `VERIFIED` by `CLAUDE` because W4 step 3 asks for "the court-day table as VERIFIED data, with links" and the block review and Q052 forbid waiting for a person. This departs from W3's "DRAFT until a person checks" and from W3's "NOT CHECKED" for Easter Monday 2027 (computed by the Easter rule, which `check_court_day_rows` checks). Both departures are named in Gaps item 1, and every result keeps `check_line` ("not checked by a lawyer"). A later add-only section can withdraw the status.
+
+**UI-4.**
+- UI-4-01 and UI-4-02 read the map's steps by rule 21.
+- UI-4-02 `record_done_step`: before storing, the new current done list is checked with `procedure.check_procedure_progress`; a `PE_` error from it is raised unchanged and nothing is stored (for example a `done_on` earlier than the step done before it, which PE-1 refuses as `PE_BAD_STEPS`).
+- UI-4-02 flowchart: the first box has `y` 16; boxes in a band are 16 apart; the first box of a later band is 32 below the last box of the band before; a band with no step takes no space; `height` is the bottom of the last box plus 16.
+- UI-4-03 `needs`: the `need` texts of PE-1's `needs_to_confirm` entries whose `step_id` is this step. PE-1 lists needs only for done steps and the next step, so for a later step `needs` is `[]` and `checklist` has only its `SV` item (if any) and the person's own items.
+- UI-4-05: if CD-1-03 gives `DRAFT` for the years from `today` to a last day, that deadline is flagged with the line `<step>: the court days left before <last_day> could not be counted (no complete court-day check for <years>).` (the safe choice).
+
+**UI-2.**
+- UI-2-04 `check_returned_rewording` keeps each check in the add-only table `dc_rewording_checks(check_id INTEGER PRIMARY KEY, draft_id INTEGER NOT NULL, returned_sha256 TEXT NOT NULL, result_json TEXT NOT NULL, recorded_at TEXT NOT NULL)`; its result also holds `check_id`. `accept_rewording` uses the newest check of that draft (none gives `DC_NOT_READY`). The new version's `overrides_json` is the old one's overrides plus `{"<number>": <suggested text>}` for each accepted number; `complete` is copied.
+- `NEW_FACT` for a capitalised word: the word counts only when no word of the original equals it ignoring case, so a sentence that now starts with `The` is not flagged. Numbers, dates and quoted phrases are compared exactly.
+
+**LS-L.**
+- LS-L-03's first test uses the made-up affidavit with `3` added as the last line of page 3, so it has no page problem and gives `OK`. (The LS-L-01 affidavit has no number on page 3 and would give a `PAGE_NUMBER` problem.)
+
+**LS-J.**
+- LS-J-04's `print` for `BC_SUPREME` is `{"paper": "8.5 x 11 in", "paper_colour": "white or off-white", "first_page_blank_cm": 5, "margins_cm": None}`, with the added line `NOT CHECKED: margins other than the page-1 blank area; Rule 22-3 as read sets only that area.` W3 read "legibly printed" on "white or off-white" paper and a 5 cm blank area; it gives no ink colour and no 2.5 cm margin, so `"colour": "black on white"` and `"margins_cm": 2.5` are dropped. For other courts `paper_colour` is also None. The tests are unchanged.
+
+**UI-3.**
+- UI-3-02: `web_step` is the entry of the search result's `steps` whose `step` is `web`, or None. `hits` is the search result's `hits`.
+- UI-3-04's code checks, in full (without a map, E2, E3 and E5 are `NOT CHECKED`):
+  - E2: `YES` when `all_steps_checked` is true, otherwise `NO`;
+  - E3: for every step of `build_route_view`'s `steps` that is not `DONE`, call `route.build_filing_guide` with that `step_id`. `NO` when any `when` is `NOT_CHECKED`; otherwise `YES`;
+  - E5: `YES` when every done step whose notes list a service method has a proof; otherwise `NO`;
+  - E6: `YES` when every quote check is `FOUND`, `NO` when any is `NOT FOUND`, and `NOT CHECKED` with no draft or no quote.
+
+**UI-5.**
+- UI-5-04's redaction test: the `Timeline` part shows `[REDACTED]` twice (the email address and the phone number). No part except `Quote receipts` still holds either one; the `Lawyer brief` part repeats the timeline titles, so it is redacted too.
+- UI-5-05 reads `evidence_map_links` only for rows whose `matter_id` is the case (rule 20 when the table is missing), and reads `ui_thread_notes` the same way.
+
+**Ready to build.** With these corrections, all ten batches are **Ready to build**, in this order. uclrcde: CD-1, UI-1, UI-4, UI-2, LS-L, LS-J, UI-3, UI-5. apccs: CP-1, CP-2. Each batch's "Build only after" line still holds. None is held.
+
+UNDO: before merge, drop this commit. After merge, a later add-only section can hold or correct any batch.
