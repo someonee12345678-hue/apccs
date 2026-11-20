@@ -299,3 +299,21 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
 - The four unread links (R218, R222, R224, R225) need a web read that unattended Claude runs can't do. On 20 Nov at 13:25 UTC all four page reads stopped on a permission request nobody was there to answer (PROVENANCE_REQUIRED), and a web search gave titles only. They went to Muse as Drive › MUSE_INBOX › JOB_W7_READ_O20_O21_LINKS_2026-11-20. Part B of that job checks the new sheet, so no agent checks its own work. The next W7 pass places Muse's findings once RESEARCH_O20_O21_LINKS_2026-11-20 is in Claude 2.
 - Still open for W7: the 58 research items that sit in older documents (PRODUCT_COMPILATION_2026-11-19, "Not checked").
 - Next: W7 (standing order).
+
+## Status note 2026-11-20 19:25 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225.
+- **W7, Muse's link job came back unread.** Muse's read safety check refused the job file JOB_W7_READ_O20_O21_LINKS_2026-11-20 twice, so nothing in it was done (Drive › Claude 2 › Builder Reports › MUSE_REPLY_JOB_W7_READ_O20_O21_LINKS_2026-11-20_RETURNED, 18:12 UTC). The reply says a shorter re-issue runs without the Owner.
+  - Re-issued in MUSE_INBOX as two short, plain files: JOB_W7A_READ_FOUR_LINKS_2026-11-20 (R218, R222, R224, R225) and JOB_W7B_CHECK_PRODUCT_MAP_DETAIL_2026-11-20 (the check of the 20 Nov sheet). Their header time, "about 13:00 Vancouver", is wrong; they were written at 12:22.
+  - The outputs keep their names: RESEARCH_O20_O21_LINKS_2026-11-20 and MUSE_CHECK_PRODUCT_MAP_DETAIL_2026-11-20, in Claude 2 or its Builder Reports folder. Don't re-issue again unless Muse returns these too.
+- **W7, the 58 older items: started.**
+  - Read: RESEARCH_TOOLS_SLICE1_AGENT_APPS_2026-11-04, APCCS_TOOLBOX_LIBRARY_v2, TOOLBOX_ADDITIONS_2026-11-04_LATE_ANDROID and TOOLBOX_ADDITIONS_2026-11-04_EVENING.
+  - Name searches inside MASTER_TOOL_TABLE_V3 find PocketClaw, PokeClaw, councli, OpenTasker, Mirendil and AutoPie, so those are already placed. termux-mcp and buddy-android also match, but a search may match their name in parts. droidclaw is not in V3.
+  - Most of the 58 are not in those four documents at all: the legal names under O06, the agent names under O05, and Operit, AutoGLM, Appium, Langflow, FreeSerp and freenewsapi.
+- **Next W7 pass:** the 58 items are its whole job.
+  1. Read V3's Tools tab once, to list exactly which ledger items are missing.
+  2. Find each one's research: the four documents above, and the C08 and C20 logs.
+  3. Place each ability in a new supplement sheet beside PRODUCT_MAP_DETAIL_2026-11-20. Mark items that need research first as NOT CHECKED.
+  4. Hand the sheet to Muse to check, as a short, plain job file.
+- No email: nothing failed that a retry can't fix, and no product-map decision changed.
