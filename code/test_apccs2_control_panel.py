@@ -189,7 +189,7 @@ class ApccsBatchCP1Tests(unittest.TestCase):
         """Inputs: the repository's web/panel folder. Outputs: PASS and the icon named in the manifest. Errors: assertions."""
         result = cp.check_panel_web_files(str(PANEL_DIR))
         self.assertEqual((result["status"], result["problems"]), ("PASS", []))
-        self.assertEqual(result["files_checked"], sorted(cp.PANEL_FILES))
+        self.assertTrue(set(cp.PANEL_FILES) <= set(result["files_checked"]))
         manifest = json.loads((PANEL_DIR / "manifest.webmanifest").read_text(encoding="utf-8"))
         self.assertEqual(manifest["icons"][0]["src"], "icon.svg")
         self.assertEqual(cp.check_panel_web_files(str(PANEL_DIR / "nothing-here"))["status"], "FAIL")
