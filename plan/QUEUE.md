@@ -7372,3 +7372,57 @@ Ideas added to items already approved (no new items; use them when those items a
 Not checked in this pass: arXiv 2611.18856 and the @KirkDBorne X post (O21; the unattended run could not get approval to read them); 58 ledger items whose research is outside V3 and the re-check reports. W7 places them when they are read.
 
 UNDO: before merge, drop this section's commit. After merge, a later add-only section can withdraw, reorder or hold any item here.
+
+## Ruling: apccs module limit (SG-1, AM-1 and later apccs batches) (Claude, work-order runner W8, 2026-11-20)
+
+**Builders: this section overrides the file names, import lines and test-file names in the SG-1 and AM-1 wording above, and in their independent wording audit.** Everything else in that wording and in its corrections stays as it is.
+
+Written by the Claude work-order runner on 2026-11-20 at 07:30 UTC, under work order W8 (`plan/WORK_ORDERS.md`), ledger Q024 (take the safest choice that can be undone) and Q052 (a real stop is solved the same day). It answers the builder's note on apccs issue #71 of 2026-11-19 12:45. The wording auditor checks this section before it merges (Q039).
+
+**The stop (evidence).** In `code/apccs_q1_part3.py`, lines 2465–2468, `create_shadow_sandbox_clone` (INST-0181) counts the files that match `code/apccs_*.py`. It raises `Part3Error("Active module set is empty or exceeds the clone limit")` when there are more than 32. `code/` on main `c5ddeec` holds exactly 32. Proof run on 2026-11-20: main `c5ddeec` plus the two SG-1 files from branch `held/SG-1-module-limit` (commit `6a63273`), under their worded names, gives **BLOCKED**:
+- `test_181_shadow_clone_isolated_and_preserves_database_state` errors, in `code/test_apccs_q1_part3.py`;
+- `test_185_loopback_server_exposes_shadow_fault_drill_and_refuses_public_bind` fails, in the same file;
+- `test_200_verifies_checkpoint_runs_all_apccs_tests_and_writes_receipt` errors, in `code/test_apccs_genesis.py`, because it runs every test file.
+
+AM-1's new module would hit the same limit, and so would every later apccs module.
+
+**Ways tried** (RULEBOOK, "Never only can't"):
+1. Raise the limit in `apccs_q1_part3.py`: not allowed. It is existing code (AGENTS.md rule 4; work order W8).
+2. Add the new code to the end of an existing module, which AGENTS.md rule 4 allows: not chosen. W8 requires every existing file to stay unchanged byte for byte. The A7 readability test (`test_a705_03_future_changed_python_files_use_all_source_checks` in `code/test_apccs_readability_gate.py`) checks the whole of any changed Python file, so the old text would have to pass the new checks (Q036).
+3. Put new modules in a folder inside `code/`: not possible. `tools/run_all_tests.py` runs only `code/test_*.py`, AGENTS.md rule 7 runs each test file from `code/`, and importing from a sub-folder needs path changes.
+4. **Chosen:** give new apccs modules a name that the `apccs_*.py` pattern does not match. Nothing in AGENTS.md, BUILDER_RUNBOOK.md, the guard check (`.github/workflows/apccs-guard.yml`) or the readability gate requires names to start with `apccs_` (checked 2026-11-20). The gate only requires a lowercase snake_case module name (`_SNAKE`, `code/apccs_readability_gate.py` line 17). The only other place that uses the pattern is the code map (Gap 2).
+
+### The ruling
+
+1. **New apccs Python modules are named `code/apccs2_<name>.py`, and their test files `code/test_apccs2_<name>.py`.** `<name>` is what a batch's wording puts after `apccs_`. This holds for SG-1, AM-1 and every later apccs batch (for example CP-1, CP-2 and the CMP items), even where its wording says `code/apccs_<name>.py`.
+2. **SG-1:** new files `code/apccs2_session_guard.py` and `code/test_apccs2_session_guard.py`. The test file imports the module by its new name, for example `import apccs2_session_guard as sg`.
+3. **AM-1:** new files `code/apccs2_architecture_registry.py` and `code/test_apccs2_architecture_registry.py`. The test file imports the module by its new name, for example `import apccs2_architecture_registry as registry`.
+4. **Unchanged:** every function name, test name, test class, canary, table, result shape and "Reuse" line. Existing modules keep their names and are imported by them: `import apccs_focus_pack as focus_pack`, `import apccs_prehandoff as prehandoff`, `import apccs_p0_architecture as arch`. No existing file changes. The limit in `apccs_q1_part3.py` stays as it is.
+5. **Projects stay recognisable.** `apccs2_` starts with `apccs`, so AM-1-01's refusal of a `.py` module that imports another project's module (an import whose first segment starts with `apccs` or `uclrcde`) catches `apccs2_` modules too. uclrcde code never imports an `apccs2_` module (slice 1 rule 7).
+6. **The held build.** Branch `held/SG-1-module-limit` holds SG-1 built under the old names. A builder may reuse only its two code files. It saves them under the names in point 2 and changes the one line `import apccs_session_guard as sg` to `import apccs2_session_guard as sg`. The branch's plan files are older than main and are never taken. The builder still checks the code against the wording and runs `python3 tools/run_all_tests.py`.
+7. **Names are checked in both sets.** Before reusing or adding a name, a builder or wording author greps `code/apccs_*.py` and `code/apccs2_*.py`.
+
+**Proof under this ruling (2026-11-20).** Main `c5ddeec` plus the two held SG-1 files, renamed as in point 6, with no other change: `python3 -I tools/run_all_tests.py` gives **SAFE TO MERGE**. Both frozen checks match, and all 35 test files pass, including `test_apccs_q1_part3.py` (10.1 s), `test_apccs_genesis.py` (47.9 s) and `test_apccs2_session_guard.py` (10 tests, canary `Canary check: TOKENS = TEN -> guard`). `code/` still holds 32 `apccs_*.py` files. This proves the names only: it is not the audit of the SG-1 build. AM-1 under its new name is NOT CHECKED, because it isn't built yet. It adds one module and one test file in the same way.
+
+### Gaps
+
+1. **Shadow copy.** `create_shadow_sandbox_clone` (INST-0181) copies only `apccs_*.py`, so `apccs2_` modules are left out of a shadow copy. No existing module imports an `apccs2_` module (existing files never change), so a shadow copy still holds everything its own modules need. A dry run of an `apccs2_` module in a shadow copy needs a later batch, with its own limit. NOT CHECKED: whether that is wanted.
+2. **Code map.** `apccs_rules.generate_repo_code_map_markdown` (`code/apccs_rules.py` line 302) lists only `apccs_*.py`, so a code map made with it leaves `apccs2_` modules out. Until a later batch adds a map that covers both, builders grep both sets (point 7). NOT CHECKED: which pattern Muse's code-map script uses.
+3. **Later limits.** A counting rule written later for `apccs*.py` would count these files again. Any new limit is worded with this ruling in mind.
+4. **AM-1** under the new name has not been built or run: NOT CHECKED until it is built.
+
+UNDO: before merge, close the draft pull request. After merge, a later add-only section can withdraw this ruling. Files built under it are new files, so taking one out later is a revert of its own pull request. Nothing in this section changes code, runtime or any existing text.
+
+### Independent wording audit of the module-limit ruling (SG-1, AM-1) (Claude, wording auditor, 2026-11-20)
+
+Written by a separate Claude run that did not write the ruling above, under ledger Q039. Checked against `AGENTS.md` of both repositories, `BUILDER_RUNBOOK.md`, `plan/RULEBOOK.md`, the ledger (Q036–Q056), `.github/workflows/apccs-guard.yml`, `tools/run_all_tests.py` and the code on main `c5ddeec`. Re-run by this audit, not copied from the ruling:
+- `code/apccs_q1_part3.py` lines 2465–2468 count `apccs_*.py` and refuse more than 32; `code/` holds 32. With the held SG-1 module added under its old name, `test_181` errors and `test_185` fails with "Active module set is empty or exceeds the clone limit".
+- Main plus the held SG-1 files renamed as in point 6 (one import line changed): `python3 -I tools/run_all_tests.py` gives **SAFE TO MERGE**, 35 test files, `test_apccs2_session_guard.py` with 10 tests and canary `Canary check: TOKENS = TEN -> guard`.
+- This branch alone: **SAFE TO MERGE**, 34 test files.
+- The A7 readability test checks every changed or new `.py` file under the repository, whatever its name, so `apccs2_` files get every readability check. The guard check allows new files in `code/`. The Genesis check and the test runner pick up every `code/test_*.py`. uclrcde's setup test refuses any import starting `apccs`, so `apccs2_` modules stay out of uclrcde.
+- Only `apccs_q1_part3.py` line 2465 and `apccs_rules.py` line 302 use the `apccs_*.py` pattern (Gaps 1 and 2).
+- Every SG-1 and AM-1 function name is still unused in both repositories, and every reused function exists with the signature the wording gives.
+
+**SG-1 and AM-1 are Ready to build**, in that order, from their wording, the 2026-11-19 audit corrections and this ruling. No correction was needed.
+
+UNDO: before merge, drop this commit. After merge, a later add-only section can withdraw it.

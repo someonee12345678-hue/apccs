@@ -95,3 +95,4 @@ Roles are a preference order (RULEBOOK, “Backups when an agent runs out of usa
 
 Changes to this map: none yet.
 - 2026-11-19 20:30 (work-order runner, W5): the Drive side of section 4 is now inventoried. Drive › FULL_LOG_AUDIT_2026-11-19 › DRIVE_INVENTORY_2026-11-19 lists the 2,234 files the connector account can see; DRIVE_INVENTORY_SUMMARY_2026-11-19 beside it proposes a tidy-up. The phone is still not inventoried.
+- 2026-11-20 07:30 UTC (work-order runner, W8): new apccs Python modules are named `code/apccs2_<name>.py`, with tests in `code/test_apccs2_<name>.py`, so the 32-module limit of the Part 3 shadow copy never counts them (plan/QUEUE.md, "Ruling: apccs module limit"). UCLRCDE slice 1 (BR-1, PE-1, GS-1) is built as code.
