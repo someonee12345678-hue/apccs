@@ -94,3 +94,4 @@ Roles are a preference order (RULEBOOK, “Backups when an agent runs out of usa
 - **The register:** each requirement, with its evidence, is in Drive › FULL_LOG_AUDIT_2026-11-19 › 04_REQUIREMENTS_AND_REALITY_REGISTER_2026-11-19.
 
 Changes to this map: none yet.
+- 2026-11-19 20:30 (work-order runner, W5): the Drive side of section 4 is now inventoried. Drive › FULL_LOG_AUDIT_2026-11-19 › DRIVE_INVENTORY_2026-11-19 lists the 2,234 files the connector account can see; DRIVE_INVENTORY_SUMMARY_2026-11-19 beside it proposes a tidy-up. The phone is still not inventoried.
