@@ -159,3 +159,16 @@ Changes to this map: none yet. W6 fills each branch with the specific abilities 
   - C8: readability nits only; nothing changed.
   - Counts now: 85 adopt now, 311 adopt later, 484 borrow the idea, 77 not used.
   - Still to place: R218, R222, R224 and R225 (Muse is asked to read them: Drive › MUSE_INBOX › JOB_W7_READ_O20_O21_LINKS_2026-11-20), and the 58 items whose research sits in older documents.
+- 2026-11-20 22:40 UTC (W7, Claude work-order runner): the research items outside V3 are placed. A name-by-name check of plan/RESEARCH_LEDGER.csv against MASTER_TOOL_TABLE_V3 found 95 of them; the 19 Nov estimate said 58. Their research came from Claude's logged replies in the C04, C05, C08, C10 and C20 logs, research addenda 5 and 6, and Gemini's compaction research. They are in a new sheet, PRODUCT_MAP_SUPPLEMENT_2026-11-20 (Drive › FULL_LOG_AUDIT_2026-11-19): 109 rows, with the same columns plus the ledger item, the source and the evidence on main. No feature or branch of this map changes, and no decision in the 20 Nov sheet changes.
+  - Counts: 21 adopt now (20 already built, each with its file and function named), 22 adopt later, 27 borrow the idea, 16 not used, 3 already placed under another name (Moltbot is OpenClaw; Liam Fedus is Periodic Labs), and 20 NOT CHECKED (names never found, two private links, or no ability recorded).
+  - Many 4 Nov legal ideas are already built in uclrcde: tolerant exact quotes, point-in-time law, A2AJ, the Canadian citation checker, the persuasion guard, closest real wording and step order.
+  - New borrowable gaps (⬜), for a later wording pass:
+    - two-step Act search with one clarifying question;
+    - a plain-language glossary;
+    - a "this source does not address" line;
+    - court-ready pinpoints and a "How this was prepared" note;
+    - a lawyer-rated test round;
+    - SelfCompact's four-check handoff gate and a stuck-loop check;
+    - three checked copies with a yearly match check, and a case-file backup to SD card or USB.
+  - R218, R222 and R224 were read today from their own pages and placed (Drive › Claude 2 › RESEARCH_O20_O21_LINKS_2026-11-20). The arXiv paper's fix history goes into CMP-04. R225 (an X post) stays NOT CHECKED.
+  - Muse's corrections C3(b) and C3(c) are applied in a re-issued Doc, PRODUCT_COMPILATION_2026-11-20; the 19 Nov Doc is unchanged. Muse checks all three new files (Drive › MUSE_INBOX › JOB_W7C_CHECK_SUPPLEMENT_2026-11-20).
