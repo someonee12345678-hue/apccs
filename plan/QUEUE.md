@@ -7426,3 +7426,1176 @@ Written by a separate Claude run that did not write the ruling above, under ledg
 **SG-1 and AM-1 are Ready to build**, in that order, from their wording, the 2026-11-19 audit corrections and this ruling. No correction was needed.
 
 UNDO: before merge, drop this commit. After merge, a later add-only section can withdraw it.
+
+## Slice 2 — the screens the Owner uses: one legal page, court days, route and filing, document creator, blocks, forms, guide, lawyer review, installer and project switcher (Claude, work-order runner W4, 2026-11-20)
+
+### Batches 35 and 36 superseded
+
+**Builders: never build Batch 35 (INST-0171–0175) or Batch 36 (INST-0176–0180), in any of their wordings above.** Their content is re-worded below under today's rules (new files only, no file written at run time, information only, nothing counted without a court-day table, made-up data only):
+
+| Old instruction | Re-worded here as |
+|---|---|
+| INST-0171 court hierarchy route map | UI-4-01 and UI-4-02 (route notes and route view, built on PE-1 maps) |
+| INST-0172 service and filing deadline engine | CD-1-04 and CD-1-05 (calendar-day and court-day counts from the VERIFIED court-day table) |
+| INST-0173 official forms and service guide | UI-4-03 (filing guide) and LS-J (forms from prescribed regulation text) |
+| INST-0174 two-sided issue table | UI-5-02 |
+| INST-0175 affidavit of service and proof record | UI-4-04 |
+| INST-0176 word-for-word quote auditor | already built as `uclrcde_sources.verify_quote_in_locked_document` and `uclrcde_filing.pre_filing_check`; reused by UI-2, UI-4 and UI-5 |
+| INST-0177 numbered exhibit book | UI-5-03 |
+| INST-0178 urgent duty-counsel warnings | UI-4-05 |
+| INST-0179 case binder | UI-5-04 (a returned bundle and SQLite rows, never a written file) |
+| INST-0180 standalone workspace page and server | UI-1 |
+
+CP-245's record that instructions 171–180 were "built in uclrcde" is wrong: no uclrcde test is named `test_171_` to `test_180_` (checked on uclrcde main `669810f`, 2026-11-20). CP-2-04 reports it as NOT BUILT. The frozen CP-245 code is not changed.
+
+Written by the Claude work-order runner on 2026-11-20 at 10:20 UTC, under work order W4 (`plan/WORK_ORDERS.md`), ledger Q039 (Claude words it when no other agent does), Q050–Q056 and Q052 (no invented blocks). W4's After condition holds: PR #171 is merged; BR-1, PE-1 and GS-1 have their tests on uclrcde main and SG-1 and AM-1 on apccs main; W3 is done.
+
+**Status of all ten batches: fully worded, NOT ready to build.** A separate Claude run audits this wording first (Q039). A later add-only section marks each batch ready, with any corrections. Until then no builder builds any of them.
+
+**Sources read for this wording (2026-11-20):**
+
+- Ledger Q036–Q056; `plan/RULEBOOK.md` with "Owner's standing preferences"; `plan/SYSTEM_MAP.md`; `plan/WORK_ORDERS.md` (W3, W4, W8); `plan/PRODUCT_MAP.md`; this file's Batches 35 and 36 (both wordings), the slice 1 section and its audit, "Approved features waiting for wording" (both sections, including CMP-05 and CMP-08), the block review of 2026-11-19 and the module-limit ruling; `AGENTS.md` of apccs and uclrcde; `PROJECTS.md`; the guard workflows of both repositories (new files outside `.github/` and `tools/` are allowed; `code/` and `plan/` only grow).
+- Drive: `NOV1_CONTROL_PANEL_UPGRADE_LIST` (all 29 items, the Owner's words), `FEATURE_LEDGER_v2_2026-11-05` (U9–U15, A13, A14), `RESEARCH_SLICE2_FORMS_OCR_COURTDAYS_2026-11-19` (work order W3; https://docs.google.com/document/d/1TACvyTQkz2m--JGoWJjhK7T2vKogmToSveIbWwiUolg/edit).
+- Code on apccs main `8ed4ad8` and uclrcde main `669810f`: the Mission Control pattern (`web/mission/`, `apccs_mission_server.py` with `handle_mission_request`, `run_mission_server` and its `handler.connection.sendall` reply, `apccs_mission_web.check_mission_web_files`), `apccs_readability_gate.py`, `apccs_logs.py` (`LOG_V2_FIELD_ORDER`, `parse_and_check_log_v2_record`), `apccs_events.TIMELINE_VIEWS`, `apccs_batches_41_49` (`CP245_EXTERNAL_RANGES`, `CP245_EXTERNAL_LABEL`), `apccs2_session_guard.py`, `apccs2_architecture_registry.py`; uclrcde `uclrcde_core.py` (`LEGAL_INFORMATION_NOTICE`, `open_uclrcde_db`, `init_uclrcde_db_and_register_matter`, `add_and_list_legal_docket_events`, `draft_point_by_point_response`, `export_lawyer_triage_brief`, `ingest_and_lock_legal_source_document`, `find_literal_in_locked_document`, the `matters`, `docket_events`, `response_drafts` and `source_documents` tables), `uclrcde_procedure.py` (PE-1: `check_procedure_progress`, `check_step_deadlines`, the court-day table fields, `UNSIGNED_REVIEW_LINE`), `uclrcde_answer_gate.py` (`run_search_request`, `label_answer`), `uclrcde_clerk.check_clerk_text`, `uclrcde_filing` (`pre_filing_check`, `RECEIPT_STATEMENT`), `uclrcde_sources.verify_quote_in_locked_document`, `uclrcde_evidence` (the `evidence_map_links`, `evidence_link_reviews` and `case_link_history` tables), `uclrcde_oracle.BC_KPL_STATEMENT`, `uclrcde_case_spine` and `uclrcde_courts`.
+
+**Build order.** uclrcde: CD-1, UI-1, UI-4, UI-2, LS-L, LS-J, UI-3, UI-5. apccs: CP-1, CP-2. The two repositories build side by side (one open pull request per repository). Needs, batch by batch: CD-1 needs nothing new; UI-1 needs nothing new; UI-4 needs CD-1 and UI-1; UI-2 needs UI-1; LS-L needs nothing new; LS-J needs UI-1 and UI-2; UI-3 needs UI-1, UI-2 and UI-4; UI-5 needs UI-1, UI-4 and LS-L; CP-1 needs nothing new; CP-2 needs CP-1.
+
+**Where the Owner's words land** (NOV1 item numbers): 2 (instruction set, main topic, burner tab, legal prep, four tabs) → UI-1; 3 (principal checklist, one unified page; page-number check) → UI-1, LS-L; 4, 5, 6, 9 (document creator, preset questions, preview, print, local save, calendar reminder, finish everything before AI) → UI-2; 5, 9 (question and research generators), 5, 10 (help guide, "did we check everything" checklist) → UI-3; 6, 8 (cross-linker and importance trigger, hidden rule) → UI-5; 7, 8 (lawyer review, hidden to the side) → UI-5; 8, 15 (court-action flowchart, next options, penalties, judge was unfair, Verify) → UI-4; 10 (cases kept apart by type) → UI-1; 14 (filing box and checklist) → UI-4; 23, 25 (logs, batch history, project switcher, predicted finish) → CP-2; 10–12, 18, 19, 24 (installer, home-screen icon, finds projects and tools) → CP-1; 29 (welcome walkthrough, slash commands) → UI-1. Item 3's OCR stays research (W3 said NO for an engine); LS-L-04 builds the engine-neutral exhibit-label and page-order checker that W3 said can be worded now.
+
+### Rules for all ten slice 2 batches (read with each batch)
+
+Rules 1–11 of slice 1 ("Rules for all five slice 1 batches") apply unchanged: new files only; AI switch OFF; docstrings and hints (and, in apccs, the A7 test-method rules); the readability gate; add-only SQLite; formats; projects stay separate; legal content is information only; reuse, never rebuild; tests; nothing here is a live claim. Where a batch below says more, both hold. These rules are added:
+
+12. **New file names.** apccs Python modules are `code/apccs2_<name>.py` with tests in `code/test_apccs2_<name>.py` (module-limit ruling). uclrcde modules are `code/uclrcde_<name>.py` with tests in `code/test_uclrcde_<name>.py`. Screen files are new files in `ui/` (uclrcde; AGENTS.md says "the web page lives in `ui/`") and in `web/panel/` (apccs). No batch changes another batch's files, including UI-1's and CP-1's page files: later screens plug in by rule 15.
+13. **Plain web files only.** HTML, CSS and JavaScript written by hand: no framework, no CDN, no web font, no build step, no file loaded from another website, no `http:` or `https:` address anywhere in a `.js` file, no inline `on...=` handler, no `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `eval` or `new Function`. Data goes into the page with `textContent` and `createElement`. Every `fetch` in a page script uses a relative `/api/...` address or a constant holding one; the service worker `sw.js` may only call `fetch(event.request)`, for the page's own requests, as Mission Control's does. Every page works at 360 px wide; text is 14 px or larger; there is no fixed width over 360 px; every input, select and textarea has a `<label for>`; headings are in order; the tab order is the reading order (CMP-08); colour is never the only signal. Each page has print styles (`@media print`) that hide buttons and tabs.
+14. **Local server, safe by default** (both repositories). The server listens only on `127.0.0.1` or `localhost` (port 0 picks a free port in tests). Each request is a dict `{"method", "path", "headers", "body", "client_ip"}` shaped like Mission Control's. It is refused with:
+    - 403 unless `client_ip` is `127.0.0.1`;
+    - 403 unless the `Host` header is `127.0.0.1:<port>` or `localhost:<port>` for the server's own port (`config["port"]`), which stops DNS-rebinding pages;
+    - 403 for a `POST` whose `Origin` header is present and is not `http://127.0.0.1:<port>` or `http://localhost:<port>`;
+    - 415 for a `POST` whose `Content-Type` is not `application/json`;
+    - 413 for a body over 65,536 bytes;
+    - 400 for a body that is not one JSON object;
+    - 400 for a path holding `..`, `\`, `//`, `%` or a control character;
+    - 405 for any method but `GET` and `POST`.
+    Replies never carry CORS headers. Every reply has `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`; HTML replies also have `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`. A `ValueError` from a handler becomes 400 with its message; any other exception becomes 500 with the body `{"status": "ERROR", "reason": "internal error"}` and never a traceback. Replies are sent with `handler.connection.sendall(data)`, as `apccs_mission_server` does; nothing is written with `.write(`. Only files named in the batch's file list are served, and a symlink or a file that resolves outside its folder gives 403.
+15. **Screens plug in without changing older files.**
+    - uclrcde: UI-1's `SCREEN_PLAN` names every slice 2 screen: `route` (UI-4), `creator` (UI-2), `forms` (LS-J), `guide` (UI-3) and `review` (UI-5). For each it gives the module, the script file, the tab and the batch. Each screen module defines `SCREEN_ID` (text) and `handle_screen_request(config: dict, request: dict) -> dict`. The request is `{"method", "path" (the part after /api/legal/<screen_id>), "query" (a dict of text), "body" (the parsed JSON object or None)}`; the reply is `{"http_status", "headers", "body"}`. Each screen script `ui/screen_<id>.js` calls `window.uclrcdeScreens.register("<id>", mount)`, where `mount(section, api)` fills its section and `api.get(path)` and `api.post(path, body)` call `/api/legal/<id>/<path>`. UI-1's page loads a screen's script only when `/api/legal/screens` says it is built.
+    - apccs: CP-1's `PANEL_PLAN` names `projects` (CP-2) in the same way, with `window.apccsPanel.register` and `/api/panel/<id>/...`.
+    - Each later screen batch's tests check that its screen shows as built through UI-1's or CP-1's own functions, and that UI-1's or CP-1's file checker gives PASS with its new script present.
+16. **Saving and printing.** "Save locally" means the server returns the text with its SHA-256 and the page offers it as a download through the browser (a `Blob` and a link with a `download` name), or the text is kept in SQLite. Python writes no file. Print uses the browser's own print (`window.print()`), with print styles. A calendar reminder is an iCalendar (RFC 5545) text the person opens in their own calendar app; nothing sets a reminder by itself.
+17. **Dates.** Only CD-1 and PE-1 count dates, in code, from the court-day table. A date the person types is shown as "you entered" and is never changed. A count is always labelled "Information only" and ends "Check the court's own rule <rule_ref>."
+18. **Unreviewed is a label, never a block** (Q052). A procedure map, route notes, form template, block map or question set nobody has reviewed still works. Every result built from it carries its review line, for example `UNSIGNED_REVIEW_LINE` or "NOT CHECKED: no person has reviewed this block map".
+
+---
+
+### Batch CD-1 — BC court days: the VERIFIED court-day table and deadline counts (COURT-DAYS-1)
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/uclrcde_court_days.py` and `code/test_uclrcde_court_days.py`. Test class `UclrcdeBatchCD1Tests`.
+**Source:** W3 research, section 3 (court days 2026 and 2027, the closed-day rule), all pages read 2026-11-19; BUILD_PLAN_V1 S5; old INST-0172.
+**Reuse, by exact name:** `uclrcde_core.open_uclrcde_db(db_path)`, `uclrcde_core.LEGAL_INFORMATION_NOTICE`, `uclrcde_procedure.check_step_deadlines(db_path, map_id, done_steps, court_day_table)`; tests also use `uclrcde_procedure.record_procedure_map(db_path, map_json)`. Import as `import uclrcde_core as core` and `import uclrcde_procedure as procedure`.
+**Errors:** bad input raises `ValueError` whose message starts with a `CD_` code. `PE_` errors from PE-1 pass through unchanged.
+**Words used:** a *closed day* is a day the court registry is not open; a *holiday* is a holiday as the Interpretation Act s.29 defines it (Sunday is one, Saturday is not); an *uncertain* day is one that may be closed but is not on an official page yet.
+**Canary:** `Canary check: COURT = DAYS -> almanac`.
+
+**The data this batch carries** (public facts, not case data; every row from the W3 research). The module holds them as the constant `BC_COURT_DAY_ROWS`, a tuple of row dicts in date order, and the constant `BC_COURT_DAY_CHECK = {"jurisdiction": "BC", "checked_by": "CLAUDE", "checked_on": "2026-11-19", "how": "Each row was read on the official pages linked in it by the W3 research run (Claude); not checked by a lawyer.", "years_complete": [2026, 2027]}`. Weekends are not rows: Saturday and Sunday are closed days (registries open Monday to Friday), and Sunday is also a holiday (s.29(a)).
+
+Source keys: **ESA** https://www2.gov.bc.ca/gov/content/employment-business/employment-standards-advice/employment-standards/statutory-holidays · **DH** https://www2.gov.bc.ca/gov/content/health/practitioner-professional-resources/msp/claim-submission-payment/designated-holidays-and-close-off-dates · **REG** https://www2.gov.bc.ca/gov/content/justice/courthouse-services/courthouse-roles/court-registry-services · **IA** https://free.bcpublications.ca/civix/document/id/complete/statreg/96238_01 · **PS** https://www2.gov.bc.ca/gov/content/careers-myhr/all-employees/leave-time-off/statutory-holidays
+
+| date | weekday | office_closed | s29_holiday | reason | date_source | sources |
+|---|---|---|---|---|---|---|
+| 2026-01-01 | Thu | YES | YES | New Year's Day | PAGE | ESA, REG, IA |
+| 2026-02-16 | Mon | YES | YES | Family Day | PAGE | ESA, DH, REG, IA |
+| 2026-04-03 | Fri | YES | YES | Good Friday | PAGE | ESA, DH, REG, IA |
+| 2026-04-06 | Mon | YES | YES | Easter Monday | PAGE | DH, REG, IA |
+| 2026-05-18 | Mon | YES | YES | Victoria Day | PAGE | ESA, DH, REG, IA |
+| 2026-07-01 | Wed | YES | YES | Canada Day | PAGE | ESA, DH, REG, IA |
+| 2026-08-03 | Mon | YES | YES | B.C. Day | PAGE | ESA, DH, REG, IA |
+| 2026-09-07 | Mon | YES | YES | Labour Day | PAGE | ESA, DH, REG, IA |
+| 2026-09-30 | Wed | YES | YES | National Day for Truth and Reconciliation | PAGE | ESA, DH, REG, IA |
+| 2026-10-12 | Mon | YES | UNCERTAIN | Thanksgiving Day (a statutory holiday on ESA; not named in s.29(a)–(c); s.29(d) not read in full) | PAGE | ESA, DH, REG |
+| 2026-11-11 | Wed | YES | YES | Remembrance Day | PAGE | ESA, DH, REG, IA |
+| 2026-12-25 | Fri | YES | YES | Christmas Day | PAGE | ESA, DH, REG, IA |
+| 2026-12-26 | Sat | YES | YES | Boxing Day, "December 26" in s.29(c); a Saturday | PAGE | IA, REG |
+| 2026-12-28 | Mon | UNCERTAIN | NO | Boxing Day as the BC Public Service observes it; the registry page names Boxing Day without a date | PAGE | DH, PS, REG |
+| 2027-01-01 | Fri | YES | YES | New Year's Day | PAGE | ESA, REG, IA |
+| 2027-02-15 | Mon | YES | YES | Family Day | PAGE | ESA, REG, IA |
+| 2027-03-26 | Fri | YES | YES | Good Friday | PAGE | ESA, REG, IA |
+| 2027-03-29 | Mon | YES | YES | Easter Monday (named in s.29(a) and on the registry page; date by the Gregorian Easter rule, CD-1-01) | COMPUTED | REG, IA |
+| 2027-05-24 | Mon | YES | YES | Victoria Day | PAGE | ESA, REG, IA |
+| 2027-07-01 | Thu | YES | YES | Canada Day | PAGE | ESA, REG, IA |
+| 2027-08-02 | Mon | YES | YES | B.C. Day | PAGE | ESA, REG, IA |
+| 2027-09-06 | Mon | YES | YES | Labour Day | PAGE | ESA, REG, IA |
+| 2027-09-30 | Thu | YES | YES | National Day for Truth and Reconciliation | PAGE | ESA, REG, IA |
+| 2027-10-11 | Mon | YES | UNCERTAIN | Thanksgiving Day (as 2026) | PAGE | ESA, REG |
+| 2027-11-11 | Thu | YES | YES | Remembrance Day | PAGE | ESA, REG, IA |
+| 2027-12-25 | Sat | YES | YES | Christmas Day; a Saturday | PAGE | ESA, IA |
+| 2027-12-26 | Sun | YES | YES | Boxing Day, "December 26" in s.29(c); a Sunday | PAGE | IA |
+| 2027-12-27 | Mon | UNCERTAIN | NO | possible in-lieu day for Christmas Day 2027; the 2027 designated-holidays table is not published yet | PAGE | DH, PS |
+| 2027-12-28 | Tue | UNCERTAIN | NO | possible in-lieu day for Boxing Day 2027; as above | PAGE | DH, PS |
+
+Each row is `{"date", "weekday", "office_closed", "s29_holiday", "reason", "date_source", "sources", "read_on": "2026-11-19"}`, with `sources` as the full addresses above, in the order shown. The weekdays were checked by Python's calendar; the Easter rule gives Good Friday 2026-04-03 and 2027-03-26 and Easter Monday 2026-04-06, which match the official pages, and Easter Monday 2027-03-29.
+
+**The safe-direction rule.** Every count here gives the *last day* to do something. An uncertain day is always treated the way that gives the earlier last day: counting forward, it is treated as open (and not a holiday); counting back, as closed (and a holiday). The result names it and gives the other possible day. A count can therefore come out early, never late, because of an uncertain day.
+
+#### CD-1-01: CHECK_COURT_DAY_ROWS (source: W3 section 3; Interpretation Act s.29)
+Functions: `easter_monday(year: int) -> str` and `check_court_day_rows(rows: list) -> dict`.
+Does: `easter_monday` returns Easter Monday of a year from 1900 to 2199 as `YYYY-MM-DD`, worked out with the anonymous Gregorian Easter rule (Meeus/Jones/Butcher) in whole-number arithmetic. `check_court_day_rows` checks each row, in this order:
+- exactly the eight keys above;
+- `date` a real date, and `weekday` its English three-letter day name from `datetime`;
+- `office_closed` `YES`, `NO` or `UNCERTAIN` (`NO` is only used later, to correct a row);
+- `s29_holiday` `YES`, `NO` or `UNCERTAIN`;
+- `reason` 1–200 characters;
+- `date_source` `PAGE` or `COMPUTED`. `COMPUTED` is allowed only when `reason` starts `Easter Monday` and `date` equals `easter_monday` of its year, or starts `Good Friday` and `date` is three days earlier than it;
+- `sources` a list of 1 to 5 distinct addresses, each `https` with a host in `OFFICIAL_HOSTS = ("www2.gov.bc.ca", "www.bclaws.gov.bc.ca", "free.bcpublications.ca", "provincialcourt.bc.ca", "justice.gov.bc.ca", "www.bccourts.ca")`, checked with `urllib.parse.urlsplit`;
+- `read_on` a real date no later than today;
+- no date twice.
+Return `{"status": "OK", "rows": <copies in date order>, "years": <sorted distinct years>, "uncertain": [{"date", "reason"}]}`.
+Refuses: `CD_BAD_YEAR` for a year outside 1900–2199 or a non-integer (a bool included); `CD_BAD_ROWS` for anything outside the shape, naming the row's date and the field.
+Tests: `test_cd1_01_checks_the_carried_rows_and_easter_rule` (`easter_monday(2026)` is `2026-04-06` and `easter_monday(2027)` is `2027-03-29`; `BC_COURT_DAY_ROWS` passes with years `[2026, 2027]` and three uncertain dates, `2026-12-28`, `2027-12-27` and `2027-12-28`); `test_cd1_01_rejects_bad_rows` (weekday `Tue` on `2026-04-06`; a source on `example.com`; `COMPUTED` on `2027-03-30`; the same date twice; `easter_monday(True)`; each raises its code).
+Done means: every closed day the engine knows has an official source or a checked computation, and a typo is refused.
+Not checked: whether a registry ever closes on a day not listed here, for example an emergency closure. Nothing here can see one.
+
+#### CD-1-02: RECORD_COURT_DAYS (source: W3 section 3; add-only rule)
+Function: `record_court_days(db_path: str, jurisdiction: str, rows: list, check: dict) -> dict`.
+Does: Check `rows` with CD-1-01. `check` is shaped like `BC_COURT_DAY_CHECK`: `jurisdiction` (must equal the argument, one of `core.SUPPORTED_JURISDICTIONS`), `checked_by` (1–8 letters), `checked_on` (a real date no later than today), `how` (1–300 characters) and `years_complete` (a list of distinct years, each one of the rows' years). Create the add-only tables:
+- `cd_court_days(row_id INTEGER PRIMARY KEY, jurisdiction TEXT NOT NULL, day TEXT NOT NULL, row_json TEXT NOT NULL, row_sha256 TEXT NOT NULL, checked_by TEXT NOT NULL, checked_on TEXT NOT NULL, recorded_at TEXT NOT NULL, UNIQUE(jurisdiction, day, row_sha256))`;
+- `cd_year_checks(check_id INTEGER PRIMARY KEY, jurisdiction TEXT NOT NULL, year INTEGER NOT NULL, complete INTEGER NOT NULL, checked_by TEXT NOT NULL, checked_on TEXT NOT NULL, how TEXT NOT NULL, recorded_at TEXT NOT NULL, UNIQUE(jurisdiction, year, checked_by, checked_on))`.
+Insert a row only when it differs from the current row for that day (the newest row of a day is current). Insert one year check per year of the rows: `complete` is 1 for a year in `years_complete`, otherwise 0. A repeated identical call adds nothing. Return `{"status": "RECORDED" or "ALREADY_RECORDED", "added_days", "changed_days", "years": [{"year", "complete"}]}`. `changed_days` lists days whose current row was replaced, so a correction is visible.
+Refuses: `CD_BAD_CHECK` for a check outside its shape or naming another jurisdiction; `CD_BAD_ROWS` from CD-1-01; `CD_BAD_JURISDICTION`.
+Tests: `test_cd1_02_records_once_and_shows_corrections` (a temporary database: recording `BC_COURT_DAY_ROWS` with `BC_COURT_DAY_CHECK` gives `RECORDED` with 29 added days and both years complete; the same call again gives `ALREADY_RECORDED`; recording a corrected row for `2026-12-28` with `office_closed` `YES` gives `changed_days` `["2026-12-28"]`, and the table keeps both rows); `test_cd1_02_rejects_bad_check` (`checked_by` `C1`; `years_complete` `[2025]`; jurisdiction `ON` against a `BC` check; each raises its code, and nothing is added).
+Done means: the court days live in the engine's own database, with who checked them and when, and no row is ever overwritten.
+Not checked: who may correct a row. Any caller can add a correction; each one records its initials.
+
+#### CD-1-03: BUILD_VERIFIED_TABLE (source: PE-1-05's court-day table; W3 "every count must still show Check the court's own rule")
+Function: `build_court_day_table(db_path: str, jurisdiction: str, covers_from: str, covers_to: str) -> dict`.
+Does: `covers_from` and `covers_to` are real dates in order, at most three years apart (PE-1's limit). Every calendar year the cover touches needs a current year check with `complete` 1 (the newest check of that year counts). If one is missing or not complete, return `{"status": "DRAFT", "table": None, "missing_years": [...], "reason": "no complete check for <years>; no date is counted"}`. Otherwise build the PE-1 table with exactly PE-1's nine fields:
+- `status` `VERIFIED`;
+- `jurisdiction`;
+- `source`: `<jurisdiction> registry closed days <covers_from> to <covers_to> (table cd_court_days)`, at most 200 characters;
+- `verified_by`: the newest year check's `checked_by`;
+- `verified_on`: the earliest `checked_on` of the cover's year checks;
+- `covers_from`, `covers_to`;
+- `closed_weekdays` `[5, 6]`;
+- `closed_dates`: every current row inside the cover with `office_closed` `YES`, in date order.
+An uncertain day is never in `closed_dates`, so a forward court-day count treats it as open (the safe-direction rule). Return `{"status": "VERIFIED", "table", "uncertain_dates": [{"date", "reason"}] inside the cover, "holidays": [s.29 YES dates inside the cover], "uncertain_holidays": [s.29 UNCERTAIN dates], "sources": <sorted distinct addresses of the rows used>, "check_line": "Court days checked by <checked_by> on <checked_on> against the official pages linked; not checked by a lawyer.", "notice": core.LEGAL_INFORMATION_NOTICE}`.
+Refuses: `CD_BAD_COVER` for dates that are not real, out of order or more than three years apart; `CD_BAD_JURISDICTION`.
+Tests: `test_cd1_03_builds_pe1_table_with_uncertain_days_apart` (after CD-1-02: the cover 2026-01-01 to 2027-12-31 gives `VERIFIED`, a `table` whose keys are exactly PE-1's nine, 26 closed dates, three uncertain dates, and `2026-12-28` not in `closed_dates`); `test_cd1_03_gives_draft_without_a_complete_year` (the cover 2026-01-01 to 2028-12-31 gives `DRAFT` with `missing_years` `[2028]`; covers_to before covers_from raises `CD_BAD_COVER`).
+Done means: PE-1 gets a table it accepts, built only from checked rows, and an unchecked year gives no table at all.
+Not checked: closed days of the Provincial Court calendar (W3 could not read its dates). Its registries are listed on the same registry page, and the table is used for both courts until a court-specific row is recorded.
+
+#### CD-1-04: COUNT_CALENDAR_DEADLINE (source: Interpretation Act s.25(3), s.25(4), s.25.2, s.29; Supreme Court Civil Rule 22-4(1); old INST-0172)
+Function: `count_calendar_deadline(db_path: str, jurisdiction: str, request: dict) -> dict`.
+Does: `request` has exactly:
+- `from_date` (a real date, the reference day);
+- `days` (a whole number from 1 to 365);
+- `direction` (`AFTER`, for "within 21 days after service", or `BEFORE`, for "10 days before the hearing");
+- `clear_days`, `skip_holidays` and `office_act` (each a bool);
+- `rule_ref` (1–120 characters, the rule the person is following).
+`clear_days` and `skip_holidays` may not both be true.
+
+The *window* runs from `from_date` to `from_date` plus (2 × `days` + 31) days for AFTER, and from `from_date` minus (2 × `days` + 31) days to `from_date` for BEFORE. Build the table with CD-1-03 for the whole calendar years the window touches. If those are more than three years, or the table is `DRAFT`, or a count or move runs outside the table, return `{"status": "NOT_CHECKED", "last_day": None, "reason"}` and count nothing.
+
+Otherwise count, step by step:
+1. **Raw last day.** Without `skip_holidays`: `from_date` plus `days` (AFTER) or minus `days` (BEFORE). With `clear_days`, one more day each way: the first and last days are left out (s.25.2). With `skip_holidays` (the person says the rule leaves holidays out): step one day at a time from `from_date` and count only days that are not holidays, until `days` are counted.
+2. **Holiday move.** If the day is a holiday, move AFTER to the next day that is not a holiday (s.25(3)(a)), or BEFORE to the previous one (s.25(3)(b)).
+3. **Registry move.** If `office_act` is true (the act is done at the registry) and the day is a closed day, move AFTER to the next open day (s.25(4)(a)), or BEFORE to the previous open day.
+
+Do this twice: with every uncertain day treated as closed and a holiday, and with every uncertain day treated as open and not a holiday. Report the earlier of the two last days (the safe-direction rule) and the other as `other_possible_day` when they differ.
+
+Warnings:
+- `days` under 7 without `skip_holidays`: "Supreme Court Civil Rule 22-4(1) leaves holidays out of periods under 7 days. Check whether your rule does.";
+- BEFORE with `office_act`: "Interpretation Act s.25(4)(b) was not read in full (NOT CHECKED); the earlier open day is shown.";
+- each uncertain day used, with its reason.
+
+Return `{"status": "COUNTED", "last_day", "raw_last_day", "moves": [{"from", "to", "why"}], "other_possible_day", "uncertain_days_used", "warnings", "line", "rule_ref", "check_line", "notice", "ai_used": False}`. `line` is: `Information only: <days> <clear >days <after|before> <from_date> gives <last_day>. Check the court's own rule <rule_ref>.` Each `why` names its section, for example `holiday (Interpretation Act s.25(3)(a)): next day that is not a holiday`.
+Refuses: `CD_BAD_REQUEST` for a request outside its shape (an unknown key, a bool where a number belongs, both `clear_days` and `skip_holidays`); `CD_BAD_JURISDICTION`.
+Tests: `test_cd1_04_counts_with_holiday_and_registry_moves` (after CD-1-02, jurisdiction `BC`, `rule_ref` `SYNTH-RULE-1`:
+- 21 days AFTER 2026-03-13 gives raw `2026-04-03`, moved to `2026-04-04` (Good Friday);
+- the same with `office_act` gives `2026-04-07`, past Saturday, Sunday and Easter Monday;
+- 7 clear days BEFORE 2026-07-10 gives `2026-07-02`;
+- 5 days BEFORE 2026-07-06 gives `2026-06-30` (moved back from Canada Day), with the 22-4(1) warning;
+- the same with `skip_holidays` gives `2026-06-29`;
+- 10 days AFTER 2026-10-02 gives `2026-10-12` with `other_possible_day` `2026-10-13`, because Thanksgiving's holiday status is uncertain;
+- 10 days AFTER 2026-12-18 with `office_act` gives `2026-12-28` with `other_possible_day` `2026-12-29`);
+`test_cd1_04_refuses_bad_request_or_unchecked_years` (`days` 0; `direction` `LATER`; both `clear_days` and `skip_holidays`; an extra key `today` each raise `CD_BAD_REQUEST`; on a fresh database with no rows, 21 days AFTER 2026-03-13 gives `NOT_CHECKED` and `last_day` None).
+Done means: the old deadline calculator now counts only from checked court days, moves a last day exactly as the Interpretation Act says, and never comes out late because of an uncertain day.
+Not checked: rules that set the *earliest* day something may be done (the safe direction is the other way there; this function refuses nothing, but its `line` always says "last day"); service-time rules such as when e-filing or e-service counts as done (Supreme Court Civil Rules Part 23 was not read); the Provincial Court Family and Small Claims time rules.
+
+#### CD-1-05: COUNT_COURT_DAY_DEADLINES (source: PE-1-05; W4 "deadlines only from a VERIFIED court-day table")
+Function: `count_court_day_deadlines(db_path: str, map_id: str, done_steps: list) -> dict`.
+Does: Read the newest version of the map from PE-1's table `pe_procedure_maps` (through `core.open_uclrcde_db`, read only) to learn its `jurisdiction`. The cover runs from 1 January of the earliest `done_on` in `done_steps` to 31 December of the year after the latest one (at most three years; an empty list counts nothing). Build the table with CD-1-03. Call `procedure.check_step_deadlines(db_path, map_id, done_steps, <the table, or None when DRAFT>)`. For each `COUNTED` deadline, list the uncertain days between its `from_date` (left out) and its `last_day` (included), with the line `<date> was counted as a court day but may be closed (<reason>); if it is, the last day is one court day later.` Return PE-1's result unchanged, plus `"table_status"`, `"missing_years"`, `"uncertain_in_period": [{"step_id", "dates", "lines"}]`, and `"check_line"`.
+Refuses: `PE_` errors from PE-1 unchanged (an unknown map, a bad step list); `CD_BAD_COVER` when the done dates span more than two years.
+Tests: `test_cd1_05_counts_court_days_through_pe1` (after CD-1-02, a made-up BC map recorded with `procedure.record_procedure_map`, built the way `test_uclrcde_procedure.py` builds one and copied, not imported: step `S1`; `S2` counts 7 court days from `S1`; `S3` counts 10. With `S1` done on `2026-12-17`: `S2` is `COUNTED` with `last_day` `2026-12-29` and an uncertain-day line for `2026-12-28`; `S3` is `COUNTED` with `last_day` `2027-01-04`; a map step counting 10 court days from `S1` done on `2026-03-27` gives `2026-04-14`, past Good Friday and Easter Monday, with no uncertain line); `test_cd1_05_gives_not_checked_outside_checked_years` (`S1` done on `2025-06-02` gives `S2` `NOT_CHECKED` with `table_status` `DRAFT`; an unknown map raises `PE_UNKNOWN_MAP`).
+Done means: every step deadline the screens show comes from PE-1 and the checked table, with each uncertain day named.
+Not checked: whether each made-up map's `court_days` match a real rule; real maps carry their own `rule_ref`.
+
+---
+
+### Batch UI-1 — One unified legal page on 127.0.0.1: welcome, instruction set, principal checklist, tabs, walkthrough
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/uclrcde_ui.py`, `code/test_uclrcde_ui.py`, and in `ui/`: `index.html`, `app.js`, `style.css`, `manifest.webmanifest`, `sw.js` and `icon.svg`. Test class `UclrcdeBatchUI1Tests`.
+**Source:** NOV1 items 2, 3, 5, 10 and 29 (the Owner's words); FEATURE_LEDGER_v2 U9; old INST-0180; rules 13–16 above.
+**Reuse, by exact name:** `uclrcde_core.open_uclrcde_db`, `uclrcde_core.LEGAL_INFORMATION_NOTICE`, `uclrcde_clerk.check_clerk_text(text)`. Import as `import uclrcde_core as core` and `import uclrcde_clerk as clerk`.
+**Errors:** bad input raises `ValueError` whose message starts with a `UI_` code.
+**Canary:** `Canary check: PAGE = ONE -> welcome`.
+
+#### UI-1-01: PAGE_FILES_AND_CHECKER (source: NOV1 item 3, "one unified page, not a bunch of different web pages"; item 2, four tabs; rules 13 and 15)
+Function: `check_legal_ui_files(ui_dir: str) -> dict`.
+Does: The six files make one page titled `UCLRCDE legal workspace`.
+- **Page.** `<html lang="en">`; one `<h1>` reading `Legal workspace`; a viewport meta tag; a `<nav id="tabs">` with four tab buttons in this order, `Main`, `Burner`, `Legal prep` and `Cases by type`, each with `aria-controls` naming its `<section>`: `tab-main`, `tab-burner`, `tab-prep` and `tab-cases`.
+- **Side panel.** An `<aside id="side" hidden>`, opened by a small button labelled `More`. It is closed by default (NOV1 item 8: lawyer review "somewhere obscure ... off to the side").
+- **Notice.** `core.LEGAL_INFORMATION_NOTICE` word for word in a `<p id="notice">`.
+- **Script.** `app.js` holds `window.uclrcdeScreens = { register }`. It fetches `/api/legal/screens` and adds a `<script src="screen_<id>.js">` for each built screen. It mounts each screen into a `<section>` with `id="screen-<id>"`, inside its tab. It registers `sw.js`.
+- **Offline and print.** `sw.js` caches the six files and, once seen, each `screen_*.js`. Offline, the page shows the word `offline` and the time of its last good reply. `manifest.webmanifest` has `name` `Legal workspace`, `start_url` `.`, `display` `standalone` and `icon.svg` as its icon. `style.css` has `@media print` rules.
+`check_legal_ui_files` reads every file in `ui_dir` whose name is one of the six or matches `screen_[a-z]+\.js`. It never renders, runs or writes anything. It checks the six exist and that the page holds what is listed above. It checks every `.js` file for rule 13's forbidden patterns, for `fetch` to anything but a relative `/api/` address (in `sw.js`, only `fetch(event.request)`), and for any `http:` or `https:` text. It checks `style.css` for a font size under 14 px, a fixed width over 360 px, `@import` and `url(` to another site, and that every input, select and textarea in `index.html` has a matching `<label for>`. Return `{"status": "PASS" or "FAIL", "problems": [one plain line per broken rule, naming the file], "files_checked": [sorted names]}`; it never raises for a bad folder.
+Refuses: nothing is raised; a missing folder gives `FAIL` with `ui_dir: folder not found`.
+Tests: `test_ui1_01_page_files_pass_the_checker` (the repository's own `ui/` folder gives `PASS` with the six names in `files_checked`); `test_ui1_01_checker_catches_unsafe_or_missing_parts` (the page text is copied into strings and checked through a private helper `_check_texts(files: dict)`, which the public function also uses, so no file is written: a copy whose `app.js` uses `innerHTML`, one with `fetch("https://example.com")`, one with the `Burner` tab missing, and one with `font-size: 12px` each give `FAIL` with the right line).
+Done means: the Owner's one page exists with its four tabs, its hidden side panel and its notice, and a later screen script that breaks the safety rules is caught by this checker.
+Not checked: how the page looks on the Owner's phone. No screenshot is taken; the checks are on the text.
+
+#### UI-1-02: LEGAL_REQUEST_HANDLER (source: rules 14 and 15; old INST-0180's loopback server)
+Function: `handle_legal_request(config: dict, request: dict, handlers: dict | None = None) -> dict`.
+Does: `config` has `db_path`, `ui_dir`, `port` and optional `settings`; `handlers` maps a screen id to its `handle_screen_request`. Apply rule 14's checks first. Then:
+- `GET /` serves `index.html`. `GET /<name>` serves one of the six files, or `screen_<id>.js` when `<id>` is in `SCREEN_PLAN`. Content types are `text/html`, `text/javascript`, `text/css`, `application/manifest+json` and `image/svg+xml`, each with `; charset=utf-8`.
+- `GET /api/legal/screens` returns `{"screens": [{"screen_id", "title", "tab", "batch", "built"}]}` in `SCREEN_PLAN` order. `built` is true only when the script file is in `ui_dir` and the id is in `handlers`.
+- `/api/legal/app/<action>` goes to UI-1's own actions (UI-1-03 and UI-1-04): `GET welcome`; `GET checklist?scope=&checklist_id=`; `POST checklist` (`{"scope", "checklist_id", "event", "at"}`); `POST slash` (`{"text"}`); `POST notes` (`{"case_id", "thread", "text", "at"}`); `POST burner_handoff` (`{"case_id", "settings"}`); `POST case_type` (`{"case_id", "case_type", "at"}`); `GET cases`. A `ValueError` from an action gives 400 with its message.
+- `/api/legal/<screen_id>/<rest>` goes to `handlers[screen_id]` with the sub-request of rule 15. An unknown id gives 404. A planned screen that is not built gives 404 with `{"status": "NOT_BUILT", "reason": "the <title> screen is not built yet (batch <batch>)"}`.
+- Anything else gives 404.
+`SCREEN_PLAN` is a tuple of dicts `{"screen_id", "title", "tab", "module", "script", "batch"}`, in this order:
+  1. `route`, `Court route and filing`, tab `prep`, `uclrcde_ui_route`, `screen_route.js`, `UI-4`;
+  2. `creator`, `Document creator`, tab `main`, `uclrcde_ui_creator`, `screen_creator.js`, `UI-2`;
+  3. `forms`, `Court forms`, tab `prep`, `uclrcde_ui_forms`, `screen_forms.js`, `LS-J`;
+  4. `guide`, `Help guide and question generators`, tab `prep`, `uclrcde_ui_guide`, `screen_guide.js`, `UI-3`;
+  5. `review`, `Lawyer review`, tab `side`, `uclrcde_ui_review`, `screen_review.js`, `UI-5`.
+The document creator sits on the Main tab because the Owner asked for it "on the main website. Permanently" (NOV1 item 5).
+Refuses: nothing is raised; every refusal is an HTTP reply (rule 14).
+Tests: `test_ui1_02_serves_page_screens_and_dispatches` (called directly with request dicts, no socket: `GET /` gives 200 with the CSP header; with `ui_dir` a temporary folder holding copies of the six page files and no screen script, `GET /api/legal/screens` with a fake `creator` handler (a private test function) shows `creator` not built; `GET /api/legal/creator/ping` gives the `NOT_BUILT` 404; `GET /api/legal/app/welcome` gives 200); `test_ui1_02_refuses_unsafe_requests` (Host `evil.example:8530`; a POST with Origin `https://evil.example`; a POST with `text/plain`; a body of 70,000 bytes; `GET /../AGENTS.md`; `DELETE /`: each gives its rule 14 status, and none calls a handler).
+Done means: one local address serves the whole legal page, and a later screen plugs in by adding its own files.
+Not checked: browsers other than Chrome on Android. The checks follow the web standards, not one browser.
+
+#### UI-1-03: WELCOME_CHECKLISTS_AND_SLASH_COMMANDS (source: NOV1 item 2, "an instruction set explaining to you what you should do"; item 3, "a principal checklist"; item 29, "gently walk you through the process ... /features or /control panel"; item 14, checklist actions)
+Functions: `build_welcome(db_path: str) -> dict`, `record_checklist_event(db_path: str, scope: str, checklist_id: str, event: dict, at: str) -> dict`, `build_checklist_state(db_path: str, scope: str, checklist_id: str, base_items: tuple = ()) -> dict` and `run_slash_command(db_path: str, text: str) -> dict`.
+Does: **The checklist engine** (reused by UI-3 and UI-4):
+- `scope` is `APP` or a registered matter id; `checklist_id` is 1–40 letters, digits, `.`, `_` or `-`.
+- Events go in the add-only table `ui_checklist_events(event_id INTEGER PRIMARY KEY, scope TEXT NOT NULL, checklist_id TEXT NOT NULL, kind TEXT NOT NULL, item_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL)`.
+- An event is exactly `{"kind", "item_id", "text"}`:
+  - `ADD` (a new item id; text 1–300 characters, checked by `clerk.check_clerk_text`);
+  - `EDIT` (an existing item; new text, also checked);
+  - `REMOVE`, `TICK`, `UNTICK` (an existing item; text empty);
+  - `RESET` (unticks everything; item id and text empty);
+  - `RETIRE` (the whole list is put away and shows as retired: the add-only form of "delete"; item id and text empty).
+- `build_checklist_state` replays the events in order over `base_items` (a tuple of `(item_id, text)` pairs that are never stored, so a later code version can add base items). It returns `{"items": [{"item_id", "text", "done"}], "done_count", "total", "retired", "print_text"}`. `print_text` is plain text: a title line, then one line per item starting `[x]` or `[ ]`, then `core.LEGAL_INFORMATION_NOTICE`.
+
+**The welcome** returns `{"instruction_set", "walkthrough", "principal_checklist", "slash_commands", "notice"}`:
+- `instruction_set` is `INSTRUCTION_SET`, a tuple of these lines, for a chatbot the person works with:
+  1. `You are helping a person who represents themselves. Give legal information, never advice, and never predict an outcome.`
+  2. `Keep the main topic in the Main tab. Put side questions in the Burner tab, so the main thread stays clean.`
+  3. `Quote only from documents locked in this engine, word for word, and name the document.`
+  4. `Never count a deadline yourself. Use the engine's court-day count and say: check the court's own rule.`
+  5. `Say NOT CHECKED when you cannot check something. Never guess.`
+  6. `Finish every question in the document creator before anything is sent to an AI.`
+  7. `Use plain English and always say the next step.`
+- `walkthrough` is six steps, each with a `why` line: register the matter and pick its case type; lock your documents; add the dates you know; open the court route; build documents in the creator; check everything and print the filing checklist.
+- `principal_checklist` is the state of checklist `principal` in scope `APP`, over `PRINCIPAL_CHECKLIST`, these ten base items, `P1` to `P10`:
+  1. `Register your matter and choose its case type.`
+  2. `Lock every document you have, so the engine keeps an untouched copy.`
+  3. `Add every date you know to the timeline.`
+  4. `Open the court route for your case and see where you are.`
+  5. `Answer every question in the document creator before anything is sent anywhere.`
+  6. `Check every quote against your locked documents.`
+  7. `Count deadlines only with the court-day table, and check the court's own rule.`
+  8. `Print your filing checklist and take it to the registry.`
+  9. `Run the help guide's "did we check everything" list before you file.`
+  10. `Ask duty counsel, legal aid or a lawyer to look at it where you can.`
+- `slash_commands` lists `/features`, `/checklist`, `/route`, `/creator`, `/forms`, `/guide`, `/review` and `/control panel`.
+
+**`run_slash_command`** returns `{"command", "open_tab", "open_screen", "text"}`:
+- `/features` lists every planned screen with built or not built;
+- each screen command opens its tab and screen;
+- `/checklist` opens the principal checklist;
+- `/control panel` gives the text `The control panel is the APCCS app. Open it from its own home-screen icon; the two projects stay separate.`
+Refuses: `UI_BAD_SCOPE`; `UI_BAD_CHECKLIST`; `UI_BAD_EVENT` (an unknown kind, a duplicate `ADD`, an event on a missing or removed item, any event after `RETIRE`); `UI_NOT_CLERK` when text predicts or advises; `UI_BAD_TIME` for a time without an offset; `UI_UNKNOWN_COMMAND`.
+Tests: `test_ui1_03_welcome_and_checklist_replay` (a temporary database: `build_welcome` gives seven instruction lines, six walkthrough steps and ten unticked principal items; ticking `P3`, adding `X1` `Bring two copies.`, editing `X1`, unticking `P3`, ticking `P5` and then `RESET` gives eleven items with none done; `RETIRE` then shows `retired` true; `print_text` starts each item line with `[ ]`); `test_ui1_03_refuses_bad_events_and_commands` (a second `ADD` of `X1`; `TICK` on `P99`; any event after `RETIRE`; an `ADD` with text `You will win at trial.`, which gives `UI_NOT_CLERK`; `/teleport`, which gives `UI_UNKNOWN_COMMAND`).
+Done means: the welcome page tells the person and their chatbot what to do, the principal checklist works like the Owner's filing checklist, and nothing in its history is ever lost.
+Not checked: whether a person finds the walkthrough clear. The plain-language check (CMP-08) is a later batch.
+
+#### UI-1-04: MAIN_AND_BURNER_NOTES_AND_CASES_BY_TYPE (source: NOV1 item 2, "create a main topic and have a burner tab"; item 5, "a handoff with instructions for a burner table to keep your main thread clean"; item 10, "It should not mix them up, everything should be under their own category")
+Functions: `add_thread_note(db_path: str, case_id: str, thread: str, text: str, at: str) -> dict`, `build_burner_handoff(db_path: str, case_id: str, settings: dict) -> dict`, `record_case_type(db_path: str, case_id: str, case_type: str, at: str) -> dict` and `list_cases_by_type(db_path: str) -> dict`.
+Does: **Notes.** `thread` is `MAIN` or `BURNER`. Notes are 1–4,000 characters, kept in the add-only table `ui_thread_notes(note_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, thread TEXT NOT NULL, text TEXT NOT NULL, text_sha256 TEXT NOT NULL, at TEXT NOT NULL)`. Return `{"note_id", "thread", "count_in_thread"}`.
+
+**Burner hand-off.** `build_burner_handoff` builds the text a person pastes into a separate chat, so side questions never fill the main thread. It is: the seven `INSTRUCTION_SET` lines; then `Burner notes for matter <case_id>:` and every burner note in order; then `Main-thread notes are left out on purpose.` and the notice. Its size estimate is characters ÷ 4, rounded up (the same rule as apccs `estimate_tokens`; uclrcde never imports apccs). `settings` is `{}` or `{"max_tokens": <whole number 500–100000>}` (default 8000). Over the limit, the oldest burner notes are left out first, and their ids are listed in `left_out`. Return `{"status": "READY", "text", "text_sha256", "tokens_estimate", "left_out", "ai_used": False}`. Nothing is sent anywhere.
+
+**Cases by type.** `case_type` is 1–40 characters, the person's own name for a kind of case (for example `Small claims`). The add-only table is `ui_case_types(row_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, case_type TEXT NOT NULL, at TEXT NOT NULL)`; the newest row of a matter is current. At most 10 distinct current types: an 11th is refused. `list_cases_by_type` returns `{"types": [{"case_type", "cases": [{"case_id", "title", "court_level"}]}], "untyped": [...]}`. Types are in alphabetical order; matters come from the `matters` table, each under exactly one type.
+Refuses: `UI_UNKNOWN_MATTER`; `UI_BAD_THREAD`; `UI_BAD_NOTE` (empty or over 4,000 characters); `UI_BAD_SETTINGS`; `UI_BAD_TYPE` (empty, over 40 characters, or an 11th type); `UI_BAD_TIME`.
+Tests: `test_ui1_04_keeps_threads_apart_and_groups_cases` (a temporary database with the made-up matters `MATTER-SYNTH-0001` and `MATTER-SYNTH-0002`: two burner notes and one main note give a hand-off holding both burner notes and not the main note; with `max_tokens` 500, an older burner note of 2,400 characters and a newer one of 100 characters, the older note is in `left_out` and the newer one is in the text; typing 0001 `Small claims` and then `Family`, and 0002 `Small claims`, lists `Family: [0001]` and `Small claims: [0002]`); `test_ui1_04_refuses_bad_notes_and_types` (thread `SIDE`; a note of 4,001 characters; an unknown matter; an 11th distinct type).
+Done means: the main thread stays clean, side questions get their own hand-off, and cases never mix.
+Not checked: how a chatbot uses the hand-off; nothing here drives a chat app.
+
+#### UI-1-05: SCREEN_PLUG_INS_AND_LOCAL_SERVER (source: rule 15; old INST-0180)
+Functions: `build_screen_handlers() -> dict` and `run_legal_server(config: dict, host: str = "127.0.0.1", port: int = 8530, ready_event: threading.Event | None = None) -> None`.
+Does: **Plug-ins.** `build_screen_handlers` imports each `SCREEN_PLAN` module by its exact name with a plain `import` inside `try`. On `ModuleNotFoundError`, it skips the module only when the error's `name` is that module's name, and re-raises any other import error, so a broken screen is never hidden. For each module found, it checks that the module's `SCREEN_ID` equals the plan's id and that `handle_screen_request` is a function, and adds it to the result. Return `{screen_id: handle_screen_request}`. No `importlib`, `__import__` or `getattr`.
+
+**Server.** `run_legal_server` refuses any host but `127.0.0.1` or `localhost`, a bad port (a whole number from 0 to 65535) and a config without `db_path` and `ui_dir`. It starts a `ThreadingHTTPServer` and sets `config["port"]` to the port really used. It answers every request with `handle_legal_request(config, request, build_screen_handlers())`, the handlers built once at start. Like `apccs_mission_server.run_mission_server`, it gives `ready_event` the attributes `server_port` and `server` before setting it. It stops on `server.shutdown()` or a keyboard interrupt.
+Refuses: `UI_HOST_REFUSED`, `UI_BAD_PORT`, `UI_BAD_CONFIG`, raised before any socket is opened.
+Tests: `test_ui1_05_server_answers_on_loopback` (port 0 in a thread: `GET /` over `http.client` gives 200 and the page; `GET /api/legal/screens` lists the five planned screens; a POST to `/api/legal/app/notes` with the right Origin adds a note; then shut down); `test_ui1_05_refuses_public_host_and_bad_config` (host `0.0.0.0` raises `UI_HOST_REFUSED`; port `70000` raises `UI_BAD_PORT`; a config without `ui_dir` raises `UI_BAD_CONFIG`; `build_screen_handlers()` returns a dict whose keys are plan ids, each mapped to a function, so the test still passes after later screens merge).
+Done means: the Owner opens one local address and sees the whole legal page; each later screen appears as soon as its batch is merged.
+Not checked: starting the server on the Owner's phone (Termux, the P0-3 route) and adding the page to the home screen. Those are live steps for a later run.
+
+---
+
+### Batch UI-4 — Court route map, court-action flowchart, Verify, filing assistant, proof of service and duty-counsel warnings
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** CD-1 and UI-1 are merged.
+**New files:** `code/uclrcde_ui_route.py`, `code/test_uclrcde_ui_route.py`, `ui/screen_route.js`. Test class `UclrcdeBatchUI4Tests`. `SCREEN_ID = "route"`.
+**Source:** NOV1 items 8, 14 and 15 (the Owner's words); FEATURE_LEDGER_v2 U13 and U15; old INST-0171, INST-0173, INST-0175 and INST-0178.
+**Reuse, by exact name:**
+- `uclrcde_procedure.check_procedure_progress(db_path, case_id, map_id, done_steps)`;
+- `uclrcde_court_days.count_court_day_deadlines(db_path, map_id, done_steps)` and `uclrcde_court_days.build_court_day_table(db_path, jurisdiction, covers_from, covers_to)`;
+- `uclrcde_sources.verify_quote_in_locked_document(db_path, doc_id, quote)`;
+- `uclrcde_clerk.check_clerk_text(text)`;
+- `uclrcde_ui.record_checklist_event`, `uclrcde_ui.build_checklist_state`, `uclrcde_ui.check_legal_ui_files`, `uclrcde_ui.build_screen_handlers` and `uclrcde_ui.handle_legal_request`;
+- `uclrcde_core.open_uclrcde_db` and `uclrcde_core.LEGAL_INFORMATION_NOTICE`.
+Import as `procedure`, `court_days`, `sources`, `clerk`, `ui` and `core`.
+**Errors:** `ValueError` whose message starts with an `RT_` code; `PE_` and `CD_` errors pass through unchanged.
+**Words used:** *route notes* are a person's plain-English notes on a PE-1 map, step by step. A *phase* is `BEGINNING`, `MIDDLE` or `END` of the court action.
+**Canary:** `Canary check: ROUTE = SHOWN -> signpost`.
+
+#### UI-4-01: RECORD_ROUTE_NOTES (source: NOV1 item 8, "explaining to them the penalties"; item 15, "step-by-step instructions ... what you could do and why if the judge was unfair"; W4 "costs and penalties only where a map states them")
+Function: `record_route_notes(db_path: str, notes_json: str) -> dict`.
+Does: The notes are JSON text with exactly:
+- `notes_id` (1–64 letters, digits, `.`, `_` or `-`); `version` (a whole number from 1; versions come in order, with no gap);
+- `map_id` (a map recorded by PE-1);
+- `written_by` (1–8 letters) and `written_on` (a real date);
+- `reviewer` (`{"signed_off_by": null or 1–8 letters, "signed_off_on": null or a real date}`, both null or both set);
+- `steps`: a list of notes, at most one per step of the map's newest version, each with exactly:
+  - `step_id` and `phase`;
+  - `explain`: 1 to 3 texts of at most 600 characters, from short to most detailed. The screen shows the first and opens the next on each "More" tap: the Owner's "expanding expanding expanding";
+  - `file_what`, `file_where`, `file_how`: text of at most 300, 300 and 600 characters, or null;
+  - `serve_methods`: 0 to 6 texts of at most 120 characters;
+  - `costs_and_penalties`: 0 to 6 of `{"text", "doc_id", "quote"}`;
+  - `if_unfair`: 0 to 4 of `{"text", "next_map_id"}`, where `next_map_id` is a recorded map or null.
+Every text passes `clerk.check_clerk_text`. Every cost or penalty must have a quote that `sources.verify_quote_in_locked_document` finds (`verified` true) in a locked original: a cost or penalty without its source is never stored.
+Keep the notes in the add-only table `rt_route_notes(row_id INTEGER PRIMARY KEY, notes_id TEXT NOT NULL, version INTEGER NOT NULL, map_id TEXT NOT NULL, map_version INTEGER NOT NULL, notes_json TEXT NOT NULL, notes_sha256 TEXT NOT NULL, review TEXT NOT NULL, recorded_at TEXT NOT NULL, UNIQUE(notes_id, version))`, with the map's newest version at recording time. `review` is `NOT CHECKED` or `SIGNED`. Return `{"status": "RECORDED" or "ALREADY_RECORDED", "notes_id", "version", "map_id", "map_version", "review", "review_line"}`. The `review_line` is `Not checked by a lawyer: these route notes have no lawyer sign-off.` or `Signed off by lawyer <x> on <date>.`
+Refuses: `RT_BAD_NOTES` (shape); `RT_VERSION_TAKEN` (the same id and version with other content); `RT_VERSION_GAP`; `RT_UNKNOWN_STEP`; `RT_NOT_CLERK`; `RT_UNSOURCED` (a cost or penalty quote not found); `PE_UNKNOWN_MAP`.
+Tests: `test_ui4_01_records_sourced_notes` (a temporary database with the made-up matter `MATTER-SYNTH-0001` (BC) and a made-up BC map with steps `S1` `Start of claim`, `S2` `Reply filed` (7 court days from `S1`) and `S3` `Hearing`. A locked made-up document `SYNTH-FEES` holds `A party who appeals late may be ordered to pay costs of 100 dollars.`. Notes quoting that sentence as `S3`'s cost give `RECORDED` with review `NOT CHECKED`; the same call again gives `ALREADY_RECORDED`); `test_ui4_01_refuses_unsourced_or_advising_notes` (a cost quote `costs of 500 dollars`; an `explain` text `You will win if you file early.`; step `S9`; version 3 after version 1: each raises its code).
+Done means: costs and penalties appear only with the words of a locked source, and every explanation passes the clerk check.
+Not checked: real BC route notes. Each one says "not checked by a lawyer" until one signs it (rule 18).
+
+#### UI-4-02: ROUTE_VIEW_FLOWCHART_AND_VERIFY (source: NOV1 item 8, "a flowchart matrix ... begins middle and end ... keeps progress automatically ... tells them where they're at with maybe even pictures or a graph ... what their next options are"; item 15, "a button called verify")
+Functions: `record_done_step(db_path: str, case_id: str, map_id: str, event: dict, at: str) -> dict` and `build_route_view(db_path: str, case_id: str, map_id: str) -> dict`.
+Does: **Done steps.** `record_done_step` keeps the matter's progress, so the route remembers where the person is. An event is exactly `{"kind": "DONE" or "UNDONE", "step_id", "done_on", "proof_doc_id", "proof_quote"}`; for `UNDONE`, the last three are null. Events go in the add-only table `rt_done_steps(event_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, map_id TEXT NOT NULL, kind TEXT NOT NULL, step_id TEXT NOT NULL, done_on TEXT, proof_doc_id TEXT, proof_quote TEXT, at TEXT NOT NULL)`. The current done list is the replay in order: `DONE` adds a step, or replaces it in place; `UNDONE` removes it. The list is shaped like PE-1's `done_steps`.
+
+**The view.** `build_route_view` calls `procedure.check_procedure_progress` with the current done list and the newest route notes for the map, if any. It returns:
+- `where_you_are`: PE-1's `next_step`, or `All steps are done.`;
+- `steps`: one per map step, `{"step_id", "name", "phase", "state", "explain", "costs_and_penalties", "if_unfair"}`.
+  - `phase` comes from the notes, or `NOT SET`.
+  - `state` is `DONE`, `NEXT`, `LATER`, `MISSING`, `OUT_OF_ORDER` or `UNPROVEN`, from PE-1's lists.
+  - Each cost carries its document title and quote. With none, the line is `No cost or penalty is stated in the notes for this step.`
+- `flowchart`: `{"width": 360, "height", "boxes": [{"step_id", "x", "y", "w", "h", "label", "state"}], "arrows": [{"from", "to"}]}`. It has three bands, BEGINNING, MIDDLE and END, top to bottom. Steps keep map order inside a band, and a step with phase `NOT SET` goes in MIDDLE. Each box is 300 × 48 at `x` 30, with 16 between boxes and 32 between bands. Each label is the step name followed by its state word, so state never shows as colour alone. The arrows run in map order. The screen draws it with `document.createElementNS`; no SVG text is built in Python.
+- `verify`: one line per done step: `PROVEN` (a `DOCUMENT` step whose quote PE-1 found), `NOT PROVEN` (with PE-1's reason) or `NO PROOF NEEDED`. Then PE-1's `missing` and `out_of_order`, and `all_steps_checked`, true only when PE-1's status is `COMPLETE`.
+- the map's and the notes' review lines, `notice` and `"ai_used": False`.
+Refuses: `RT_BAD_EVENT` (shape, an `UNDONE` of a step not done, a `done_on` that is not a real date, a step not in the map); `RT_BAD_TIME`; `PE_` errors unchanged (for example `PE_UNKNOWN_MATTER`).
+Tests: `test_ui4_02_shows_where_you_are_and_verifies` (after UI-4-01: `S1` done on `2026-12-17` with a quote from a locked made-up claim document gives `S1` `DONE`, `S2` `NEXT`, `S3` `LATER`, three boxes, arrows `S1`→`S2` and `S2`→`S3`, `S3`'s cost with its source, and `S1` `PROVEN`; then `UNDONE` `S1` makes `S1` `NEXT`); `test_ui4_02_refuses_bad_events` (`done_on` `2026-02-30`; `UNDONE` of `S2`, which was never done; step `S9`; an unknown matter gives `PE_UNKNOWN_MATTER`).
+Done means: the person sees where they are, what comes next and why, with costs only where a source states them, and a Verify list that shows what is proven.
+Not checked: whether a picture helps more than the boxes. The Owner said "maybe even pictures"; boxes and arrows are the plain-code version.
+
+#### UI-4-03: FILING_ASSISTANT (source: NOV1 item 14, "what I should file. When I should file it. Where ... How ... a checklist ... print ... save ... share it with my lawyer ... delete ... edit ... add ... remove ... check off ... uncheck ... reset"; "a little box on the side that says explore")
+Function: `build_filing_guide(db_path: str, case_id: str, map_id: str, step_id: str | None = None) -> dict`.
+Does: The step is `step_id`, or else PE-1's `next_step` for the current done list. When every step is done, return `{"status": "ALL_DONE"}`. Otherwise return `{"status": "OK", "step_id", "name", "what", "where", "how", "when", "next_after", "needs", "checklist", "explore", "review_lines", "notice", "ai_used": False}`:
+- `what`, `where` and `how` come from the newest notes, or are the line `Not in the route notes yet: NOT CHECKED.`
+- `when` is this step's entry from `court_days.count_court_day_deadlines(db_path, map_id, <current done list>)`: `COUNTED` with its `line` and any uncertain-day lines; `WAITING`; `NOT_CHECKED` with its reason; or `No deadline is set for this step in the map.` No other date is ever shown.
+- `next_after` is the step after this one, or null.
+- `needs` is PE-1's `needs_to_confirm` for this step.
+- `checklist` is `ui.build_checklist_state(db_path, case_id, "filing-" + step_id, base_items)`. The base items are the step's needs that do not start with `step:`, as `N1`, `N2` and so on, plus `SV`, `Proof of service is recorded.`, when the notes list a service method. Every action the Owner listed goes through `ui.record_checklist_event`: add, edit, remove, check off, uncheck, reset, and retire (the add-only "delete"). Print, save and share use the checklist's `print_text`, saved as a browser download (rule 16) that the person can send to a lawyer.
+- `explore` is the step's `explain` texts, for the side box.
+Refuses: `RT_UNKNOWN_STEP`; `PE_` and `CD_` errors unchanged.
+Tests: `test_ui4_03_guides_the_next_filing` (after UI-4-02 with `S1` done on `2026-12-17` and CD-1's rows recorded: the guide is for `S2`, `when` is `COUNTED` with `2026-12-29` in its line and the `2026-12-28` uncertain-day line, `what` comes from the notes, and ticking `N1` through `ui.record_checklist_event` gives `done_count` 1 and a `[x]` line in `print_text`); `test_ui4_03_never_shows_an_unchecked_date` (on a database without CD-1's rows, `when` is `NOT_CHECKED` and no date appears anywhere in the result; step `S9` raises `RT_UNKNOWN_STEP`).
+Done means: the filing box tells the person what, when, where and how from checked sources, and the checklist does everything the Owner listed without losing its history.
+Not checked: registry addresses and filing fees. They appear only where the person's route notes give them.
+
+#### UI-4-04: PROOF_OF_SERVICE_RECORD (source: old INST-0175; NOV1 item 14)
+Functions: `record_service_proof(db_path: str, case_id: str, map_id: str, proof: dict, at: str) -> dict` and `list_service_proofs(db_path: str, case_id: str) -> dict`.
+Does: A proof is exactly:
+- `step_id` (a step of the map);
+- `document_doc_id` (a locked document of this matter);
+- `method` (one of that step's `serve_methods` in the newest notes);
+- `served_on` (a real date the person entered);
+- `served_by` (1–8 letters);
+- `recipient_role` (1–60 characters, for example `respondent`).
+Keep it in the add-only table `rt_service_proofs(proof_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, map_id TEXT NOT NULL, proof_json TEXT NOT NULL, proof_sha256 TEXT NOT NULL UNIQUE, at TEXT NOT NULL)`. A repeat of the same proof returns the existing id. Return `{"status": "RECORDED" or "ALREADY_RECORDED", "proof_id", "line"}`. The `line` is `You entered: <document title> was served by <method> on <served_on> to the <recipient_role>, by <served_by>.`, with a second line: `To count what follows, mark the step done in the court route.` `list_service_proofs` returns every proof of the matter in order (UI-5's binder uses it). No service date is ever worked out: the person's date is kept as entered.
+Refuses: `RT_BAD_PROOF` (shape); `RT_UNKNOWN_DOC` (not a locked document of this matter); `RT_BAD_METHOD`, also when the notes list no method for that step (reason `the route notes list no service method for this step`); `RT_BAD_TIME`; `RT_UNKNOWN_MATTER`.
+Tests: `test_ui4_04_records_proof_once` (notes listing `personal service` for `S1`: a proof gives `RECORDED` and a `line` that holds `personal service` and `2026-12-18`; repeating it gives `ALREADY_RECORDED`; `list_service_proofs` gives one proof); `test_ui4_04_refuses_unlisted_method_or_unlocked_document` (method `email` → `RT_BAD_METHOD`; document `NOT-LOCKED` → `RT_UNKNOWN_DOC`; `served_on` `18/12/2026` → `RT_BAD_PROOF`).
+Done means: every service the person did is on record, exactly as they entered it, ready for the binder.
+Not checked: which service methods a real rule allows. They come only from route notes.
+
+#### UI-4-05: DUTY_COUNSEL_WARNINGS_AND_ROUTE_SCREEN (source: old INST-0178; NOV1 items 8 and 15; rules 13–15)
+Functions: `check_urgent_help(db_path: str, case_id: str, map_id: str, answers: dict, today: str, settings: dict) -> dict` and `handle_screen_request(config: dict, request: dict) -> dict`.
+Does: **Urgent help.** `answers` has exactly four keys, each `YES`, `NO` or `NOT_SURE`. These are the questions of `URGENT_QUESTIONS`, which the screen shows word for word:
+- `liberty`: `Could you be held in custody or jailed, for example because of a warrant or a contempt application?`
+- `children`: `Is there an urgent matter about children, such as parenting time, child protection or a removal?`
+- `contempt`: `Has someone applied to find you in contempt of court?`
+- `strike`: `Has someone applied to strike out or dismiss your case or your reply?`
+
+`NOT_SURE` counts like `YES` (the safe choice). `settings` is `{}` or `{"warn_court_days": <1–30>}` (default 7). `today` is a real date the caller gives.
+
+Deadlines come from `court_days.count_court_day_deadlines` for the current done list. For each `COUNTED` last day, count the court days after `today` up to the last day, with CD-1-03's table for the years from `today` to the last day, treating uncertain days as closed (fewer days left, the safe choice). Flag the deadline when the count is at most `warn_court_days`, or when the last day is before `today`.
+
+Return `{"level": "URGENT" or "NONE", "flags": [{"code", "line"}], "line", "notice", "ai_used": False}`. Each answer flag's line quotes its question, and each deadline flag names the step and its last day. With `URGENT`, `line` is `Duty counsel and legal aid can help with this. Contact them before your next step.`; with `NONE` it is `No urgent sign was found in these answers. This is not a check of your whole case.` Keep each check in the add-only table `rt_urgent_checks(check_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, answers_json TEXT NOT NULL, level TEXT NOT NULL, flags_json TEXT NOT NULL, today TEXT NOT NULL, at TEXT NOT NULL)`.
+
+**The screen.** `handle_screen_request` answers, under `/api/legal/route/`:
+- `GET view?case_id=&map_id=` (UI-4-02);
+- `POST done`;
+- `POST notes` (`{"notes_json"}`);
+- `GET filing?case_id=&map_id=&step_id=`;
+- `POST checklist` (UI-1's event, scope the matter);
+- `POST service`;
+- `GET service?case_id=`;
+- `POST urgent`, which passes today's local date as `today`.
+`ui/screen_route.js` mounts, in this order: where you are; the flowchart, drawn with `createElementNS`; each step with its first explanation and a `More` button that opens the next level (all closed by default); a `Verify` button that shows the verify list; the filing box with the `Explore` side box; the checklist with add, edit, remove, tick, untick, reset, retire, print and save buttons; the service form; and the four urgent-help questions with their result. Every control has a label.
+Refuses: `RT_BAD_ANSWERS` (a missing or extra key, or a value outside the three); `RT_BAD_SETTINGS`; `RT_BAD_DATE`; the handler gives 400 for a `ValueError` and 404 for an unknown path.
+Tests: `test_ui4_05_flags_urgent_signs_and_serves_the_screen` (`contempt` `YES` gives `URGENT` with a `contempt` flag. All `NO`, with `S1` done on `2026-12-17` and `today` `2026-12-22`, gives `URGENT` with a deadline flag for `S2` (`2026-12-29`), because only 3 court days are left when `2026-12-28` counts as closed. All `NO` with `today` `2026-11-20` and no done step gives `NONE`. `ui.build_screen_handlers()` holds `route`; `ui.check_legal_ui_files` on the repository's `ui/` gives `PASS` with `screen_route.js` listed; `GET /api/legal/screens` through `ui.handle_legal_request` shows `route` built); `test_ui4_05_refuses_bad_answers_and_paths` (an answer `MAYBE`; a missing `strike`; `warn_court_days` 0; a handler request `GET /api/legal/route/nothing` gives 404).
+Done means: urgent signs and close deadlines are flagged in plain words, and the whole route screen works inside the one page.
+Not checked: which situations a real duty-counsel service treats as urgent. The four questions come from old INST-0178's list.
+
+---
+
+### Batch UI-2 — Document creator: preset questions, finish before AI, preview in legal form, print, local save, calendar reminder
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** UI-1 is merged.
+**New files:** `code/uclrcde_ui_creator.py`, `code/test_uclrcde_ui_creator.py`, `ui/screen_creator.js`. Test class `UclrcdeBatchUI2Tests`. `SCREEN_ID = "creator"`.
+**Source:** NOV1 items 4, 5, 6 and 9 (the Owner's words); FEATURE_LEDGER_v2 U10; W4 ("any AI rewording is a hand-off packet, with the AI switch OFF by default").
+**Reuse, by exact name:**
+- `uclrcde_filing.pre_filing_check(db_path, draft, limits)`;
+- `uclrcde_sources.verify_quote_in_locked_document(db_path, doc_id, quote)`;
+- `uclrcde_clerk.check_clerk_text(text)`;
+- `uclrcde_core.open_uclrcde_db` and `uclrcde_core.LEGAL_INFORMATION_NOTICE`;
+- `uclrcde_ui.check_legal_ui_files`, `uclrcde_ui.build_screen_handlers` and `uclrcde_ui.handle_legal_request`.
+Import as `filing`, `sources`, `clerk`, `core` and `ui`.
+**Errors:** `ValueError` whose message starts with a `DC_` code.
+**Canary:** `Canary check: DRAFT = COMPLETE -> quill`.
+
+#### UI-2-01: QUESTION_SETS (source: NOV1 item 5, "preset question you can check as many as you like 1 to 10 questions at one and bar to add your own question"; "The beginning part means this. Such as history. The next part ... context. The next part is the remedy. And finally ... supporting documentation")
+Functions: `load_question_set(set_json: str) -> dict` and `pick_questions(question_set: dict, picked_ids: list, own_questions: list) -> dict`.
+Does: A question set is JSON text with exactly:
+- `set_id`, `title` (1–80 characters), `document_kind` (1–60 characters);
+- `written_by` (1–8 letters), `written_on`, `reviewed_by` (null or 1–8 letters);
+- `sections`: 1 to 6 sections, each `{"section_id", "heading", "meaning", "questions"}`, with `meaning` a plain line of at most 300 characters on what that part of a document is for;
+- the questions: 1 to 10 in the whole set, each `{"question_id", "text" (at most 300 characters), "required" (bool), "answer": "TEXT", "DATE", "YES_NO" or "LIST"}`.
+Every text passes the clerk check.
+
+`DEFAULT_QUESTION_SET` (set id `general-response`, kind `Response to a document`, written by `CLAUDE` on `2026-11-20`, not reviewed) has the Owner's four parts, with these eight questions:
+- **History** (`What happened, in date order.`):
+  - `H1` `What happened, in date order? Put one event on each line.` (LIST, required);
+  - `H2` `On what date did the most recent event happen?` (DATE, required).
+- **Context** (`Why this document is being made now.`):
+  - `C1` `Which document are you answering or starting, and when did you receive it?` (TEXT, required);
+  - `C2` `Which of its paragraphs do you agree with, disagree with, or not know about?` (TEXT, required).
+- **Remedy** (`What you are asking the court to order.`):
+  - `R1` `What are you asking the court to order?` (TEXT, required);
+  - `R2` `Is any part of what you ask for time-sensitive?` (YES_NO, optional).
+- **Supporting documents** (`Which documents show each point.`):
+  - `S1` `Which of your locked documents show each event? Write one per line as document id, a colon, then the exact words.` (LIST, required);
+  - `S2` `Do you have any document that is not locked yet?` (YES_NO, optional).
+
+`pick_questions` keeps the picked preset questions in set order (1 to all of them) and adds 0 to 10 of the person's own questions. Each own question is 1–300 characters and passes the clerk check. Own questions become `OWN1`, `OWN2` and so on, `TEXT`, required, in a last section `Your own questions`. Return `{"set_id", "document_kind", "sections", "question_count", "review_line"}`. The `review_line` is `NOT CHECKED: no person has reviewed this question set.` or `Reviewed by <x>.`
+Refuses: `DC_BAD_SET` (shape, more than 10 preset questions, a repeated id); `DC_BAD_PICK` (none picked, an unknown id, more than 10 own questions, an empty own question); `DC_NOT_CLERK`.
+Tests: `test_ui2_01_default_set_and_picking` (the default set loads with four sections and eight questions; picking `H1`, `C1`, `R1` and `S1` with one own question `What did the clerk say on the phone?` gives five questions, the last `OWN1`); `test_ui2_01_refuses_bad_sets_and_picks` (a set with 11 questions; a pick of `Z9`; eleven own questions; an own question `You should file now.`, which gives `DC_NOT_CLERK`).
+Done means: the person picks some or all of the preset questions, adds their own, and every question explains which part of the document it builds.
+Not checked: whether these eight questions suit every kind of document. A person can add sets; each says whether it was reviewed.
+
+#### UI-2-02: DRAFT_ANSWERS_COMPLETE_FIRST (source: NOV1 item 6, "You should finish all the questions first. Have it all complete")
+Function: `record_creator_draft(db_path: str, case_id: str, picked: dict, answers: dict, at: str) -> dict`.
+Does: `picked` is UI-2-01's result; `answers` maps question ids to values:
+- `TEXT`: 1–4,000 characters;
+- `DATE`: a real date, kept as the person entered it;
+- `YES_NO`: `YES` or `NO`;
+- `LIST`: 1–30 lines of at most 300 characters each.
+An unanswered question is simply missing. Keep a new version in the add-only table `dc_drafts(draft_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, version INTEGER NOT NULL, picked_json TEXT NOT NULL, answers_json TEXT NOT NULL, overrides_json TEXT NOT NULL, draft_sha256 TEXT NOT NULL, complete INTEGER NOT NULL, at TEXT NOT NULL, UNIQUE(case_id, version))`, with `overrides_json` `{}` and versions counting up per matter. `complete` is true when every required question has an answer. The person's own words are never refused for sounding like advice: each answer the clerk check would refuse gets a warning, `Question <id>: this reads like a prediction or advice. Courts expect facts. Change it if you can.` Return `{"draft_id", "version", "complete", "missing", "warnings"}`.
+Refuses: `DC_UNKNOWN_MATTER`; `DC_BAD_ANSWERS` (an unknown question id, or a value of the wrong kind); `DC_BAD_TIME`.
+Tests: `test_ui2_02_keeps_versions_and_reports_missing` (the made-up matter: answering only `H1` and `C1` gives version 1, not complete, with `H2`, `C2`, `R1` and `S1` missing; answering all required questions gives version 2, complete; an answer `You will win this case.` gives a warning and is kept); `test_ui2_02_refuses_wrong_kinds` (`H2` `next Friday`; `R2` `maybe`; question `Q99`; a time without an offset).
+Done means: nothing is half-finished by accident: the draft always says what is still missing, and every version is kept.
+Not checked: autosave timing on the phone; the screen saves on each "Save answers" tap.
+
+#### UI-2-03: PREVIEW_IN_LEGAL_FORM (source: NOV1 item 5, "a preview button that when you click it you'll see the document look just like it would originally be in legal form"; item 9, "live preview can be just a click button that is left closed by default")
+Function: `build_document_preview(db_path: str, draft_id: int) -> dict`.
+Does: Build the preview from a draft (any version, complete or not):
+- `blocks`, in order:
+  1. a `heading` from the matter: `<jurisdiction> · <court_level> · <matter_id>`;
+  2. a `title`: the matter's title;
+  3. a `kind`: the set's `document_kind`;
+  4. for each section with answers, a `section` block (its heading), then one numbered `paragraph` per answer (a `LIST` gives one paragraph per line), numbered 1, 2, 3 … through the whole document, with any `overrides_json` paragraph text in place of the answer;
+  5. a `signature` block, `Signed: ____________   Date: ____________`;
+  6. a `notice` block, `core.LEGAL_INFORMATION_NOTICE`.
+- `text`: the plain text of all blocks, and `text_sha256`.
+- `checks`:
+  - `filing.pre_filing_check(db_path, {"text": <text>, "doc_type": <document_kind>, "points": [{"point": <paragraph>, "authorities": []} for each paragraph]}, None)`;
+  - a `quote_checks` list for every `S1` line written `doc id: exact words`, from `sources.verify_quote_in_locked_document` (`FOUND` or `NOT FOUND`, never changed);
+  - `incomplete`: the missing required ids.
+- `print`: `{"paper": "8.5 x 11 in", "margins_in": 1, "font_pt": 12, "line_spacing": 1.5}`, used by the screen's print styles.
+- `preview_closed_by_default: True`.
+Nothing is sent and no file is written.
+Refuses: `DC_UNKNOWN_DRAFT`.
+Tests: `test_ui2_03_preview_numbers_paragraphs_and_checks_quotes` (a complete draft with `H1` of two lines and `S1` quoting a locked made-up document gives paragraphs 1 and 2 from `H1`, a `FOUND` quote check, a `NOT FOUND` one for a changed word, the notice as the last block, and a `text_sha256` that matches the text); `test_ui2_03_marks_incomplete_and_unknown` (an incomplete draft gives a preview with `incomplete` listing the missing ids; draft id 999 raises `DC_UNKNOWN_DRAFT`).
+Done means: one tap shows the document laid out like a court document, with its quotes and citations checked by code.
+Not checked: any court's exact form layout; prescribed forms are LS-J's job.
+
+#### UI-2-04: AI_REWORDING_HAND_OFF_AND_RETURN_CHECK (source: NOV1 item 4, "you automatically send it back reworded asking if they're ok with the suggested changes. Also include the reason ... why you made the changes"; item 6; W4, the AI switch OFF by default)
+Functions: `build_rewording_packet(db_path: str, draft_id: int, settings: dict) -> dict`, `check_returned_rewording(db_path: str, draft_id: int, returned_text: str) -> dict` and `accept_rewording(db_path: str, draft_id: int, accepted: list, at: str) -> dict`.
+Does: **The packet.** `settings` is `{}` or `{"ai_rewording": bool}`; the default is `False`.
+- Switch off: return `{"status": "OFF", "reason": "The AI switch is off. Nothing is prepared for an AI."}`.
+- Draft not complete: return `{"status": "BLOCKED", "reason": "Finish every required question first: <ids>."}`.
+- Otherwise return `{"status": "READY", "packet_text", "packet_sha256", "tokens_estimate", "ai_used": False}`. The packet is these lines, then the numbered paragraphs of UI-2-03:
+  - `Reword each numbered paragraph below in plain, respectful court language.`
+  - `Keep every fact, date, name, number and quoted word exactly as it is. Add nothing new.`
+  - `Keep the same numbers. After each paragraph write a line starting "Reason:" that says why you changed it, or "Reason: no change".`
+  - `Do not give legal advice or predict an outcome.`
+  The person copies it to a chat themselves; code never sends it.
+
+**The return check.** `check_returned_rewording` reads the reply: numbered paragraphs (`<n>. text`), each followed by a `Reason:` line. For each paragraph it returns `{"number", "original", "suggested", "reason", "changed", "flags"}`. The flags are:
+- `NO_REASON`;
+- `NEW_FACT`: a number, a date, a quoted phrase or a capitalised word in the suggestion that is not in the original;
+- `NOT_CLERK`: the clerk check would refuse it;
+- `MISSING`: a paragraph not returned;
+- `EXTRA`: a number not in the draft.
+`ready_to_accept` lists the numbers changed with no flags.
+
+**Accepting.** `accept_rewording` takes the numbers the person accepts (each must be ready to accept) and records a new draft version with those paragraphs in `overrides_json`. The answers are never changed.
+Refuses: `DC_BAD_SETTINGS`; `DC_UNKNOWN_DRAFT`; `DC_BAD_RETURN` (no numbered paragraph found); `DC_NOT_READY` (accepting a number that is not ready to accept).
+Tests: `test_ui2_04_switch_off_by_default_then_packet_and_check` (settings `{}` gives `OFF`; `{"ai_rewording": true}` on an incomplete draft gives `BLOCKED`; on a complete draft gives `READY` with the four instruction lines. A reply that rewords paragraph 1 with a reason is ready; one that adds `on 2026-01-09` to paragraph 2 is flagged `NEW_FACT`; one that drops paragraph 3 is `MISSING`. Accepting 1 gives a new version whose preview shows the new paragraph 1); `test_ui2_04_refuses_unready_accepts` (accepting 2 raises `DC_NOT_READY`; a reply `Looks good to me` raises `DC_BAD_RETURN`).
+Done means: AI help is the person's choice, starts only when everything is answered, and every suggested change comes back with its reason and a check that no fact was added.
+Not checked: how any chatbot answers the packet.
+
+#### UI-2-05: SAVE_PRINT_REMINDER_AND_CREATOR_SCREEN (source: NOV1 item 4, "There's a save button. And it saves it to the local drive. And automatically ask them if they want to set up a calendar reminder"; item 5, "a print pop option"; rules 15 and 16)
+Functions: `build_saved_copy(db_path: str, draft_id: int, at: str) -> dict`, `build_reminder_ics(title: str, on_date: str, note: str, made_at: str) -> dict` and `handle_screen_request(config: dict, request: dict) -> dict`.
+Does: **Saved copy.** `build_saved_copy` returns `{"file_name", "text", "text_sha256"}`. The file name is `<case_id>-v<version>.txt` with any character outside letters, digits, `.`, `_` and `-` replaced by `-`; the text is UI-2-03's. It records a receipt in the add-only table `dc_saved_copies(copy_id INTEGER PRIMARY KEY, draft_id INTEGER NOT NULL, text_sha256 TEXT NOT NULL, at TEXT NOT NULL)`. The browser saves the file (rule 16).
+
+**Reminder.** `build_reminder_ics` returns `{"file_name": "reminder.ics", "text"}`, an iCalendar text with CRLF line ends and lines folded at 75 octets:
+- `BEGIN:VCALENDAR`, `VERSION:2.0` and `PRODID:-//UCLRCDE//Legal workspace//EN`;
+- one all-day `VEVENT` with `UID:<first 16 hex of the SHA-256 of title|on_date|note>@uclrcde.local`, `DTSTAMP` from `made_at` in UTC, `DTSTART;VALUE=DATE:<YYYYMMDD>`, `DTEND;VALUE=DATE:` the next day, and `SUMMARY` and `DESCRIPTION` escaped by RFC 5545 (`\\`, `\;`, `\,`, `\n`);
+- a `VALARM` with `ACTION:DISPLAY` and `TRIGGER:-P1D`.
+`on_date` is a date the person entered, or a `COUNTED` last day passed through with its line in `note`.
+
+**The screen.** `handle_screen_request` answers, under `/api/legal/creator/`:
+- `GET sets` (the default set);
+- `POST pick`, `POST draft`;
+- `GET preview?draft_id=`;
+- `POST packet`, `POST return`, `POST accept`;
+- `POST save`, `POST reminder`.
+`ui/screen_creator.js` mounts on the Main tab:
+- the preset questions as checkboxes, with a box to add your own;
+- the answer fields, with each section's `meaning` shown above its questions;
+- a `Preview` panel inside `<details>`, closed by default, laid out with the `print` values;
+- `Print` (`window.print()`);
+- `Save a copy` (a browser download). After it, the question `Set a calendar reminder?`, with a date field and a `.ics` download;
+- the AI switch, shown with its state in words (`AI rewording: off`). When it is on: the packet with a `Copy` button, a box to paste the reply, and each suggestion with its reason and flags, accepted one by one.
+Refuses: `DC_UNKNOWN_DRAFT`; `DC_BAD_REMINDER` (an empty or over-200-character title, a date that is not real, a `made_at` without an offset); the handler gives 400 for a `ValueError` and 404 for an unknown path.
+Tests: `test_ui2_05_save_reminder_and_screen` (a saved copy's SHA-256 matches its text and one receipt row exists; a reminder for `2026-12-29` titled `File reply, part 2; check rule` holds `DTSTART;VALUE=DATE:20261229`, `DTEND;VALUE=DATE:20261230`, `SUMMARY:File reply\, part 2\; check rule` and `TRIGGER:-P1D`, and every line ends with CRLF; `ui.build_screen_handlers()` holds `creator`; `ui.check_legal_ui_files` gives `PASS` with `screen_creator.js`); `test_ui2_05_refuses_bad_reminders_and_paths` (date `2026-13-01`; an empty title; `GET /api/legal/creator/nothing` gives 404).
+Done means: the document creator lives on the main page, and the person can preview, print and save, then get a reminder in their own calendar.
+Not checked: whether the phone's calendar app opens `.ics` files from a download. Most Android calendar apps do; it is not tested here.
+
+---
+
+### Batch LS-L — Text blocks inside Form 2 and affidavits, page numbers and exhibit labels
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** this plan is merged. Needs nothing new. (It is placed after UI-2 in the build order only so that the screens come first.)
+**New files:** `code/uclrcde_blocks.py` and `code/test_uclrcde_blocks.py`. Test class `UclrcdeBatchLSLTests`.
+**Source:** W4 ("text blocks inside Form 2 and affidavits, built with made-up text, results labelled NOT CHECKED until reviewed"); the block review of 2026-11-19 (no wait for anyone's answer key); NOV1 item 3 (page numbers: "Add a notification if it isn't numbered to add numbers to the bottom right of the page"); W3 section 2 (an engine-neutral exhibit-label and page-order checker); LS-E's page rule (each form feed starts a page) and T41/T42 (the block map).
+**Reuse, by exact name:** `uclrcde_core.open_uclrcde_db`, `uclrcde_core.LEGAL_INFORMATION_NOTICE`. Import as `import uclrcde_core as core`.
+**Errors:** `ValueError` whose message starts with a `BL_` code.
+**Words used:** a *block* is one piece of a document: a heading, a numbered paragraph, a sub-paragraph, an exhibit stamp, a jurat (the "sworn before me" part), a page number or other text.
+**Canary:** `Canary check: BLOCKS = MAPPED -> mosaic`.
+
+#### LS-L-01: SPLIT_DOCUMENT_BLOCKS (source: T42; NOV1 item 3)
+Function: `split_document_blocks(text: str) -> dict`.
+Does: Page 1 starts at the beginning of the text, and each form feed (`\f`) starts the next page. Each line is classified on its stripped text, by the first rule that matches:
+1. `PAGE_NUMBER`: the last non-empty line of a page when it is only `<n>`, `Page <n>`, `- <n> -`, `<n> of <m>` or `Page <n> of <m>`;
+2. `EXHIBIT_STAMP`: starts with `This is Exhibit` (any case). Its label is the next word without quotes or punctuation (letters or digits);
+3. `JURAT`: holds `SWORN` or `AFFIRMED` and, later on the same line, `BEFORE ME` (any case);
+4. `PARAGRAPH`: starts with digits then `.` or `)` and a space, or with `(<digits>) `. The label is the number;
+5. `SUBPARAGRAPH`: starts with `(<one lowercase letter>) ` or `<one lowercase letter>) `. The label is the letter;
+6. `HEADING`: starts with `Part <n>`, or is 3 to 80 characters with at least one letter and no lowercase letter;
+7. anything else continues the block above it on the same page, or starts an `OTHER` block.
+A blank line ends a block. Each block is `{"block_id" (B001, B002 …), "kind", "label", "page", "start", "end", "text"}`, where `text == text_in[start:end]` exactly and `end` leaves out the line end.
+
+`exhibit_refs` lists every `Exhibit <label>` mention (with or without quotes) outside a stamp, with its block id. `pages` lists `{"page", "printed_number", "status"}`, where `status` is `OK`, `NO_NUMBER` or `WRONG_NUMBER` (the printed number is not the page's place in the file). `page_lines` holds one plain line per problem: `Page 3 has no page number. Add one at the bottom right.` or `Page 4 is numbered 5.`
+
+Return `{"blocks", "exhibit_refs", "pages", "page_lines", "text_sha256"}`. The function reads only the text it is given.
+Refuses: `BL_BAD_TEXT` for text that is not a `str`, is empty, or is over 2,000,000 characters.
+Tests: `test_lsl_01_splits_a_made_up_affidavit` (a made-up affidavit of `Jane Roe` on three pages:
+- page 1: the heading `AFFIDAVIT`; paragraph 1; paragraph 2 holding `attached as Exhibit "A"`; sub-paragraph `(a)`; a `SWORN BEFORE ME at Synthville` line; and the page number `1`;
+- page 2: `This is Exhibit "A" referred to in the affidavit of Jane Roe` and `2`;
+- page 3: some text and no number.
+It gives the kinds in that order, one exhibit reference `A`, the stamp label `A`, page 3 `NO_NUMBER` with its line, and `text[start:end] == block["text"]` for every block); `test_lsl_01_rejects_bad_text_and_flags_wrong_numbers` (bytes and the empty string raise `BL_BAD_TEXT`; two pages numbered `1` and `3` give page 2 `WRONG_NUMBER`).
+Done means: any locked text can be cut into blocks whose offsets point at its exact words, and missing or wrong page numbers are reported in plain words.
+Not checked: real BC Form 2 and affidavit layouts. The rules work on plain text; messier layouts may need more rules later.
+
+#### LS-L-02: RECORD_BLOCK_MAP (source: T41/T42; locked originals, LS-A)
+Functions: `record_block_map(db_path: str, case_id: str, doc_id: str, form_kind: str) -> dict` and `list_blocks(db_path: str, map_id: str, kind: str | None = None) -> dict`.
+Does: `form_kind` is `FORM_2`, `AFFIDAVIT` or `OTHER`. Read the locked original from `source_documents` through `core.open_uclrcde_db`. It must belong to `case_id`, and the SHA-256 of its `raw_text` must equal its stored `sha256`. Split it with LS-L-01.
+
+The map id is `<doc_id>:<first 12 hex of the text's SHA-256>:<form_kind>`. Keep the map in the add-only table `bl_block_maps(map_id TEXT PRIMARY KEY, case_id TEXT NOT NULL, doc_id TEXT NOT NULL, form_kind TEXT NOT NULL, text_sha256 TEXT NOT NULL, blocks_json TEXT NOT NULL, pages_json TEXT NOT NULL, refs_json TEXT NOT NULL, recorded_at TEXT NOT NULL)`. Recording the same map again returns `ALREADY_RECORDED`.
+
+Return `{"status", "map_id", "block_count", "kinds" (a count per kind), "page_lines", "review_line"}`. Until LS-L-05 records a review, `review_line` is `NOT CHECKED: no person has reviewed this block map.` `list_blocks` returns `{"map_id", "doc_id", "form_kind", "blocks", "review_line"}`, filtered by kind when one is given.
+Refuses: `BL_UNKNOWN_DOC` (not a locked document of this matter); `BL_TAMPERED` (the stored hash does not match the text); `BL_BAD_KIND`; `BL_UNKNOWN_MAP`.
+Tests: `test_lsl_02_maps_a_locked_document_once` (a temporary database with the made-up matter and the made-up affidavit locked as `SYNTH-AFF-1`: recording gives `RECORDED` with the same block count as `split_document_blocks` gives for that text, and the NOT CHECKED line; again gives `ALREADY_RECORDED`; `list_blocks(..., "PARAGRAPH")` gives the two paragraphs); `test_lsl_02_refuses_unknown_or_tampered_documents` (doc `SYNTH-NONE`; a document whose row a plain `sqlite3` connection changed, as `test_uclrcde_p0_search.py` does, which gives `BL_TAMPERED`; kind `LETTER`).
+Done means: every block points into a locked, untouched original, and every map says plainly that no person has checked it yet.
+Not checked: the speed on very long documents (2,000,000 characters is the cap; NOT CHECKED until built).
+
+#### LS-L-03: CHECK_FORM_2_AND_AFFIDAVIT_STRUCTURE (source: T42; old INST-0177's exhibit order)
+Function: `check_block_map(db_path: str, map_id: str, outline: list | None = None) -> dict`.
+Does: Check a recorded map by its kind. Each problem is `{"code", "line", "block_id"}`:
+- **Every kind:**
+  - `PAGE_NUMBER`, for each page problem from LS-L-01;
+  - `PARA_GAP` or `PARA_REPEAT`, when the numbered paragraphs do not run 1, 2, 3 … in order.
+- **AFFIDAVIT:**
+  - `NO_JURAT`, when no jurat follows the last numbered paragraph;
+  - `REF_WITHOUT_STAMP`, for each exhibit reference with no stamp of the same label;
+  - `STAMP_NOT_REFERENCED`, for each stamp no paragraph mentions;
+  - `STAMP_ORDER`, when the stamp labels do not run A, B, C … or 1, 2, 3 … in page order.
+- **FORM_2:** `outline` is required: a list of 1 to 20 headings the form must hold, in order (the person or LS-J gives them, because the real Form 2 layout is NOT CHECKED). The codes are `MISSING_PART` (a heading not found as a `HEADING` block) and `PART_ORDER` (found out of order).
+- **OTHER:** the common checks only.
+Return `{"status": "OK" or "PROBLEMS", "problems", "review_line", "notice"}`.
+Refuses: `BL_UNKNOWN_MAP`; `BL_BAD_OUTLINE` (a `FORM_2` map without an outline, an outline on another kind, or an outline outside its shape).
+Tests: `test_lsl_03_checks_affidavit_and_form_2` (the made-up affidavit gives `OK`. A version whose paragraph 2 mentions Exhibit B with no B stamp gives `REF_WITHOUT_STAMP`. A made-up Form 2 text with `Part 1` and `Part 3`, checked with outline `["Part 1", "Part 2", "Part 3"]`, gives `MISSING_PART` for `Part 2`); `test_lsl_03_rejects_bad_outline` (a `FORM_2` map with no outline; an outline of 21 headings).
+Done means: the engine catches a missing jurat, an unstamped exhibit, a skipped paragraph number or a missing part before anything is filed.
+Not checked: what each real form requires. That comes from LS-J's form templates or a person's outline.
+
+#### LS-L-04: EXHIBIT_LABEL_AND_PAGE_ORDER_CHECKER (source: W3 section 2, "What can be worded now anyway, as engine-neutral plain code"; NOV1 item 3, "OCR cannot miss anything")
+Function: `check_scanned_pages(pages: list, settings: dict) -> dict`.
+Does: `pages` is the output of any OCR engine (Tesseract, PaddleOCR, RapidOCR …), turned by the caller into a list in scanning order of `{"page_index" (1, 2, 3 … in order), "lines": [{"text", "confidence" (a number from 0 to 1, or null), "kind" ("TEXT", "HANDWRITING", "STAMP" or "PICTURE")}]}`. `settings` is `{}` or `{"min_confidence": <0.5–0.99>}` (default 0.8). It returns:
+- `labels`: every `This is Exhibit <label>` line, with its page;
+- `needs_a_person`: `{"page_index", "line_no", "reason"}` for each of these:
+  - a line under the confidence line (`low confidence 0.42`);
+  - a line with no confidence (`confidence not given`);
+  - a `HANDWRITING`, `STAMP` or `PICTURE` line (`handwriting: check it by eye`, and so on). W3 found no engine that reads handwriting reliably, so a handwritten mark is shown to a person, never read as fact;
+  - a page with no lines (`no text on this page`);
+- `pages`: LS-L-01's page-number check, on the last line of each page;
+- `text`: the pages' text joined with form feeds, ready to lock with `core.ingest_and_lock_legal_source_document` once the person has checked it;
+- `engine`: `none: this checker reads any engine's lines`;
+- `"ai_used": False`.
+Refuses: `BL_BAD_PAGES` (a page index out of order or repeated, a confidence outside 0–1, an unknown kind, more than 2,000 pages); `BL_BAD_SETTINGS`.
+Tests: `test_lsl_04_finds_labels_and_lines_for_a_person` (three made-up pages: page 2 holds `This is Exhibit "C"` and a stamp line; page 3 holds a line with confidence 0.42. This gives the label `C` on page 2, and `needs_a_person` holding the stamp and the 0.42 line); `test_lsl_04_rejects_bad_page_lists` (page indexes 1, 3; confidence 1.5; kind `BARCODE`; `min_confidence` 0.2).
+Done means: whatever OCR the phone ends up using, labels and page order are checked by plain code, and anything uncertain is shown to a person.
+Not checked: any OCR engine itself (W3 says the engine choice is not ready).
+
+#### LS-L-05: BLOCK_MAP_REVIEW (source: rule 18; W4 "results labelled NOT CHECKED until reviewed")
+Functions: `record_block_review(db_path: str, map_id: str, review: dict) -> dict` and `get_block_review(db_path: str, map_id: str) -> dict`.
+Does: A review is exactly `{"reviewed_by" (1–8 letters), "reviewed_on" (a real date), "decision" ("CONFIRMED" or "CORRECTIONS_NEEDED"), "note" (0–500 characters)}`. Keep it in the add-only table `bl_block_reviews(review_id INTEGER PRIMARY KEY, map_id TEXT NOT NULL, review_json TEXT NOT NULL, review_sha256 TEXT NOT NULL UNIQUE, recorded_at TEXT NOT NULL)`; a repeat returns the existing id. The newest review is current. A review never changes a block. `get_block_review` returns `{"map_id", "review_line", "reviews"}`. The `review_line` is:
+- `Reviewed by <x> on <date>: confirmed.`;
+- `Reviewed by <x> on <date>: corrections needed: <note>`; or
+- `NOT CHECKED: no person has reviewed this block map.`
+LS-L-02 and LS-L-03 use the same line.
+Refuses: `BL_UNKNOWN_MAP`; `BL_BAD_REVIEW`.
+Tests: `test_lsl_05_review_changes_only_the_label` (before a review, `list_blocks` shows the NOT CHECKED line; after `CONFIRMED` by `JR` on `2026-11-20`, it shows `Reviewed by JR on 2026-11-20: confirmed.` and the same blocks; a later `CORRECTIONS_NEEDED` becomes current); `test_lsl_05_rejects_bad_reviews` (`reviewed_by` `J1`; decision `OK`; an unknown map).
+Done means: a block map is usable at once and says honestly whether a person has checked it.
+Not checked: who the reviewer should be; anyone may review, and every review keeps its initials.
+
+---
+
+### Batch LS-J — BC court forms from prescribed regulation text: fill in, preview and print
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** UI-1 and UI-2 are merged.
+**New files:** `code/uclrcde_ui_forms.py`, `code/test_uclrcde_ui_forms.py`, `ui/screen_forms.js`. Test class `UclrcdeBatchLSJTests`. `SCREEN_ID = "forms"`.
+**Source:** W3 section 1 (R3: "Ready for wording? YES (facts usable)"), the King's Printer Licence clauses 2.1, 2.2, 3.3, 4.1(d), 5.1 and 8.1(a), and Supreme Court Civil Rules 22-3(1), (2), (4) and (5), all read 2026-11-19; old INST-0173.
+**Reuse, by exact name:**
+- `uclrcde_sources.verify_quote_in_locked_document(db_path, doc_id, quote)`;
+- `uclrcde_oracle.BC_KPL_STATEMENT`;
+- `uclrcde_evidence.check_kpl_statement(candidate_text)`, in tests;
+- `uclrcde_clerk.check_clerk_text(text)`;
+- `uclrcde_core.open_uclrcde_db` and `uclrcde_core.LEGAL_INFORMATION_NOTICE`;
+- `uclrcde_ui.check_legal_ui_files`, `uclrcde_ui.build_screen_handlers` and `uclrcde_ui.handle_legal_request`.
+Import as `sources`, `oracle`, `evidence`, `clerk`, `core` and `ui`.
+**Errors:** `ValueError` whose message starts with an `FM_` code.
+**The licence limits, built in:**
+- forms are built only from wording a regulation prescribes, found word for word in a locked copy of the regulation;
+- the Province's own fillable files are never copied or bundled (8.1(a)); the screen only shows their page address as text, for the person to open themselves;
+- the clause 3.3 statement (`oracle.BC_KPL_STATEMENT`) is shown once in every copy;
+- no BC logo, crest or symbol (4.1(d)), and no word that claims or suggests official status (5.1).
+**Canary:** `Canary check: FORM = PRESCRIBED -> stencil`.
+
+#### LS-J-01: LOAD_FORM_TEMPLATE (source: W3 R3, "May: take a form's prescribed wording and layout from the regulation text")
+Function: `load_form_template(template_json: str) -> dict`.
+Does: A form template is JSON text with exactly:
+- `form_id` (1–64 letters, digits, `.`, `_` or `-`) and `title` (1–120 characters);
+- `court` (`BC_SUPREME`, `BC_PROVINCIAL` or `OTHER`);
+- `regulation_name` (1–160 characters, for example `Supreme Court Civil Rules, B.C. Reg. 168/2009`) and `form_number` (1–20 characters);
+- `regulation_doc_id` (the locked copy of the regulation text);
+- `source_url` (`https` on `www.bclaws.gov.bc.ca` or `free.bcpublications.ca`) and `official_page_url` (`https` on `www2.gov.bc.ca`, or null);
+- `written_by` (1–8 letters), `written_on`, and `reviewed_by` (null or 1–8 letters);
+- `parts`: 1 to 200, each either `{"kind": "PRESCRIBED", "text"}` (1–2,000 characters) or `{"kind": "FIELD", "field_id", "label", "answer": "TEXT", "DATE" or "LIST", "required"}`.
+Every field label passes the clerk check. No text may hold the words `official version`, `official form`, `endorsed` or `approved by the Province`, in any case (licence 5.1). Return `{"status": "OK", "template", "template_sha256", "field_ids"}`.
+Refuses: `FM_BAD_TEMPLATE` (shape, a repeated field id, an address on another host); `FM_CLAIMS_OFFICIAL`; `FM_NOT_CLERK`.
+Tests: `test_lsj_01_loads_a_made_up_template` (a made-up template, `SYNTH-FORM-99` from the made-up `SYNTH Court Rules`, with two prescribed parts and three fields, loads with field ids in order); `test_lsj_01_refuses_official_claims_and_bad_hosts` (a part reading `This is the official form`; `source_url` on `example.com`; two fields with id `F1`).
+Done means: a form is described in plain JSON that any person can read and check.
+Not checked: the real Appendix A form pages (W3 read Rule 22-3 only). Real templates come from a person reading the regulation; each says whether it was reviewed.
+
+#### LS-J-02: RECORD_FORM_TEMPLATE (source: W3 R3, "LS-J builds forms only from prescribed regulation text ... records its source regulation and form number"; licence 8.1(a))
+Function: `record_form_template(db_path: str, template_json: str) -> dict`.
+Does: Load the template with LS-J-01. Check that the regulation document is locked, and that every `PRESCRIBED` text is found word for word in it by `sources.verify_quote_in_locked_document` (`verified` true). Keep the template in the add-only table `fm_templates(row_id INTEGER PRIMARY KEY, form_id TEXT NOT NULL, template_json TEXT NOT NULL, template_sha256 TEXT NOT NULL UNIQUE, recorded_at TEXT NOT NULL)`; the newest row of a form is current. Return `{"status": "RECORDED" or "ALREADY_RECORDED", "form_id", "licence_lines", "review_line"}`. `licence_lines` are, in order:
+1. `Built from the prescribed wording in <regulation_name>, <form_number>, under the King's Printer Licence – British Columbia. This is not an official version.`
+2. For `BC_PROVINCIAL`: `NOT CHECKED: whether this Provincial Court form is prescribed in its regulation's text.`
+3. Always: `NOT CHECKED: the BC Laws "Important Information" page and the King's Printer Licence disagree about reproduction; a one-line question to the Province's Intellectual Property Program would settle it.`
+`review_line` is `NOT CHECKED: no person has reviewed this form template.` or `Reviewed by <x>.`
+Refuses: `FM_UNKNOWN_REGULATION` (the regulation document is not locked); `FM_NOT_PRESCRIBED` (a prescribed text not found, naming its part number); the refusals of LS-J-01.
+Tests: `test_lsj_02_records_only_prescribed_wording` (the made-up regulation locked as `SYNTH-REG-1` and holding both prescribed texts gives `RECORDED` with the first and third licence lines; a `BC_PROVINCIAL` copy also has the second); `test_lsj_02_refuses_wording_not_in_the_regulation` (a prescribed part with one word changed raises `FM_NOT_PRESCRIBED` for its part; an unlocked regulation id raises `FM_UNKNOWN_REGULATION`).
+Done means: no form text reaches the person unless the regulation says it, word for word.
+Not checked: which current regulation text is in force on a given day. The person locks the copy they read, and the template keeps its address.
+
+#### LS-J-03: FILL_FORM (source: W3 R3, "Let the person fill it in"; Supreme Court Civil Rule 22-3(5), headed with the style of proceeding)
+Function: `fill_form(db_path: str, form_id: str, case_id: str, answers: dict, at: str) -> dict`.
+Does: Use the current template. Answers are checked by kind as in UI-2-02 (`TEXT` up to 4,000 characters, `DATE` a real date, `LIST` 1–30 lines). The heading is the matter's title, labelled `Style of proceeding (as you entered it)`. The prescribed texts are kept exactly; each field's answer goes in its place; a missing field shows `________`. Answers the clerk check would refuse get UI-2-02's warning and are kept. Keep each fill as a new version in the add-only table `fm_filled(filled_id INTEGER PRIMARY KEY, form_id TEXT NOT NULL, template_sha256 TEXT NOT NULL, case_id TEXT NOT NULL, version INTEGER NOT NULL, answers_json TEXT NOT NULL, complete INTEGER NOT NULL, at TEXT NOT NULL, UNIQUE(case_id, form_id, version))`. Return `{"filled_id", "version", "complete", "missing", "warnings", "blocks"}`; each block is `{"kind": "HEADING", "PRESCRIBED" or "FIELD", "text"}`.
+Refuses: `FM_UNKNOWN_FORM`; `FM_UNKNOWN_MATTER`; `FM_BAD_ANSWERS`; `FM_BAD_TIME`.
+Tests: `test_lsj_03_fills_fields_and_keeps_prescribed_text` (answers for two of three fields give `complete` false with one missing; the prescribed blocks equal the template's texts exactly; a second fill gives version 2); `test_lsj_03_refuses_bad_answers` (an unknown field `F9`; a `DATE` field answered `soon`; an unknown matter).
+Done means: the person fills in a form whose fixed wording can never change by accident.
+Not checked: whether "the latest originating pleading" heading (22-3(5)) matches the matter title; the person enters it.
+
+#### LS-J-04: PRINT_LAYOUT_WITH_LICENCE_STATEMENT (source: Supreme Court Civil Rule 22-3(2) and (4); King's Printer Licence 3.3, 4.1(d), 5.1)
+Function: `build_form_print(db_path: str, filled_id: int) -> dict`.
+Does: Return `{"blocks", "text", "text_sha256", "print", "licence_lines", "official_page_line", "notice"}`:
+- `blocks` and `text`: the fill's blocks, then `oracle.BC_KPL_STATEMENT` once as its own block, then the notice. The statement appears exactly once.
+- `print`: `{"paper": "8.5 x 11 in", "colour": "black on white", "first_page_blank_cm": 5, "margins_cm": 2.5}` for `BC_SUPREME`, from 22-3(2) and 22-3(4), a blank area at least 5 cm from the top and the left edge of page 1. For other courts, `first_page_blank_cm` is null and the line `NOT CHECKED: this court's paper and margin rules.` is added.
+- `official_page_line`: `The government's own fillable file is on its court forms page: <official_page_url>. Open it there yourself if you want the official file.`, or null.
+No logo, crest or image is ever part of the layout.
+Refuses: `FM_UNKNOWN_FILL`.
+Tests: `test_lsj_04_prints_with_the_statement_once` (the `BC_SUPREME` made-up fill gives `first_page_blank_cm` 5; `evidence.check_kpl_statement` on the statement block gives `VERBATIM_OK`; the statement appears exactly once in `text`; no heading, prescribed or field block holds the word `official`); `test_lsj_04_marks_unchecked_courts` (an `OTHER` fill gives `first_page_blank_cm` None and the NOT CHECKED line; filled id 999 raises `FM_UNKNOWN_FILL`).
+Done means: a printed form meets the Supreme Court's paper rule and the licence's attribution rule, and never looks official.
+Not checked: Provincial Court paper rules (W3 did not read them).
+
+#### LS-J-05: FORMS_SCREEN (source: rules 13–16)
+Function: `handle_screen_request(config: dict, request: dict) -> dict`.
+Does: Under `/api/legal/forms/`:
+- `GET templates` (current templates with their licence and review lines);
+- `POST template` (`{"template_json"}`, LS-J-02);
+- `POST fill` (LS-J-03);
+- `GET print?filled_id=` (LS-J-04);
+- `POST save` (`{"filled_id", "at"}`): the print text as a browser download (rule 16), with a receipt in the add-only table `fm_saved_copies(copy_id INTEGER PRIMARY KEY, filled_id INTEGER NOT NULL, text_sha256 TEXT NOT NULL, at TEXT NOT NULL)`.
+`ui/screen_forms.js` mounts on the Legal prep tab: a form picker; the fields with labels; a preview inside `<details>`, closed by default, with print styles from `print`; `Print`; `Save a copy`; and the licence lines and official-page line as plain text, never as links.
+Refuses: the handler gives 400 for a `ValueError` and 404 for an unknown path.
+Tests: `test_lsj_05_forms_screen_plugs_in` (`ui.build_screen_handlers()` holds `forms`; `ui.check_legal_ui_files` gives `PASS` with `screen_forms.js`; `POST fill` then `GET print` through `ui.handle_legal_request` gives 200 and the statement once); `test_lsj_05_refuses_bad_requests` (`GET /api/legal/forms/print?filled_id=abc` gives 400; an unknown path gives 404).
+Done means: the person fills and prints a form inside the one page, within the licence.
+Not checked: how the browser's print matches 8½ × 11 on the Owner's printer.
+
+---
+
+### Batch UI-3 — Question and research generators, help guide, and the printable "did we check everything" checklist
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** UI-1, UI-4 and UI-2 are merged.
+**New files:** `code/uclrcde_ui_guide.py`, `code/test_uclrcde_ui_guide.py`, `ui/screen_guide.js`. Test class `UclrcdeBatchUI3Tests`. `SCREEN_ID = "guide"`.
+**Source:** NOV1 items 5, 9 and 10 (the Owner's words); FEATURE_LEDGER_v2 U11 and U12; ledger Q046 (plain code first).
+**Reuse, by exact name:**
+- `uclrcde_answer_gate.run_search_request(db_path, case_id, request, settings, web_fn)` and `uclrcde_answer_gate.label_answer(db_path, case_id, search_result, answer)`;
+- `uclrcde_ui_route.build_route_view`, `uclrcde_ui_route.list_service_proofs` and `uclrcde_ui_route.build_filing_guide`;
+- `uclrcde_ui_creator.build_document_preview`;
+- `uclrcde_ui.build_checklist_state`, `uclrcde_ui.record_checklist_event`, `uclrcde_ui.check_legal_ui_files`, `uclrcde_ui.build_screen_handlers` and `uclrcde_ui.handle_legal_request`;
+- `uclrcde_clerk.check_clerk_text`;
+- `uclrcde_core.open_uclrcde_db` and `uclrcde_core.LEGAL_INFORMATION_NOTICE`.
+Import as `answer_gate`, `route`, `creator`, `ui`, `clerk` and `core`.
+**Errors:** `ValueError` whose message starts with a `GD_` code; `BR_`, `RT_` and `PE_` errors pass through unchanged.
+**Canary:** `Canary check: QUESTIONS = TEN -> prism`.
+
+#### UI-3-01: QUESTION_GENERATOR (source: NOV1 item 9, "You should be able to copy a paragraph into a box. Click generate. An out pops 10 questions ... Is it the whole proceeding or just the current notice that you're dealing with. Or other"; item 5)
+Function: `generate_questions(paragraph: str, scope: str, scope_note: str | None = None) -> dict`.
+Does: `paragraph` is 1–6,000 characters. `scope` is `WHOLE_PROCEEDING`, `CURRENT_NOTICE` or `OTHER`; `OTHER` needs a `scope_note` of 1–60 characters. Plain code finds these things, each found thing giving its question:
+- a date written `YYYY-MM-DD` or `<Month> <d>, <yyyy>` (English month names) → `What happened on <date>, and which document shows it?`;
+- `within <n> days`, `<n> days after` or `<n> days before` → `From which day do the <n> days count, and what is the last day? Count it with the court-day table, never by guess.`;
+- a document word from `DOCUMENT_WORDS` = (`notice of application`, `notice of claim`, `notice of hearing`, `affidavit`, `application`, `order`, `reply`, `response`, `subpoena`, `judgment`, `appeal`, `summons`), longest match first and case-insensitive → `Do you have a copy of the <word>, and is it locked in the engine?`;
+- a money amount `$<digits, commas and cents>` → `What is the <amount> for, and which document proves it?`;
+- `paragraph <n>` or `para <n>` → `What does paragraph <n> say, and do you agree, disagree or not know?`;
+- a party word (`claimant`, `respondent`, `applicant`, `defendant`, `plaintiff`, `appellant`, `petitioner`) → `What does the <party> say happened, and what do you say?`.
+Questions are in order of first appearance in the paragraph, without repeats, and at most 10. Each ends with the scope: ` (whole proceeding)`, ` (current notice)` or ` (<scope_note>)`. When nothing is found, give two questions: `What is this paragraph asking you to do?` and `Which document is this paragraph from?`. Return `{"questions": [{"id": "Q1" …, "text", "why" (the words that matched)}], "found_nothing", "ai_used": False}`. The person ticks some or all and adds their own on the screen.
+Refuses: `GD_BAD_PARAGRAPH`; `GD_BAD_SCOPE`.
+Tests: `test_ui3_01_generates_ten_or_fewer_from_a_paragraph` (the made-up paragraph `On 2026-03-02 the claimant served a notice of application asking for $1,250.00. A reply is due within 14 days. See paragraph 7.` with `CURRENT_NOTICE` gives, in order, the date, party, document (`notice of application`), money, document (`reply`), days and paragraph questions, each ending ` (current notice)`; a paragraph of 40 dates gives exactly 10); `test_ui3_01_falls_back_and_refuses` (`Thank you.` gives the two fallback questions; scope `OTHER` without a note and an empty paragraph each raise their code).
+Done means: a pasted paragraph turns into the questions the person probably needs, by plain code a person can review.
+Not checked: whether these templates cover most court papers; more can be added later.
+
+#### UI-3-02: RESEARCH_GENERATOR_INTO_THE_ANSWER_GATE (source: NOV1 item 9, "a research generator as well ... research questions. Case law. Deeper analysis"; BR-1)
+Functions: `generate_research_questions(paragraph: str, scope: str, scope_note: str | None = None) -> dict` and `run_research_question(db_path: str, case_id: str, request: dict, settings: dict) -> dict`.
+Does: **Terms.** The terms are the document words found by UI-3-01's rules (party words are left out), every phrase in double quotes (2–80 characters), and every run of two to six capitalised words ending in `Act`, `Rules` or `Regulation`. They are in order of first appearance, without repeats.
+
+**Questions.** For each term, in this order until there are 10 questions, `generate_research_questions` gives one question from each of these categories, each with the scope ending of UI-3-01:
+- `LEGISLATION`: `Which rule or section sets out the <term>?`;
+- `PROCEDURE`: `What are the steps for a <term>, and in what order?`;
+- `CASE_LAW`: `Which decisions in your locked library discuss the <term>?`;
+- `DEEPER`: `What does a <term> have to show?`.
+Each question carries a BR-1 request `{"question": <text>, "phrases": [<term>]}` and `why`. Every generated text passes `clerk.check_clerk_text`.
+
+**Running one.** `run_research_question` sends one such request to `answer_gate.run_search_request(db_path, case_id, request, settings, None)` and then `answer_gate.label_answer(db_path, case_id, <that result>, None)`. It returns `{"label", "reasons", "hits", "web_step", "notice", "ai_used": False}`. With the web step OFF (the default), the label comes from locked originals and signed terms only.
+Refuses: `GD_BAD_PARAGRAPH`; `GD_BAD_SCOPE`; `BR_` errors unchanged.
+Tests: `test_ui3_02_research_questions_feed_br1` (the paragraph above gives `LEGISLATION` first for `notice of application`, each with a BR-1 request. On a temporary database with the made-up matter and a locked made-up document that holds `notice of application`, `run_research_question` gives a `label` that is one of `answer_gate.ANSWER_LABELS`, with reasons); `test_ui3_02_refuses_bad_requests` (a request without `phrases` raises `BR_BAD_REQUEST`; scope `SOME` raises `GD_BAD_SCOPE`).
+Done means: the research generator hands its questions straight to the main brain's search, and every answer comes back with exactly one label.
+Not checked: web research. BR-1's web step stays OFF and BLOCKED until a later batch.
+
+#### UI-3-03: HELP_GUIDE (source: NOV1 item 5, "a help guide ... showing where you find the documents. How you copy and paste it. A little instructional list about the typical procedure ... history ... context ... remedy ... supporting documentation")
+Function: `build_help_guide(db_path: str, case_id: str | None = None, map_id: str | None = None) -> dict`.
+Does: Return `{"sections": [{"heading", "lines"}], "notice"}`, with these sections:
+1. `How a court document is built`. Four lines, the Owner's four parts:
+   - `History: what happened, in date order.`
+   - `Context: why this document is being made now, and what it answers.`
+   - `Remedy: what you are asking the court to order.`
+   - `Supporting documents: the documents that show each point.`
+2. `Where your documents are in this app`: `Cases by type` → your matter → its locked documents; and `Lock a document before you quote it, so its words can be checked.`
+3. `How to copy a paragraph into a box`: `Press and hold on the text.` `Drag the handles to choose the paragraph.` `Tap Copy.` `Press and hold in the box, then tap Paste.`
+4. `The usual order of steps for your case`. With `case_id` and `map_id`: the step names of the map in order, from `route.build_route_view`, with the map's review line. Otherwise: `Open the court route to see the steps for your case.`
+5. `Before you file`: `Run the "did we check everything" list below and print it.`
+Nothing here states a rule of law.
+Refuses: `PE_` and `RT_` errors unchanged when ids are given.
+Tests: `test_ui3_03_guide_has_the_owners_four_parts` (without ids: five sections, and the first has the four lines in order; with the UI-4 made-up map: section 4 lists `Start of claim`, `Reply filed`, `Hearing` and the review line); `test_ui3_03_passes_route_errors` (an unknown map raises `PE_UNKNOWN_MAP`).
+Done means: the help guide on the page explains how a document is built and where everything is, in plain words.
+Not checked: pictures and video (NOV1 item 5 asked for "pictures or a video"). This batch gives text steps; pictures need a later batch.
+
+#### UI-3-04: DID_WE_CHECK_EVERYTHING (source: NOV1 item 10, "a checklist ... Did we review everything. From beginning to end. Did we go through the whole process ... Did everything get filed properly ... And a print off form"; item 15, "verify that the AI followed all the steps")
+Function: `build_check_everything(db_path: str, case_id: str, map_id: str | None = None) -> dict`.
+Does: The checklist `check-everything`, scope the matter, through `ui.build_checklist_state` over seven base items. Each item has a person tick and, where code can see evidence, a `code_check` of `YES`, `NO` or `NOT CHECKED` with an `evidence` line:
+1. `E1` `We reviewed every document from beginning to end.`: person only;
+2. `E2` `Every step of the court route is done and proven.`: `YES` when `route.build_route_view` gives `all_steps_checked`; `NOT CHECKED` without a map;
+3. `E3` `Every deadline came from the court-day table.`: `NO` when any `route.build_filing_guide` deadline for the current or a later step is `NOT_CHECKED`;
+4. `E4` `Everything was filed, with a filing receipt or registry stamp.`: person only;
+5. `E5` `Every service is recorded.`: `YES` when `route.list_service_proofs` has a proof for each done step whose notes list a service method;
+6. `E6` `Every quote in our newest document was found word for word.`: `YES` when every quote check of the newest document creator draft for the matter (read from `dc_drafts`, built with `creator.build_document_preview`) is `FOUND`; `NOT CHECKED` with no draft;
+7. `E7` `Duty counsel, legal aid or a lawyer was offered a look.`: person only.
+A code `NO` never ticks or unticks the person's box: both are shown. `print_text` adds each code check after its line. Return `{"items", "done_count", "total", "code_checks_yes", "print_text", "notice"}`.
+Refuses: `GD_UNKNOWN_MATTER`; `PE_` and `RT_` errors unchanged.
+Tests: `test_ui3_04_shows_code_evidence_beside_ticks` (with the UI-4 fixture, `S1` done and proven and `S2` not done: `E2` is `NO`; with no creator draft, `E6` is `NOT CHECKED`; ticking `E1` gives `done_count` 1 and a `[x]` line holding `E1`'s text); `test_ui3_04_refuses_unknown_matter` (`MATTER-SYNTH-9999`).
+Done means: the person checks the whole case from beginning to end, and sees what code could prove beside each tick.
+Not checked: whether something was really filed at the registry; that is the person's tick.
+
+#### UI-3-05: GUIDE_SCREEN (source: NOV1 items 5 and 9, "That should be somewhere on the main page"; rules 13–16)
+Function: `handle_screen_request(config: dict, request: dict) -> dict`.
+Does: Under `/api/legal/guide/`: `POST questions`; `POST research`; `POST run_research`; `GET guide?case_id=&map_id=`; `GET check?case_id=&map_id=`; and `POST checklist` (UI-1's event). `ui/screen_guide.js` mounts on the Legal prep tab:
+- a paragraph box with a `Generate` button and the scope choice (`Whole proceeding`, `Current notice`, `Other`, with a note box);
+- the generated questions as checkboxes, with `Select all` and a box to add your own;
+- the research questions, each with a `Search` button that shows the label and reasons;
+- the help guide sections;
+- the "did we check everything" list with its ticks, code checks, `Print` and `Save a copy`.
+Refuses: the handler gives 400 for a `ValueError` and 404 for an unknown path.
+Tests: `test_ui3_05_guide_screen_plugs_in` (`ui.build_screen_handlers()` holds `guide`; `ui.check_legal_ui_files` gives `PASS` with `screen_guide.js`; `POST /api/legal/guide/questions` through `ui.handle_legal_request` gives 200 with questions); `test_ui3_05_refuses_bad_requests` (a body without `paragraph` gives 400; an unknown path gives 404).
+Done means: the generators and the help guide are always on the page, as the Owner asked.
+Not checked: the plain-language level of the generated questions (CMP-08).
+
+---
+
+### Batch UI-5 — Hidden lawyer-review panel, two-sided issue table, numbered exhibit book, case binder, and the cross-link importance trigger
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** UI-1, UI-4 and LS-L are merged.
+**New files:** `code/uclrcde_ui_review.py`, `code/test_uclrcde_ui_review.py`, `ui/screen_review.js`. Test class `UclrcdeBatchUI5Tests`. `SCREEN_ID = "review"` (the hidden side panel).
+**Source:** NOV1 items 6, 7 and 8 (the Owner's words); FEATURE_LEDGER_v2 U14; old INST-0174, INST-0177 and INST-0179.
+**Reuse, by exact name:**
+- `uclrcde_core.export_lawyer_triage_brief(db_path, case_id, level)` and `uclrcde_core.draft_point_by_point_response(db_path, case_id, claim_points_list, responses_list, exhibits_list)`;
+- `uclrcde_core.open_uclrcde_db` and `uclrcde_core.LEGAL_INFORMATION_NOTICE`;
+- `uclrcde_sources.verify_quote_in_locked_document`;
+- `uclrcde_clerk.check_clerk_text`;
+- `uclrcde_blocks.list_blocks`;
+- `uclrcde_ui_route.build_route_view` and `uclrcde_ui_route.list_service_proofs`;
+- `uclrcde_ui.check_legal_ui_files`, `uclrcde_ui.build_screen_handlers` and `uclrcde_ui.handle_legal_request`.
+Import as `core`, `sources`, `clerk`, `blocks`, `route` and `ui`.
+**Errors:** `ValueError` whose message starts with an `RV_` code. A `ValueError` from `core` passes through unchanged.
+**Canary:** `Canary check: BINDER = BOUND -> satchel`.
+
+#### UI-5-01: LAWYER_REVIEW_PANEL (source: NOV1 item 7, "ask it a questionnaire. What particular thing are you dealing with. You should make a scoop of all the relevant information. Give a quick summary that a lawyer would want to read. A checklist ... get to only the important parts ... print it off"; item 8, "hidden ... off to the side")
+Function: `build_lawyer_review(db_path: str, case_id: str, questionnaire: dict, level: str = "BEGINNER") -> dict`.
+Does: The questionnaire is exactly:
+- `dealing_with` (1–200 characters);
+- `doc_ids` (1 to 10 locked documents of this matter: the scope);
+- `question_for_lawyer` (1–500 characters);
+- `map_id` (a recorded map, or null).
+Call `core.export_lawyer_triage_brief(db_path, case_id, level)`. Build one text, in this order:
+1. `Lawyer review: <matter title> (<case_id>)`;
+2. `Dealing with: <dealing_with>`;
+3. `Question for you: <question_for_lawyer>`;
+4. `Documents in scope:`, one line each with title, doc id, the first 12 hex of its SHA-256 and, when LS-L has a block map for it, its numbered-paragraph count;
+5. with a map, `Where the case is: <route view's where_you_are>`;
+6. the triage brief's text;
+7. the notice.
+The person's own words get the clerk-check warning (UI-2-02) and are kept. Return `{"text", "text_sha256", "line_count", "warnings", "verified_citations", "open_points", "notice"}`. Over 90 lines, the scope lines are shortened to titles only. The panel prints it (rule 16).
+Refuses: `RV_BAD_QUESTIONNAIRE` (shape, a document not locked for this matter); `PE_UNKNOWN_MAP`; `core`'s errors unchanged (an unknown matter, a bad level).
+Tests: `test_ui5_01_builds_a_short_focused_review` (the made-up matter with two locked documents, one with an LS-L block map: the text holds `Dealing with:`, both documents and the paragraph count, then the triage brief's notice, and `line_count` is at most 90); `test_ui5_01_refuses_out_of_scope_documents` (a doc id of another matter; eleven doc ids; level `GENIUS`, which raises `core`'s error).
+Done means: a lawyer gets one short page about exactly the thing the person is dealing with.
+Not checked: whether a lawyer finds it useful; that needs a real reader.
+
+#### UI-5-02: TWO_SIDED_ISSUE_TABLE (source: old INST-0174, "zero fabricated citations")
+Function: `record_issue_table(db_path: str, case_id: str, table: dict, at: str) -> dict`.
+Does: A table is exactly `{"issue_id", "title" (1–200), "claimant_points", "respondent_points"}`. Each list holds 1–30 points `{"text" (1–600), "refs": [{"doc_id", "quote"}] (0–5)}`. Every ref must be found by `sources.verify_quote_in_locked_document` in a locked document of this matter: an unverified ref is refused, never stored. Keep a new version in the add-only table `rv_issue_tables(row_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, issue_id TEXT NOT NULL, version INTEGER NOT NULL, table_json TEXT NOT NULL, table_sha256 TEXT NOT NULL, at TEXT NOT NULL, UNIQUE(case_id, issue_id, version))`. Return `{"issue_id", "version", "rows": [{"row", "claimant", "respondent"}], "refs_checked"}`. The rows pair the two lists side by side, with null where one is shorter; each ref has its offsets.
+Refuses: `RV_BAD_TABLE`; `RV_UNVERIFIED_REF` (naming the side, point and ref); `RV_BAD_TIME`; `RV_UNKNOWN_MATTER`.
+Tests: `test_ui5_02_pairs_both_sides_with_checked_refs` (two claimant points and three respondent points, one ref quoting a locked made-up letter, give three rows with a null claimant in row 3 and one checked ref with offsets; a second call gives version 2); `test_ui5_02_refuses_unverified_refs` (a quote with one word changed; a document of another matter).
+Done means: both sides of an issue sit side by side, and nothing is cited that the locked documents do not say.
+Not checked: weighing the issue. The table never says which side is stronger.
+
+#### UI-5-03: NUMBERED_EXHIBIT_BOOK (source: old INST-0177; NOV1 item 3, page counting)
+Function: `build_exhibit_book(db_path: str, case_id: str, issue_id: str, exhibits: list, settings: dict, at: str) -> dict`.
+Does: Use the newest version of the issue table. Claimant point *n* is paired with respondent point *n* (the two lists must be the same length; the person adds `No response.` where needed). Each exhibit is `{"exhibit_id" (a locked document of this matter), "title", "pages", "linked_point"}`. Call `core.draft_point_by_point_response(db_path, case_id, <claimant texts>, <respondent texts>, exhibits)` for the stamps (Exhibit A, B, C …) and running page ranges. Add each exhibit's stored SHA-256.
+
+Bundles: `settings` is `{}` or `{"max_pages_per_bundle": <1–500>}` (default 20). Exhibits fill bundles in order, and one exhibit is never split. An exhibit longer than the limit gets its own bundle and the warning `Exhibit <x> has <n> pages, more than <limit>; it is a bundle by itself.`
+
+Keep the book in the add-only table `rv_exhibit_books(book_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, issue_id TEXT NOT NULL, issue_version INTEGER NOT NULL, draft_number INTEGER NOT NULL, book_json TEXT NOT NULL, book_sha256 TEXT NOT NULL, at TEXT NOT NULL)`. Return `{"book_id", "draft_number", "exhibits": [{"stamp", "exhibit_id", "title", "pages", "page_range", "sha256", "linked_point"}], "bundles": [{"bundle", "stamps", "pages"}], "warnings", "response_text"}`.
+Refuses: `RV_UNPAIRED` (the two lists differ in length); `RV_UNKNOWN_DOC`; `RV_BAD_SETTINGS`; `RV_UNKNOWN_ISSUE`; `core`'s `ValueError` unchanged (for example zero pages).
+Tests: `test_ui5_03_stamps_pages_and_bundles` (three exhibits of 5, 18 and 30 pages with limit 20 give stamps A, B and C, page ranges `1 to 5`, `6 to 23` and `24 to 53`, bundles `[A]`, `[B]` and `[C]`, and a warning for C. The SHA-256 of each equals its `source_documents` row); `test_ui5_03_refuses_unpaired_or_unlocked` (an issue with two and three points; an exhibit id `NOT-LOCKED`; pages 0, which raises `core`'s error).
+Done means: the exhibits are lettered and paged the same way every time, with each document's fingerprint, in bundles a registry can take.
+Not checked: any court's real page limit per bundle; 20 is the old INST-0177 default and a setting.
+
+#### UI-5-04: CASE_BINDER_AS_A_RETURNED_BUNDLE (source: old INST-0179, re-worded under the readability rulings: no file written)
+Function: `build_case_binder(db_path: str, case_id: str, issue_id: str, settings: dict, at: str) -> dict`.
+Does: `settings` is `{}` or `{"redact": bool}` (default `False`). The parts, in order, are text:
+1. `Matter`: the `matters` row;
+2. `Timeline`: the docket events in date order;
+3. `Exhibit index`: the newest UI-5-03 book;
+4. `Point-by-point response`: the newest stored draft's text;
+5. `Issue table`: the newest version, side by side;
+6. `Quote receipts`: every ref of the issue table checked again now, with its offsets;
+7. `Service`: from `route.list_service_proofs`;
+8. `Lawyer brief`: `core.export_lawyer_triage_brief(db_path, case_id, "BEGINNER")`'s text.
+If any quote receipt fails now, refuse: a binder is never built with an unverified quote.
+
+With `redact`, the parts except `Quote receipts` have email addresses, phone numbers written `NNN-NNN-NNNN` or `(NNN) NNN-NNNN`, and Canadian postal codes (`A1A 1A1`) replaced by `[REDACTED]`, counted per part. The quote receipts keep the exact quoted words, because they are checked on the locked text.
+
+The manifest is `[{"part", "sha256", "line_count"}]`. `binder_sha256` is the SHA-256 of the manifest's canonical JSON. Keep `rv_binders(binder_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, manifest_json TEXT NOT NULL, binder_sha256 TEXT NOT NULL, redacted INTEGER NOT NULL, at TEXT NOT NULL)`, add-only. Return `{"binder_id", "parts": [{"part", "text"}], "manifest", "binder_sha256", "redactions", "file_name": "<case_id>-binder.txt", "notice"}`. The screen offers it as one text download (rule 16).
+Refuses: `RV_UNVERIFIED_REF`; `RV_UNKNOWN_ISSUE`; `RV_BAD_SETTINGS`; `RV_NO_EXHIBIT_BOOK` (no UI-5-03 book yet for the issue).
+Tests: `test_ui5_04_binds_parts_with_a_manifest` (after UI-5-02 and UI-5-03: eight parts in order, a manifest of eight SHA-256 values, and the same `binder_sha256` on a second build; with `redact`, a timeline title holding `person@example.com` and `604-555-0100` shows `[REDACTED]` twice and the quote receipts are unchanged); `test_ui5_04_refuses_when_a_quote_no_longer_matches` (a locked document changed through a plain `sqlite3` connection makes the quote re-check fail, so the call raises `RV_UNVERIFIED_REF`, whether `core`'s lock check raised or the quote is no longer found, and no binder row is added; an issue without a book raises `RV_NO_EXHIBIT_BOOK`).
+Done means: the whole case comes out as one checked bundle with a fingerprint, ready to print or hand to a lawyer, and nothing is written to the phone without the person saving it.
+Not checked: printing the bundle as a court-ready book with tabs; this is text.
+
+#### UI-5-05: CROSS_LINK_IMPORTANCE_TRIGGER_AND_REVIEW_PANEL (source: NOV1 item 6, "ask in the tags the user for linking it to other documents. What document does it specifically refer to ... copy and paste the relevant information ... some trigger to understand its importance ... under 30000 tokens for a server that only has a million tokens ... Let the user verify. And give the user an option to change that"; item 8, "Cross-Document Linker & Importance Trigger can be drop down touch button not open by default ... This should be a hidden rule you automatically calculate")
+Functions: `record_importance(db_path: str, case_id: str, doc_id: str, mark: dict, at: str) -> dict`, `decide_reading_scope(db_path: str, case_id: str, focus_doc_ids: list, settings: dict) -> dict` and `handle_screen_request(config: dict, request: dict) -> dict`.
+Does: **Marks.** A mark is exactly:
+- `importance` (`HIGH`, `NORMAL` or `LOW`);
+- `finished` (bool: this document's part of the case is done);
+- `refers_to` (0 to 10 locked documents of the matter: what this document refers to);
+- `passage` (null, or `{"doc_id", "quote"}` with the quote at most 600 characters and found by `sources.verify_quote_in_locked_document`: the relevant words, never the whole long text).
+Keep marks in the add-only table `rv_importance(row_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, doc_id TEXT NOT NULL, mark_json TEXT NOT NULL, at TEXT NOT NULL)`; the newest mark of a document is current, so the person can always change it.
+
+**The hidden rule.** `decide_reading_scope` works out how much an AI helper should read. `settings` is `{}` or has `model_total_tokens` (a whole number of at least 1,000; default 1,000,000) and `full_read_basis_points` (1–5,000; default 300, the Owner's 30,000 tokens of 1,000,000). The limit is `model_total_tokens × full_read_basis_points ÷ 10,000`, rounded down. The total is the estimated tokens (characters ÷ 4, rounded up) of every locked document of the matter, every `ui_thread_notes` note and every passage.
+- At or under the limit: `READ_ALL`, every document.
+- Over it: `READ_LINKED`. Read the focus documents; the documents their marks `refer_to`; the documents linked to them in `evidence_map_links` (where `from_doc_id` or `to_ref` is a focus document); every `HIGH` document; and every passage. Leave out each document marked `finished`, unless it is a focus document. Fill to the limit in that order; whatever does not fit goes in `left_out` with the reason `over the limit`.
+Return `{"decision", "limit_tokens", "total_tokens", "read": [{"doc_id", "why"}], "left_out": [{"doc_id", "why"}], "line", "ai_used": False}`. The `line` is one plain sentence, for example `The case is 41,250 tokens, over the 30,000 limit, so read the 3 linked documents and the notes first.` It runs by itself and shows only inside the closed linker drop-down.
+
+**The panel.** `handle_screen_request` answers under `/api/legal/review/`: `POST lawyer`; `POST issue`; `POST exhibits`; `POST binder`; `POST importance`; and `POST scope`. `ui/screen_review.js` mounts in the hidden side panel (`<aside id="side">`), reached only by the small `More` button:
+- the lawyer-review questionnaire and its printable page;
+- the issue table editor;
+- the exhibit book;
+- the binder download;
+- a `Cross-document linker` drop-down, inside `<details>` and closed by default, with each document's importance, finished, refers-to and passage, and the reading-scope line.
+Refuses: `RV_BAD_MARK` (shape, an unlocked document, an unfound passage); `RV_BAD_SETTINGS`; `RV_BAD_FOCUS` (0 or more than 10 focus documents, or one not locked for this matter); the handler gives 400 for a `ValueError` and 404 for an unknown path.
+Tests: `test_ui5_05_reads_all_when_small_and_linked_when_large` (two short documents with the defaults give `READ_ALL`. With `model_total_tokens` 100,000 (a 3,000-token limit) and four documents of 4,000 characters each (1,000 tokens each), focus `D1` with a mark `refers_to` `D2`, `D3` marked `HIGH` and `D4` marked `finished` give `READ_LINKED`: read `D1`, `D2` and `D3`, leave out `D4`. `ui.build_screen_handlers()` holds `review` on tab `side`, and `ui.check_legal_ui_files` gives `PASS` with `screen_review.js`); `test_ui5_05_refuses_bad_marks_and_focus` (a passage quote not in the document; `refers_to` naming a document of another matter; eleven focus documents).
+Done means: the hidden rule decides by itself when an AI must read everything and when the notes and links are enough, and the person can always see and change the marks behind it.
+Not checked: the right share for each AI model. 300 basis points comes from the Owner's 30,000-of-a-million example and is a setting.
+
+---
+
+### Batch CP-1 — Control panel installer, home-screen icon, projects and phone tools
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/apccs2_control_panel.py`, `code/test_apccs2_control_panel.py`, and in `web/panel/`: `index.html`, `app.js`, `style.css`, `manifest.webmanifest`, `sw.js` and `icon.svg`. Test class `ApccsBatchCP1Tests`. The file names follow the module-limit ruling.
+**Source:** NOV1 items 10, 11, 12, 18, 19 and 24 (the Owner's words: "Install should be dropping a zip ... It shouldn't matter if I drop it in a bunch of different bots the program should not get confused reinstalled or something it should just check it's done right ... I should have the control panel HTML icon on my screen ... automatically find the other projects"); FEATURE_LEDGER_v2 A13; W4 ("installs once, checking before any reinstall; lists the projects from PROJECTS.md; on a fresh phone, lists which tools are present or missing from a supplied file listing").
+**Reuse:** none required. This batch only reads `PROJECTS.md`; it never imports a uclrcde module.
+**Errors:** `ValueError` whose message starts with a `CP_` code.
+**Canary:** `Canary check: INSTALL = ONCE -> doorway`.
+
+#### CP-1-01: INSTALL_MANIFEST (source: NOV1 item 24, "it should just check it's done right")
+Function: `build_install_manifest(repo_root: str, project_id: str, version: str, paths: list) -> dict`.
+Does: `project_id` is 1–40 lowercase letters, digits or `-`. `version` is 1 to 4 whole numbers joined by dots (for example `1.0.0`). `paths` is 1–2,000 distinct relative paths, each inside `repo_root` after `Path.resolve()`. None may be a symlink, and none may be larger than 20 MB. Read each file's bytes, only to hash them. Return `{"project_id", "version", "files": [{"path", "sha256", "bytes"}] (sorted by path), "manifest_sha256"}`, where `manifest_sha256` is the SHA-256 of the canonical JSON of everything else. Nothing is written.
+Refuses: `CP_BAD_PROJECT`; `CP_BAD_VERSION`; `CP_BAD_PATHS` (an absolute path, `..`, a symlink, a folder, a missing file, too large, a repeat).
+Tests: `test_cp1_01_hashes_listed_files` (the repository itself as `repo_root`, with `AGENTS.md` and `plan/RULEBOOK.md`: two entries whose SHA-256 values match `hashlib` of the files, and the same `manifest_sha256` twice); `test_cp1_01_refuses_unsafe_paths` (`../outside.txt`; `/etc/hostname`; `code`, a folder; version `1.x`).
+Done means: what an install must hold can be described exactly and checked again at any time.
+Not checked: the zip step itself. The person or a runner unpacks the zip; this batch checks what is there.
+
+#### CP-1-02: CHECK_BEFORE_ANY_REINSTALL (source: NOV1 item 24, "the program should not get confused reinstalled"; A13 "without reinstalling twice")
+Function: `record_install_check(conn: sqlite3.Connection, manifest: dict, found: dict, at: str) -> dict`.
+Does: `manifest` is what the install should be. `found` is CP-1-01 built now from the same paths on this device. Create the add-only table `cp_install_checks(check_id INTEGER PRIMARY KEY, project_id TEXT NOT NULL, version TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, decision TEXT NOT NULL, problems_json TEXT NOT NULL, at TEXT NOT NULL)`. Decide, in this order:
+1. `REFUSED_OLDER` when an earlier `INSTALLED` or `UPGRADED` row of this project has a higher version (versions compare as lists of numbers);
+2. `REPAIR_NEEDED` when any file is missing from `found` or its SHA-256 differs; list `missing` and `changed`;
+3. `ALREADY_INSTALLED` when the newest `INSTALLED` or `UPGRADED` row has the same `manifest_sha256`. Nothing is installed again, and the check is still recorded;
+4. `UPGRADED` when an earlier row has a lower version;
+5. otherwise `INSTALLED`.
+Record one row for every decision. Return `{"decision", "project_id", "version", "missing", "changed", "line"}`. The `line` is one plain sentence, for example `Already installed (version 1.0.0); nothing was reinstalled.`
+Refuses: `CP_BAD_DB`; `CP_BAD_MANIFEST` (not shaped like CP-1-01's result, or `found` naming another project or version); `CP_BAD_TIME`.
+Tests: `test_cp1_02_installs_once_then_checks` (an in-memory database: the first call gives `INSTALLED`, the second `ALREADY_INSTALLED`, and the table holds two rows. A manifest for version `1.1.0` gives `UPGRADED`; then `1.0.0` again gives `REFUSED_OLDER`); `test_cp1_02_finds_repairs` (a `found` with one file's SHA-256 changed and one file missing gives `REPAIR_NEEDED`, listing both; `found` for project `other` raises `CP_BAD_MANIFEST`).
+Done means: dropping the same package into the panel many times never installs it twice; the panel only checks it and says so.
+Not checked: copying the package to an online drive (NOV1 items 11, 12 and 24). Writing to Drive is not done by code here (see Gaps).
+
+#### CP-1-03: PROJECTS_AND_PHONE_TOOLS (source: NOV1 item 24, "automatically find the other projects"; items 18, 19 and 21, "on a fresh phone ... help me set up all the tools I need")
+Functions: `list_projects(projects_md_text: str) -> dict` and `check_phone_tools(listing_text: str, settings: dict) -> dict`.
+Does: **Projects.** `list_projects` reads the table under `# The owner's projects` in the text it is given, the rows after the header `| Project | Repository | Status | Ready for the builder |`. It returns `{"projects": [{"name", "repository", "private", "status", "ready"}]}`:
+- `repository` is the `owner/name` inside backticks;
+- `private` is true when `(private)` follows it;
+- `ready` is true only for `Yes`.
+Rows keep the file's order.
+
+**Phone tools.** `check_phone_tools` reads a file listing the caller supplies: one absolute path per line, for example the output of `ls` or `find` run in Termux. `settings` is `{}` or `{"tools": [{"tool", "any_of": [path endings]}]}`. The default, `DEFAULT_PHONE_TOOLS`, is:
+- `Termux`: `/data/data/com.termux/files/usr/bin/bash`;
+- `Python 3`: `/usr/bin/python3`;
+- `git`: `/usr/bin/git`;
+- `SQLite`: `/usr/bin/sqlite3`;
+- `Codex CLI`: `/usr/bin/codex`;
+- `apccs copy`: `/apccs/AGENTS.md`;
+- `uclrcde copy`: `/uclrcde/AGENTS.md`.
+A tool is present when any listed path ends with one of its endings. Return `{"tools": [{"tool", "present", "found_at"}], "missing", "next_steps"}`. `next_steps` has one plain line per missing tool: `pkg install python`, `pkg install git` and `pkg install sqlite` for those three; `Copy the <name> project with git clone.` for a project; and `NOT CHECKED: how to install <tool>; see its own instructions.` for the rest.
+Refuses: `CP_BAD_PROJECTS_TEXT` (no project table found); `CP_BAD_LISTING` (not text, over 2,000,000 characters, or a line that is not an absolute path); `CP_BAD_SETTINGS`.
+Tests: `test_cp1_03_lists_projects_and_finds_tools` (a made-up table of three rows gives three projects with the right `ready` values; the repository's real `PROJECTS.md`, read only, parses and holds `someonee12345678-hue/apccs`. A made-up listing holding Termux's bash and python3 gives Termux and Python present and git missing, with `pkg install git`); `test_cp1_03_refuses_bad_inputs` (text without the table; a listing line `bin/git`; settings with an empty `any_of`).
+Done means: the panel finds the Owner's projects from the one list he controls, and tells him in plain words which tools a fresh phone still needs.
+Not checked: the real paths on the Owner's phone (SYSTEM_MAP: reported, not verified). The defaults are Termux's standard prefix; each tool's endings are a setting.
+
+#### CP-1-04: PANEL_PAGE_AND_HOME_SCREEN_ICON (source: NOV1 item 24, "I should have the control panel HTML icon on my screen I can click on at any time"; rules 13 and 15)
+Function: `check_panel_web_files(web_dir: str) -> dict`.
+Does: The six files in `web/panel/` make the control panel page:
+- **Page.** `<html lang="en">`; one `<h1>` reading `Control panel`; a viewport meta tag; a `<nav id="tabs">` with the tabs `Home` and `Projects`, each with `aria-controls` naming its section (`tab-home`, `tab-projects`).
+- **Home tab.** It shows the install check (CP-1-02), the projects (CP-1-03), the phone tools with a box to paste a listing, and these plain steps for the icon: `Open this page in Chrome.` `Open Chrome's menu (the three dots).` `Tap "Add to Home screen" or "Install app".`
+- **Script.** `app.js` holds `window.apccsPanel = { register }`, fetches `/api/panel/screens` and loads `screen_<id>.js` for each built panel screen.
+- **Install files.** `manifest.webmanifest` has `name` `Control panel`, `short_name` `Panel`, `start_url` `.`, `display` `standalone`, `theme_color` and `icon.svg` as its icon, so the browser can put the icon on the home screen. `sw.js` caches the six files and, once seen, each `screen_*.js`, so the page opens offline with the last answers and the word `offline`.
+`check_panel_web_files` checks all of that, rule 13 for every `.js` file in the folder, and the style limits, exactly as UI-1-01's checker does. It is written again here, because the projects stay separate and apccs never imports uclrcde. Return `{"status", "problems", "files_checked"}`; it never raises.
+Refuses: nothing is raised; a missing folder gives `FAIL`.
+Tests: `test_cp1_04_panel_files_pass` (the repository's `web/panel/` gives `PASS`, and the manifest names `icon.svg`); `test_cp1_04_checker_catches_problems` (text copies checked through a private helper, so no file is written: a manifest without `display`; an `app.js` holding `https://`; an `index.html` without the `Projects` tab; each gives its line).
+Done means: the control panel can sit on the Owner's home screen as its own icon and open offline.
+Not checked: Chrome's menu wording on the Owner's phone, which can change between versions.
+
+#### CP-1-05: PANEL_SERVER_AND_SCREEN_PLUG_INS (source: rules 14 and 15; the Mission Control server pattern)
+Functions: `handle_panel_request(config: dict, request: dict, handlers: dict | None = None) -> dict`, `build_panel_handlers() -> dict` and `run_panel_server(config: dict, host: str = "127.0.0.1", port: int = 8766, ready_event: threading.Event | None = None) -> None`.
+Does: `config` has `repo_root`, `port`, `install` (`{"project_id", "version", "paths"}`), optional `web_dir` (default `<repo_root>/web/panel`), and exactly one of `db_path` (opened with `sqlite3.connect` per request and closed) or `conn` (a `sqlite3.Connection` the caller keeps open, made with `check_same_thread=False`; tests use `sqlite3.connect(":memory:", check_same_thread=False)`, so no test writes a file). Rule 14's checks come first. Then:
+- `GET /` and the six files, plus `screen_<id>.js` for planned ids;
+- `GET /api/panel/screens`, from `PANEL_PLAN`. `PANEL_PLAN` is one entry: `projects`, `Projects`, `apccs2_project_switcher`, `screen_projects.js`, `CP-2`;
+- `GET /api/panel/home/projects` reads `<repo_root>/PROJECTS.md` (read only) through CP-1-03;
+- `POST /api/panel/home/install_check` builds the manifest and the found files with CP-1-01 from `config["install"]`, and records CP-1-02 on the configured database;
+- `POST /api/panel/home/tools` (`{"listing"}`) runs CP-1-03;
+- `GET /api/panel/home/checks` lists the install checks;
+- `/api/panel/<id>/...` goes to `handlers[id]`, or gives the `NOT_BUILT` reply of UI-1-02.
+`build_panel_handlers` and `run_panel_server` work exactly like UI-1-05's two functions, with plain `import` in `try` and no `importlib`, `__import__` or `getattr`. The default port is 8766, next to Mission Control's 8765. Replies are sent with `handler.connection.sendall`.
+Refuses: `CP_HOST_REFUSED`, `CP_BAD_PORT` and `CP_BAD_CONFIG` before any socket opens; every request refusal is an HTTP reply.
+Tests: `test_cp1_05_serves_panel_and_checks_install_once` (port 0 in a thread, with `conn` an in-memory database and `install` listing `AGENTS.md` and `plan/RULEBOOK.md`: `GET /` gives 200; two `POST /api/panel/home/install_check` calls give `INSTALLED` and then `ALREADY_INSTALLED`; then shut down; `handle_panel_request` called directly with `handlers` `{}` shows `projects` not built); `test_cp1_05_refuses_unsafe_requests_and_hosts` (Host `evil.example:8766`; a POST from Origin `https://evil.example`; `GET /../PROJECTS.md`; host `0.0.0.0` raises `CP_HOST_REFUSED`).
+Done means: the Owner opens the control panel from its icon, it checks the install instead of repeating it, and the project switcher plugs in when CP-2 is merged.
+Not checked: running it on the Owner's phone (Termux, the P0-3 route): a live step for a later run.
+
+---
+
+### Batch CP-2 — Project switcher: all projects in one window, batch history, logs in the Owner's format, predicted finish, and the "built in" label check
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** CP-1 is merged.
+**New files:** `code/apccs2_project_switcher.py`, `code/test_apccs2_project_switcher.py`, `web/panel/screen_projects.js`. Test class `ApccsBatchCP2Tests`. `SCREEN_ID = "projects"`.
+**Source:** NOV1 items 23 and 25 (the Owner's words: "all the projects that I'm doing should pop into this window. I should be able to toggle in between them. They should be organized separately. Each one of them should have a generate program main run script. I should be able to see the history of the batch instructions and the progress. Chats in a page or drop down menu to see exactly what was done"; "Give updates view how far along the project is. When it will be done predicted. It should be based on batch dependencies"); FEATURE_LEDGER_v2 A14; W4 (the "built in" label check); CMP-05 (log views, approved 2026-11-19).
+**Reuse, by exact name:**
+- `apccs_logs.parse_and_check_log_v2_record(raw_text)` and `apccs_logs.LOG_V2_FIELD_ORDER`;
+- `apccs_events.TIMELINE_VIEWS`;
+- `apccs_batches_41_49.CP245_EXTERNAL_RANGES` and `apccs_batches_41_49.CP245_EXTERNAL_LABEL`;
+- `apccs2_control_panel.list_projects`, `apccs2_control_panel.check_panel_web_files`, `apccs2_control_panel.build_panel_handlers` and `apccs2_control_panel.handle_panel_request`.
+Import as `logs`, `events`, `b4149` and `panel`.
+**Errors:** `ValueError` whose message starts with a `PS_` code.
+**Canary:** `Canary check: PROJECTS = ONE_WINDOW -> switchyard`.
+
+#### CP-2-01: BATCH_HISTORY (source: NOV1 item 25, "the history of the batch instructions and the progress")
+Function: `build_batch_history(project_id: str, pulls_json_text: str) -> dict`.
+Does: `pulls_json_text` is a saved GitHub REST reply listing pull requests (a JSON array of objects with `number`, `title`, `state`, `created_at` and `merged_at`), saved by a scheduled job or a person. This batch never calls GitHub. A batch pull request is one whose title matches `^Batch ([A-Za-z0-9.-]+)[: ]`; the group is its batch id. Return:
+- `project_id`;
+- `merged`: in `merged_at` order, `{"batch_id", "pr_number", "title", "merged_at"}`;
+- `open`: open batch pull requests;
+- `lines`: one per merged batch, for example `Batch SG-1 merged on 2026-11-20 (PR #183).`;
+- `counts`.
+Pull requests that are not batches are left out.
+Refuses: `PS_BAD_PROJECT`; `PS_BAD_PULLS` (not a JSON array, an entry without those fields, a time that is not ISO 8601).
+Tests: `test_cp2_01_builds_history_from_saved_pulls` (a made-up array of four pull requests, two merged batches, one open batch and one plan pull request, gives two merged in order, one open and two lines); `test_cp2_01_refuses_bad_pull_lists` (`{}`; an entry without `title`; `merged_at` `yesterday`).
+Done means: each project shows what was built and when, from GitHub's own record.
+Not checked: who saves the replies (see Gaps).
+
+#### CP-2-02: LOG_VIEWS_IN_THE_OWNERS_FORMAT (source: NOV1 item 23, "conversation logs. In the format that I like ... in the control panel ... some sort of toggle"; A2's eight-line record; CMP-05)
+Function: `read_project_log(records_text: str, view: str, tag: str | None = None) -> dict`.
+Does: `records_text` holds eight-line Log v2 records, one blank line between records. Each is checked with `logs.parse_and_check_log_v2_record` and never repaired: a failing record goes in `bad_records` with its reason and place. `view` is one of `events.TIMELINE_VIEWS`:
+- `summary`: `ID`, `ASK`, `RESULT` and `NEXT` of each record, newest first;
+- `full`: all eight fields, newest first;
+- `milestones`: records whose `CHANGED` is not `none` (any case), newest first;
+- `chronological`: all eight fields, oldest first.
+The order comes from the correlation ID's date and time. `tag` (1–60 characters) keeps only records with that text in any field (any case). The `RESULT` letter is shown exactly as written. Return `{"view", "records", "bad_records", "count"}`.
+Refuses: `PS_BAD_VIEW`; `PS_BAD_TAG`; `PS_BAD_LOG` (not text, or over 5,000,000 characters).
+Tests: `test_cp2_02_four_views_and_tag_search` (three made-up records built with the field order and IDs like `20261120-0930-CL`: `summary` gives three, newest first, with four fields; `milestones` leaves out the one whose `CHANGED` is `none`; `chronological` is oldest first; tag `SG-1` keeps one); `test_cp2_02_reports_bad_records_unrepaired` (a record of seven lines goes in `bad_records` with `OFF_SHAPE_LINE: expected exactly 8 lines`; view `daily` raises `PS_BAD_VIEW`).
+Done means: the Owner reads any project's log in his format, in four views, and finds an item by its tag.
+Not checked: the meaning the Owner gives to `Y` beside 🟢/🔴/🩶. The letter is shown as written until that is recorded.
+
+#### CP-2-03: PROGRESS_AND_PREDICTED_FINISH (source: NOV1 item 23, "When it will be done predicted. It should be based on batch dependencies"; the builder's daily estimate, "÷ 8 a day")
+Function: `predict_finish(batches: list, settings: dict, today: str) -> dict`.
+Does: Each batch is exactly:
+- `batch_id`, `project_id`;
+- `status`: `BUILT`, `READY`, `WORDED` (worded, waiting for its audit) or `NOT_WORDED`;
+- `after`: the batch ids it waits for.
+`settings` is `{}` or has `per_day` (1–50; default 8) and `audit_days` (0–10; default 1). `today` is a real date. A day-by-day simulation, in code:
+- `BUILT` batches are done before day 1;
+- a `WORDED` batch is buildable from day `1 + audit_days`;
+- each day builds up to `per_day` buildable batches, in list order, whose `after` batches were all built on an earlier day;
+- `NOT_WORDED` batches, and batches that wait for one, get no estimate and are listed in `no_estimate` with the reason.
+Day 1 is `today`, so the finish date is `today` plus (days − 1) days. Return:
+- `days`, `finish_date`;
+- `per_project`: `{"project_id", "built", "ready", "worded", "not_worded", "finish_date"}`;
+- `no_estimate`;
+- `line`, for example `Estimate, not a promise: 10 batches left; done about 2026-11-21 at 8 a day, if nothing fails.`
+Refuses: `PS_BAD_BATCHES` (shape, a repeated id, an unknown id in `after`, a loop of `after`); `PS_BAD_SETTINGS`; `PS_BAD_DATE`.
+Tests: `test_cp2_03_follows_dependencies` (`A` and `C` ready, `B` after `A`, `per_day` 2, `today` `2026-11-20`: day 1 builds `A` and `C`, day 2 builds `B`, `finish_date` `2026-11-21`. A `WORDED` `D` with `audit_days` 1 is built on day 2 as well. A `NOT_WORDED` `E` and an `F` after `E` are in `no_estimate`); `test_cp2_03_refuses_loops_and_unknowns` (`A` after `B` and `B` after `A`; `after` naming `Z`; `per_day` 0).
+Done means: the switcher's finish date comes from the real batch order, with what cannot be estimated named.
+Not checked: failed builds and stuck checks, which delay real runs; the line says so.
+
+#### CP-2-04: BUILT_IN_LABEL_CHECK (source: W4, "one instruction that checks any 'built in <repo>' label against that repo's real test names, and reports CP-245's label for instructions 171–180 as not built")
+Functions: `check_built_in_labels(labels: list, test_names_by_repo: dict) -> dict` and `check_cp245_label(uclrcde_test_names: list) -> dict`.
+Does: **Any label.** A label is `{"label", "repo", "ranges": [[first, last], ...]}`, with whole-number instructions from 1 to 9,999 and ranges in order. `test_names_by_repo` maps a repository name to its test function names, from a supplied listing (for example AM-1's registry `test_names`, or `grep -o "def test_[0-9]*_[a-z0-9_]*"` run by a person or job). Instruction *n* is `BUILT` when a name in that repository starts with `test_<n>_` (both AGENTS.md rule 8s name tests after their instruction number); otherwise it is `NOT BUILT`. A label whose repository has no listing is `NOT_CHECKED`. Return `{"labels": [{"label", "repo", "status": "TRUE", "FALSE" or "NOT_CHECKED", "built", "not_built"}], "lines"}`.
+
+**CP-245.** `check_cp245_label` runs this on `b4149.CP245_EXTERNAL_LABEL` with `b4149.CP245_EXTERNAL_RANGES` for repository `uclrcde`. When 171–180 are not built, its line is: `CP-245 says instructions 171–180 are built in uclrcde. They are not: uclrcde has no test named for them. Batches 35 and 36 were superseded by slice 2.`
+Refuses: `PS_BAD_LABELS`; `PS_BAD_TEST_NAMES` (not a list of text).
+Tests: `test_cp2_04_reports_cp245_171_to_180_not_built` (a listing with `test_141_init_db_registers_matter_in_wal_mode` and one test each for 142–145, as on uclrcde main, gives 141–145 `BUILT`, 171–180 `NOT BUILT`, status `FALSE` and the line above); `test_cp2_04_handles_missing_listing_and_bad_ranges` (a label for repository `corolla-obd` without a listing gives `NOT_CHECKED`; range `[180, 171]` raises `PS_BAD_LABELS`).
+Done means: no "built in" claim can stand without the test that proves it, and the false CP-245 claim is reported.
+Not checked: tests named another way. Only the `test_<n>_` rule is used.
+
+#### CP-2-05: PROJECT_SWITCHER_SCREEN (source: NOV1 item 25; rules 13–15)
+Function: `handle_screen_request(config: dict, request: dict) -> dict`.
+Does: `config["switcher"]` maps each project id to its data parts: `pulls` (CP-2-01's text), `log` (CP-2-02's text), `batches` (CP-2-03's list as JSON text) and `test_names` (CP-2-04's lists as JSON text, by repository), plus `run_command`. Each part is given either as `<part>_path`, a path relative to `repo_root` and inside it, read only, or as `<part>_text` inline, which the tests use, so no test writes a file. A missing file or part gives `NOT_CHECKED` for that part. The default `run_command` is `python3 tools/run_all_tests.py`. Under `/api/panel/projects/`:
+- `GET list`: the projects from `panel.list_projects`, with whether each has switcher data;
+- `GET project?id=`: history, log view, progress and the label check for one project;
+- `GET log?id=&view=&tag=`;
+- `GET finish`: CP-2-03 over all projects' batches, with today's date;
+- `GET cp245`.
+`web/panel/screen_projects.js` mounts on the Projects tab: one button per project, to switch between them; for the chosen project, its run command with a `Copy` button, batch history, a log view picker (the four views) with a tag box, progress with the predicted finish and its `no_estimate` reasons, and the label check. Each project's data is shown only under its own button, so projects never mix.
+Refuses: `PS_BAD_CONFIG` (a path outside `repo_root`); the handler gives 400 for a `ValueError` and 404 for an unknown path or project.
+Tests: `test_cp2_05_switcher_plugs_into_the_panel` (`panel.build_panel_handlers()` holds `projects`; `panel.check_panel_web_files` on `web/panel/` gives `PASS` with `screen_projects.js`; `GET /api/panel/projects/cp245` through `panel.handle_panel_request`, with an inline uclrcde `test_names_text` holding the five `test_141_` to `test_145_` names, gives the CP-245 line); `test_cp2_05_refuses_paths_outside_the_repository` (a `log_path` of `../secret.txt` raises `PS_BAD_CONFIG`; project `nope` gives 404).
+Done means: all the Owner's projects are in one window, each kept apart, with what was built, what was said, how far along it is and when it should be done.
+Not checked: live data. The saved replies and listings come from a job that does not exist yet (Gaps).
+
+---
+
+### Gaps (what this wording could not check)
+
+1. **Court days, who checked.** W4 asked for "the court-day table as VERIFIED data, with links", while W3's research said the table stays DRAFT "until a person checks them". This wording follows W4 and the block review (no wait for a person). The table is VERIFIED by `CLAUDE` with every row's official links, and every count says "not checked by a lawyer". The safe-direction rule makes a count come out early, never late, because of the three uncertain days. Easter Monday 2027 is worked out by the Gregorian Easter rule; that rule matches all three official 2026–2027 Easter dates W3 read. A later add-only section can withdraw CD-1's VERIFIED status, or correct any row with CD-1-02.
+2. **Court-day rules not read:**
+   - whether Thanksgiving is a s.29 holiday (s.29(d) was cut off; it is treated as uncertain);
+   - s.25(4)(b) in full;
+   - Supreme Court Civil Rules Part 23 (service and e-filing times);
+   - the Provincial Court Family and Small Claims time rules;
+   - rules that set an earliest day;
+   - the Provincial Court calendar's dates.
+   All are NOT CHECKED, and are named in the results where they matter.
+3. **Forms.** The conflict between the BC Laws "Important Information" page and the King's Printer Licence is NOT CHECKED: a one-line question to the Province's Intellectual Property Program would settle it, and this is an option, not a block. Whether Provincial Court forms are prescribed in regulation text is NOT CHECKED. No real form template exists yet: LS-J's tests use a made-up regulation. Fee-waiver information (old INST-0173) is not worded, because no official source for it was read.
+4. **OCR.** W3 found no engine ready (Ready: NO). LS-L-04 is the engine-neutral checker; choosing and installing an engine is a later research and batch.
+5. **Real content.** There are no real procedure maps, route notes, question sets or form templates yet. Every result carries its NOT CHECKED or "not checked by a lawyer" line (rule 18).
+6. **Install to an online drive** (NOV1 items 11, 12 and 24) is not worded. Code here writes no file, and Drive changes by agents wait for the Owner (RULEBOOK conflicts, 25 Oct rule). CP-1 checks and records an install that is already unpacked. Dynamic loading, so a session loads only what it needs, is the Focus Pack (built).
+7. **Switcher data.** CP-2 reads saved GitHub replies, logs, batch lists and test-name listings. No job saves them yet. The daily-status workflow is in `.github/`, which only the Owner can change, so a later apccs batch or work order adds a saver outside `.github/`. Until then, the switcher shows `NOT_CHECKED` for missing files.
+8. **Pictures and video** in the help guide (NOV1 item 5) are not worded; the flowchart is boxes and arrows.
+9. **CMP-05 and CMP-08.** CP-2-02 gives CMP-05's four log views and tag search for one project at a time. Rule 13 and the two file checkers give part of CMP-08 (labels, sizes, widths, no colour-only signals). A full reading-level check is still a later batch.
+10. **Live steps.** Starting the two servers on the Owner's phone, adding both icons to the home screen, and using the page in Chrome on Android are NOT CHECKED. They are live steps for a later run.
+11. **Names.** Every new file, module, function, test class and canary here was checked unused on apccs main `8ed4ad8` (both `code/apccs_*.py` and `code/apccs2_*.py`) and uclrcde main `669810f` on 2026-11-20. If a reused function's contract changes on main before a build, the builder says so in its pull request instead of guessing (AGENTS.md rules 12 and 13).
+12. **Test run times** are NOT CHECKED until each batch is built; each new test file should finish in about 5 seconds, and the server tests stop their servers.
+13. **Backups.** All new uclrcde tables live in the same database, so P0-6's `build_p0_sqlite_snapshot` covers them; a restore of these tables is NOT CHECKED.
+14. **CP-245's frozen record** still says 171–180 are "built in uclrcde". The frozen code is never changed; CP-2-04 reports the claim as false.
+
+UNDO: before merge, close the draft pull request. After merge, a later add-only section can hold, correct or replace any batch here, or restore Batches 35 and 36. Nothing in this section changes code, runtime or any existing text.

@@ -285,3 +285,9 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
 - **W8 steps 2–4:** the ruling is the new section at the end of plan/QUEUE.md, "Ruling: apccs module limit": new apccs modules are named `code/apccs2_<name>.py`. Its proof run is SAFE TO MERGE. The draft plan PR from plan/module-limit-ruling-2026-11-20 goes to the wording auditor with "Batches in build order: SG-1, AM-1."
 - **W4's After condition now holds:** PR #171 is merged; BR-1, PE-1 and GS-1 have their tests on uclrcde main (`code/test_uclrcde_answer_gate.py`, `code/test_uclrcde_procedure.py`, `code/test_uclrcde_gold_set.py`); W3 is done. New apccs batches in W4 (CP-1, CP-2) use the ruling's file names.
 - Next, in order: W4, W7.
+
+## Status note 2026-11-20 10:20 UTC (work-order runner)
+
+- **W4:** slice 2 is worded, as the new section at the end of plan/QUEUE.md, "Slice 2 — the screens the Owner uses". It opens with "Batches 35 and 36 superseded". It has ten batches: CD-1 (COURT-DAYS-1), UI-1, UI-4, UI-2, LS-L, LS-J, UI-3 and UI-5 in uclrcde, and CP-1 and CP-2 in apccs. The draft plan PR from plan/slice2-2026-11-19 goes to the wording auditor with "Batches in build order: CD-1, UI-1, UI-4, UI-2, LS-L, LS-J, UI-3, UI-5 (uclrcde); CP-1, CP-2 (apccs)."
+- W3 said YES for the forms and for the 2026 court days, so LS-J and COURT-DAYS-1 are worded. 2027 is carried too: its three uncertain days are handled so that a count can come out early, never late (the section's Gaps, item 1).
+- Next: W7 (standing order).
