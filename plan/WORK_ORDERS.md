@@ -331,3 +331,18 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
   - Muse checks the three new files: MUSE_INBOX › JOB_W7C_CHECK_SUPPLEMENT_2026-11-20 (Drive links only).
 - **Next W7 pass:** place Muse's W7C findings when MUSE_CHECK_PRODUCT_MAP_SUPPLEMENT_2026-11-20 arrives; otherwise check for new ledger rows. The supplement's ⬜ ideas wait for a wording pass that the Owner or the architect orders. W7 writes no batch wording.
 - No email: no product-map decision changed.
+
+## Status note 2026-11-21 01:40 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225.
+- **W7, Muse's W7C check came back:** GRAY, PASS WITH CORRECTIONS (Drive › Claude 2 › Builder Reports › MUSE_CHECK_PRODUCT_MAP_SUPPLEMENT_2026-11-20, 23:07 UTC). Every count in the supplement and the compilation is exact.
+  - Its corrections C1–C3 are applied in two re-issued Docs: PRODUCT_COMPILATION_2026-11-20_CORRECTED and RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED. The dated note in plan/PRODUCT_MAP.md lists them. No product-map decision changes.
+  - C1 also corrects the 22:40 note above: the 95 items are 92 not in V3, plus 3 that V3 holds under another name.
+  - Muse checks the re-issues: MUSE_INBOX › JOB_W7D_CHECK_CORRECTIONS_2026-11-20. Its output is MUSE_CHECK_CORRECTIONS_2026-11-20.
+- **What stays NOT CHECKED, and why:**
+  - The supplement's "Evidence on main" column for its 20 built rows: Muse can't open the repositories (Muse's GitHub app has no access to apccs or uclrcde; QUEUE.md block review, K2, optional and the Owner's own login step). It is not re-checked here, because this task wrote the column and no agent checks its own work.
+  - This run did check, by git log on main, the compilation's list of builds since 19 Nov: SG-1, AM-1, CP-1 and CP-2 (apccs PRs #183, #184, #197, #198) and the eleven uclrcde batches (PRs #29–#39), each with its test file. It also checked that RA1–RA3 are merged (apccs PRs #110–#112) and that CMP-06 is still waiting for wording. These are the author's own checks.
+  - R225, the X post: neither Claude nor Muse can read X.
+- **Next W7 pass:** place MUSE_CHECK_CORRECTIONS_2026-11-20 when it arrives; otherwise check for new ledger rows.
+- No email: no product-map decision changed, and nothing failed.
