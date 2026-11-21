@@ -178,3 +178,8 @@ Changes to this map: none yet. W6 fills each branch with the specific abilities 
   - C3: the link research named Slack and Notion as Composio examples; MausBot's pages name only Gmail and GitHub. The two names are dropped.
   - Re-issued: PRODUCT_COMPILATION_2026-11-20_CORRECTED (Drive › FULL_LOG_AUDIT_2026-11-19) and RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED (Drive › Claude 2). The second also records that Muse checked the paper's method lines against its full text.
   - Muse checks the corrections: Drive › MUSE_INBOX › JOB_W7D_CHECK_CORRECTIONS_2026-11-20 (Drive links only).
+- 2026-11-21 04:30 UTC (W7, Claude work-order runner): no research-ledger rows are newer than R225. Muse checked the two re-issued Docs (Drive › Claude 2 › Builder Reports › MUSE_CHECK_CORRECTIONS_2026-11-20, 02:01 UTC): GRAY, PASS WITH CORRECTIONS. C1, C2, C3 and the method lines pass. No feature, branch or decision of this map changes.
+  - D1, returned to the author: PRODUCT_COMPILATION_2026-11-20_CORRECTED said "Nothing else changed", but its list left out the "Built since 19 Nov" pull-request numbers and their author's-check sentence, two new "Not checked" lines and some small wording.
+  - Applied in a re-issued Doc, PRODUCT_COMPILATION_2026-11-20_CORRECTED_2 (Drive › FULL_LOG_AUDIT_2026-11-19). Its top section now lists every change from the first 20 Nov issue. Below that it is word for word the corrected issue, except the Muse job it names. The earlier issues are unchanged.
+  - The link research needed no correction.
+  - Muse checks the re-issue: Drive › MUSE_INBOX › JOB_W7E_CHECK_D1_2026-11-20 (Drive links only). Its output is MUSE_CHECK_D1_2026-11-20.

@@ -346,3 +346,17 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
   - R225, the X post: neither Claude nor Muse can read X.
 - **Next W7 pass:** place MUSE_CHECK_CORRECTIONS_2026-11-20 when it arrives; otherwise check for new ledger rows.
 - No email: no product-map decision changed, and nothing failed.
+
+## Status note 2026-11-21 04:30 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225.
+- **W7, Muse's W7D check came back:** GRAY, PASS WITH CORRECTIONS (Drive › Claude 2 › Builder Reports › MUSE_CHECK_CORRECTIONS_2026-11-20, 02:01 UTC). C1, C2 and C3 are applied as asked.
+  - Its one correction, D1: the corrected compilation's "Nothing else changed" did not cover every change. It is applied in PRODUCT_COMPILATION_2026-11-20_CORRECTED_2, whose top section now lists every change. The dated note in plan/PRODUCT_MAP.md says what changed. No product-map decision changes.
+  - Muse checks the re-issue: MUSE_INBOX › JOB_W7E_CHECK_D1_2026-11-20. Its output is MUSE_CHECK_D1_2026-11-20.
+- **Checked on main by this run, by git log (the author's own check):** the 15 build merges the compilation names (apccs PRs #183, #184, #197, #198; uclrcde PRs #29–#39) are on main, each with its test file.
+- **What stays NOT CHECKED, and why:**
+  - Those pull-request numbers, and the supplement's "Evidence on main" column, have no independent check: Muse can't open the repositories (K2 in plan/QUEUE.md: optional, and only the Owner can add them in Muse's GitHub app).
+  - R225, the X post: neither Claude nor Muse can read X.
+- **Next W7 pass:** place MUSE_CHECK_D1_2026-11-20 when it arrives; otherwise check for new ledger rows.
+- No email: no product-map decision changed, and nothing failed.
