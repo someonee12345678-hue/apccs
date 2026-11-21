@@ -172,3 +172,9 @@ Changes to this map: none yet. W6 fills each branch with the specific abilities 
     - three checked copies with a yearly match check, and a case-file backup to SD card or USB.
   - R218, R222 and R224 were read today from their own pages and placed (Drive › Claude 2 › RESEARCH_O20_O21_LINKS_2026-11-20). The arXiv paper's fix history goes into CMP-04. R225 (an X post) stays NOT CHECKED.
   - Muse's corrections C3(b) and C3(c) are applied in a re-issued Doc, PRODUCT_COMPILATION_2026-11-20; the 19 Nov Doc is unchanged. Muse checks all three new files (Drive › MUSE_INBOX › JOB_W7C_CHECK_SUPPLEMENT_2026-11-20).
+- 2026-11-21 01:40 UTC (W7, Claude work-order runner): no research-ledger rows are newer than R225. Muse checked the supplement, the 20 Nov compilation and the link research (Drive › Claude 2 › Builder Reports › MUSE_CHECK_PRODUCT_MAP_SUPPLEMENT_2026-11-20): GRAY, every count exact, three corrections. All three are applied in two re-issued Docs; the first issues are unchanged. No feature, branch or decision of this map changes.
+  - C1: the 22:40 note's "95 items outside V3" is 92 items not in V3, plus 3 that V3 holds under another name (Moltbot is OpenClaw [14-009]; two ledger items point to Periodic Labs [14-158]). The supplement already said so in its Decision column, so no row changes.
+  - C2: the compilation's feature 6 borrows 135 ideas, not 138 (its header line already said 135).
+  - C3: the link research named Slack and Notion as Composio examples; MausBot's pages name only Gmail and GitHub. The two names are dropped.
+  - Re-issued: PRODUCT_COMPILATION_2026-11-20_CORRECTED (Drive › FULL_LOG_AUDIT_2026-11-19) and RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED (Drive › Claude 2). The second also records that Muse checked the paper's method lines against its full text.
+  - Muse checks the corrections: Drive › MUSE_INBOX › JOB_W7D_CHECK_CORRECTIONS_2026-11-20 (Drive links only).
