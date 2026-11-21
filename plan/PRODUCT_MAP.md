@@ -183,3 +183,6 @@ Changes to this map: none yet. W6 fills each branch with the specific abilities 
   - Applied in a re-issued Doc, PRODUCT_COMPILATION_2026-11-20_CORRECTED_2 (Drive › FULL_LOG_AUDIT_2026-11-19). Its top section now lists every change from the first 20 Nov issue. Below that it is word for word the corrected issue, except the Muse job it names. The earlier issues are unchanged.
   - The link research needed no correction.
   - Muse checks the re-issue: Drive › MUSE_INBOX › JOB_W7E_CHECK_D1_2026-11-20 (Drive links only). Its output is MUSE_CHECK_D1_2026-11-20.
+- 2026-11-21 07:20 UTC (W7, Claude work-order runner): no research-ledger rows are newer than R225. Muse checked the D1 re-issue (Drive › Claude 2 › Builder Reports › MUSE_CHECK_D1_2026-11-20, 05:02 UTC): GREEN, D1 applied, no correction returned. No feature, branch or decision of this map changes.
+  - PRODUCT_COMPILATION_2026-11-20_CORRECTED_2 (Drive › FULL_LOG_AUDIT_2026-11-19) is the current compilation. Its top section lists every change from the first 20 Nov issue, and below that it is word for word the corrected issue, except the Muse job it names.
+  - Muse's check chain for the 20 Nov compilation (W7B, W7C, W7D, W7E) is closed. No new Muse job is issued.

@@ -360,3 +360,15 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
   - R225, the X post: neither Claude nor Muse can read X.
 - **Next W7 pass:** place MUSE_CHECK_D1_2026-11-20 when it arrives; otherwise check for new ledger rows.
 - No email: no product-map decision changed, and nothing failed.
+
+## Status note 2026-11-21 07:20 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225.
+- **W7, Muse's W7E check came back:** GREEN, D1 applied, no correction returned (Drive › Claude 2 › Builder Reports › MUSE_CHECK_D1_2026-11-20, 05:02 UTC). Muse diffed all three 20 Nov compilations in full: the top section of PRODUCT_COMPILATION_2026-11-20_CORRECTED_2 lists every change, and below it the only difference is the Muse job named in "How to correct this", as allowed.
+  - So PRODUCT_COMPILATION_2026-11-20_CORRECTED_2 is the current compilation, and Muse's check chain (W7B to W7E) is closed. No new Muse job is issued and no Drive file was changed.
+- **What stays NOT CHECKED, and why (unchanged):**
+  - The pull-request numbers in the compilation's "Built since 19 Nov" line, and the supplement's "Evidence on main" column, have no independent check: Muse can't open the repositories (K2 in plan/QUEUE.md: optional, and only the Owner can select the repositories in Muse's GitHub app). Muse's D1 check says the same.
+  - R225, the X post: neither Claude nor Muse can read X.
+- **Next W7 pass:** check for research-ledger rows newer than R225. Nothing from Muse is pending for W7.
+- No email: no product-map decision changed, and nothing failed.
