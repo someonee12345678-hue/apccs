@@ -110,6 +110,7 @@ Every agent reads this before any work, so the Owner never has to spell his pref
 15. **Tool research:** ignore price; flag terms of service but don't reject for them; don't reinvent the wheel; "it doesn't work natively" is not a reason to reject. (Q043, Q045)
 16. **Phone first.** Everything works on his Android phone, on a free server, or both. (14 Nov 19:03)
 17. **Projects stay separate,** under one control panel. (Constitution Amendment 1; PROJECTS.md)
+18. **Stuck wording goes to Gemini.** When Muse (or any wording bot) cannot get a batch or plan file through its check after re-issuing it, it must ask Gemini for help with one short script, instead of looping or leaving it open day after day. The Owner is not asked to step in. (Owner, told in chat; recorded 2026-11-21)
 
 ### Conflicts between these, and how they are resolved
 
