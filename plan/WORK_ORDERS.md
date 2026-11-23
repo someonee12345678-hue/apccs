@@ -476,3 +476,12 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
   4. Run python3 -I tools/run_all_tests.py (SAFE TO MERGE). Open a DRAFT PR from plan/caf1-reword-2026-11-23, then hand it to the wording auditor (see Rules) with "Batches in build order: CAF-1 (corolla-obd)." Say in the hand-off that the audit needs corolla-obd access too.
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W7. W7 stays last, because it is never finished.
+
+## Status note 2026-11-23 07:50 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did W9.
+- **W9:** the ten compilation items are worded as the new section at the end of plan/QUEUE.md, "Compilation batches — budget, route ladder, approval cards, failure loop, health watch, prompt brief, prior art, toolbox, logs, screen check". All ten batches are in apccs. Build order: CMP-02, CMP-01, CMP-03, CMP-04, CMP-07, CMP-10, CMP-06, CMP-09, CMP-05, CMP-08. The proof run is SAFE TO MERGE. The draft plan PR from plan/cmp-batches-2026-11-23 goes to the wording auditor with that build order.
+- **CMP-05:** CP-2-02 already gives its four log views and tag search, one project at a time. Only what is left is worded: one search and one timeline across all projects, a date and agent filter, and a screen.
+- **Found while wording:** CP-1's control panel is closed to new screens (its PANEL_PLAN, its page's two sections and app.js's tab list), and its files can't change. CMP-09-04 adds a second page, more.html, on the same local server and behind all of CP-1's checks; the toolbox (CMP-09) and log (CMP-05) screens plug in there. CP-1's Home tab can't link to it, so it gets its own icon (the section's Gaps, item 1).
+- Next, in order: W10, W11, W7.
+- No email: nothing failed.
