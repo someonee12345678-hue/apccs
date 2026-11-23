@@ -9457,3 +9457,60 @@ Not checked: the uclrcde screens as they are on uclrcde main. apccs never reads 
 14. **Live steps.** No route, scheduled job or screen is run live by this wording. Starting the door's server on the Owner's phone, and both icons on his home screen, are live steps for a later run.
 
 UNDO: before merge, close the draft pull request. After merge, a later add-only section can hold, correct or replace any batch here. Nothing in this section changes code, runtime or any existing text.
+
+### Wording audit of the compilation batches (independent Claude auditor, 2026-11-23)
+
+Written by a separate Claude run that did not write the wording above (ledger Q039). It checked all ten batches against the template, the readability gate (Q036–Q038 and slice 1 rules 3–5), the code on apccs main `2388392` and uclrcde main `0e20fd5`, and the sources the section cites (the ten items in "Approved features waiting for wording — from the product compilation", W9 in `plan/WORK_ORDERS.md`). Every reused function, constant and signature named above exists on main as written, and every new name is unused in both repositories. Where a correction below differs from the wording above, the correction wins; everything else above stands.
+
+**Status: CMP-02, CMP-01, CMP-03, CMP-04, CMP-07, CMP-10, CMP-06, CMP-09, CMP-05 and CMP-08 are Ready to build**, in that order, with these corrections.
+
+#### Corrections for all ten batches
+
+- **A1 (rule 22).** `urllib.parse.parse_qsl` may be imported and used to read query strings, as CP-1 does; it opens no connection. The ban in rule 22 is on `urllib.request`, `http.client`, `socket` and `ssl` in the new code modules. A test file that starts a local server (CMP-09-04) may import `http.client` to talk to `127.0.0.1` only, as `code/test_apccs2_control_panel.py` does.
+- **A2 (slice 1 rule 4, "No file is written anywhere").** No test writes, copies or links a file, a temporary folder included. A test may make an empty folder inside `tempfile.TemporaryDirectory()`. CMP-08's tests change as said under CMP-08.
+
+#### CMP-01
+
+- **CMP-01-03, first test.** The last step uses the same `real`-data `code` job: with `free-cloud-a` taken out, `phone-local` can't do code and `own-box` has no route record, so `proposed` is None and `flags` names `paid-api`.
+- **CMP-01-03, second test.** Use one ceiling of 760 tokens on `own-box` and its default model, with `margin_percent` 10, and reserve a 2,000-character text with 100 expected reply tokens (660 tokens) through `budget.reserve_usage`. That leaves 100, so the 3,500-token job skips `own-box` with `budget: 100 left`.
+- **CMP-01-04, counting.** An outcome counts for its `route_used`; when `route_used` is None, it counts for its proposal's `proposed` route. `proposed` counts the proposals that named the route; `used` counts the outcomes whose `route_used` is the route; `ok`, `failed` and `not_run` count the outcomes that count for the route, by `result`; `used_when_proposed` counts the outcomes whose `route_used` equals their proposal's `proposed`. In the first test, the `OK` and `FAILED` outcomes have `route_used` `own-box` and the `NOT_RUN` outcome has None, giving `used` 2 and `used_when_proposed` 2.
+
+#### CMP-03
+
+- **CMP-03-02, card id.** `card_id` is `card-` plus the first 16 hex characters of the SHA-256 of the canonical JSON of `{step_id, job_id, request_sha256, created_at}`, so a new card for the same step after an old one expired gets a new id (the `UNIQUE` column never clashes).
+- **CMP-03-02, stored request.** `request_json` is the canonical JSON of P0-2's returned `request`, and `request_sha256` is P0-2's returned `request_sha256`, which equals the SHA-256 of that canonical JSON. CMP-03-05 checks a card by computing the SHA-256 of `request_json` again and comparing.
+- **CMP-03-04, order of checks.** In this order: `AC_BAD_DB`; `AC_BAD_TIME`; `AC_UNKNOWN_CARD`; `AC_NOT_OWNER`; `AC_BAD_DECISION`; `AC_ALREADY_DECIDED` (a card with a decision or `EXPIRED` row); then the expiry check and the record. An `EXPIRED` row keeps the caller's `actor_id`.
+
+#### CMP-04
+
+- **CMP-04-01, unittest blocks.** In unittest's own output the header line `FAIL: ...` or `ERROR: ...` is followed at once by a line of `-` signs. The block's traceback starts after that line and ends at the next line made only of 10 or more `=` signs, the next line made only of 10 or more `-` signs, or the log's end; the message is the last non-blank line of that traceback.
+- **CMP-04-01, run_all_tests rows.** Only a row of the summary table (a line starting `| ` with three cells, as `tools/run_all_tests.py` prints) whose result cell is `❌ fail` gives a `SUITE_BLOCKED` failure: `where` is the first cell, `test` is None and `message` is the third cell. The `**Result: ...**` line and unittest's `FAILED (failures=...)` line give no failure.
+- **CMP-04-02, paths.** Rule 3 replaces each run of non-space characters that holds `/` and ends in `.` and 1–5 letters.
+
+#### CMP-07
+
+- **CMP-07-02, run ids and times.** For `github_workflow`, `id` must be a whole number, and the heartbeat's `run_id` is its decimal text. For `scheduled_task`, `last_run` must hold `fired_at` (a time with an offset) for a heartbeat: the `run_id` is `<id>:<fired_at>` and `started_at` is `fired_at`. A `last_run` without `fired_at` gives no heartbeat and is counted in a returned `skipped` number. A heartbeat `run_id` is 1–200 characters; rule 25 does not apply to it, because it comes from saved text.
+
+#### CMP-10
+
+- **CMP-10-01, labels.** A label covers the rest of its own line only; the next line is sorted again by rule 1 or rule 2. So in the first test, `It is done when the page shows three totals. Never use a paid service.` gives one done_when and one limits sentence. A labelled line's sentence is its text after the `:`, trimmed.
+- **CMP-10-01, matching.** Every word or phrase in rule 2 matches as whole words, in any case. `rule` is `label <label>` for rule 1, `holds "<word>"` or `starts with "<word>"` for rule 2 (the word that matched), and `no rule matched` for context.
+
+#### CMP-06
+
+- **CMP-06-03, tests and reasons.** In the tests, `settings` is always `load_prior_art_settings(...)`'s result (`{}` means `load_prior_art_settings("{}")`). A `source` not in `web_sources` gives `BLOCKED` with the reason `the source is not in web_sources`.
+
+#### CMP-09
+
+- **CMP-09-04, handlers.** `more_handlers` None means `build_more_handlers()`; an empty dict stays empty (the `NOT_BUILT` test needs this). The query of a sub-request is read with `urllib.parse.parse_qsl(query_text, keep_blank_values=True)` into a dict, as CP-1 does. A handler is called through a small private helper (as CP-1's `_call`), because the readability gate refuses a call written on a dictionary item.
+- **CMP-09-04, host test.** The last check of `test_cmp09_04_door_keeps_cp1_refusals` calls `more.run_more_server(config, host="0.0.0.0", port=0)`, which raises `MS_HOST_REFUSED` before any socket opens.
+- **CMP-09-05, query values.** In the screen handler, a `feature` or `limit` made only of digits is turned into a whole number before CMP-09-02, so `feature=13` raises `TB_BAD_QUERY` (400). `GET search` and `GET summary` with no snapshot answer 404 with `read_toolbox_snapshot`'s `NOT_CHECKED` body, as `POST load` does with no copy.
+- **CMP-09-01, headers.** NOT CHECKED in full by this audit: the Drive reader showed the supplement's 13 header cells only cut short, and their starts match the list above. If a real CSV copy's header differs, `TB_BAD_CSV` refuses it loudly; the tests use the headers as listed.
+
+#### CMP-08
+
+- **CMP-08-01, first test.** No symlink is made (correction A2). The repository's `web/panel/` gives the files listed; an empty temporary folder named `ui` gives `project` `uclrcde`, `folder_kind` `ui` and no files. Skipping a symlink stays in the instruction but is not tested.
+- **CMP-08-04, REVIEW.** `REVIEW` is given when the grade is over `target_grade` or any sentence is over `max_sentence_words`.
+- **CMP-08-05, second test.** The temporary folder named `ui` is empty (correction A2): as `uclrcde` it gives `project` `uclrcde`, no files, an empty `reused` and `PASS`; as `apccs` it raises `SC_BAD_FOLDER`.
+
+UNDO: a later add-only section can hold or correct any batch here. This audit changes no code and no earlier text.
