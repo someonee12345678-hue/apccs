@@ -8650,3 +8650,867 @@ Written by a separate Claude run that did not write the wording above (ledger Q0
 **Ready to build.** With these corrections, all ten batches are **Ready to build**, in this order. uclrcde: CD-1, UI-1, UI-4, UI-2, LS-L, LS-J, UI-3, UI-5. apccs: CP-1, CP-2. Each batch's "Build only after" line still holds. None is held.
 
 UNDO: before merge, drop this commit. After merge, a later add-only section can hold or correct any batch.
+
+## Compilation batches — budget, route ladder, approval cards, failure loop, health watch, prompt brief, prior art, toolbox, logs, screen check (Claude, work-order runner W9, 2026-11-23)
+
+Written by the Claude work-order runner on 2026-11-23, about 07:50 UTC, under work order W9 (`plan/WORK_ORDERS.md`) and ledger Q024, Q052 and Q056. It words the ten items of "Approved features waiting for wording — from the product compilation" above. The wording auditor checks this section before it merges (Q039). **Every batch here is NOT ready to build until the wording audit marks it ready.**
+
+Build order (one open pull request per repository, so this is also the queue order), all in `someonee12345678-hue/apccs`: **CMP-02, CMP-01, CMP-03, CMP-04, CMP-07, CMP-10, CMP-06, CMP-09, CMP-05, CMP-08.**
+
+Sources read for this wording: the ten items and their idea sources (above); `plan/PRODUCT_MAP.md`; Drive › FULL_LOG_AUDIT_2026-11-19 › PRODUCT_COMPILATION_2026-11-20_CORRECTED_2, PRODUCT_MAP_DETAIL_2026-11-20 and PRODUCT_MAP_SUPPLEMENT_2026-11-20 (their header rows, for CMP-09); Drive › Claude 2 › RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED (the fix-history idea of arXiv 2611.18856, for CMP-04); ledger Q010, Q016, Q024, Q041, Q046, Q049, Q052 and Q056; the code on apccs main `2388392` and uclrcde main `0e20fd5`.
+
+### Rules for the compilation batches (read with each batch)
+
+Rules 1–11 of slice 1 ("Rules for all five slice 1 batches") and rules 12–18 of slice 2 ("Rules for all ten slice 2 batches") apply unchanged: new files only (`code/apccs2_<name>.py`, tests in `code/test_apccs2_<name>.py`, screens in `web/panel/`); AI switch OFF; docstrings with `Inputs:`, `Outputs:` and `Errors:`, hints, and the A7 test-method rules; the readability gate; add-only SQLite on the `sqlite3.Connection` the caller gives; canonical JSON and SHA-256; projects stay separate; reuse, never rebuild; two tests per instruction; nothing is a live claim; plain web files; the safe local server; unreviewed is a label, never a block. Where a batch says more, both hold. These rules are added:
+
+19. **Supplied data only.** No instruction fetches anything. GitHub replies, scheduler lists, run logs, search results and sheet copies are text the caller gives, saved earlier by a person or a job. An instruction reads a file only where it says so, and only inside the folder it names.
+20. **Settings are strict.** A settings loader reads one JSON object. An unknown key, a bool where a number is wanted, or a value out of range is refused, never replaced by a default. Every number the Owner might change is a setting with a stated default, and the result lists `defaults_used`.
+21. **Switches start OFF.** The router's choice (CMP-01), the AI hand-off (CMP-04) and the web step (CMP-06) are OFF by default. An OFF result says so in plain words (`WATCH_ONLY`, `AI_OFF`, `the web step is OFF`).
+22. **One door for outside calls.** CMP-02-05 is the only instruction that calls anything outside the module: a `call_fn` the caller gives. Tests give a plain stub. No module imports or names a model client, a key, or a network library (`urllib`, `http.client`, `socket` and `ssl` are never imported; the local servers use `http.server` as CP-1 does).
+23. **$0 and route records** (Q010, Q049). A route marked paid is never chosen, reserved or proposed; it is only flagged. Anything but made-up data goes through a route only when it has a route record: exactly `vendor`, `route`, `date` (a real date), `terms` (text, or `NOT CHECKED`) and `checked_by`, each non-blank. These are the five fields `apccs_memory_bench`'s adapter slots and BR-1-03 already use.
+24. **Times.** Every `at` or `now` is given by the caller as ISO 8601 with an offset (`Z` allowed). No instruction reads the clock, except a screen handler, which uses `datetime.now(timezone.utc)` once per request, as CP-1's install check does. Minutes are whole minutes, rounded down, counted in code.
+25. **Ids.** A `call_id`, `job_id`, `step_id`, `run_id`, `fix_id` or `check_id` is 1–80 characters of letters, digits, `.`, `_`, `-` or `:`. A `route` or `model` name is 1–60 characters of lowercase letters, digits, `.`, `_` or `-`.
+26. **New control-panel screens use CMP-09's door.** CP-1's panel is closed to new screens, and its files can't change (rule 12):
+    - `PANEL_PLAN` (`code/apccs2_control_panel.py` line 50) names only `projects`;
+    - `_screen_reply` answers 404 for any other screen id, and `_serve_file` serves only the six panel files and planned scripts;
+    - `web/panel/index.html` holds only the sections `tab-home` and `tab-projects`, and `app.js`'s `selectTab` lists only `home` and `projects`.
+    So CMP-09-04 adds a second page, `web/panel/more.html`, on the same local server, through which `toolbox` (CMP-09) and `logs` (CMP-05) plug in. Every request still passes CP-1's own checks first.
+
+---
+
+### Batch CMP-02 — Usage budget ledger: reserve before every outside call, keep a receipt, release or reconcile, refuse when used up
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/apccs2_usage_budget.py` and `code/test_apccs2_usage_budget.py`. Test class `ApccsBatchCMP02Tests`.
+**Source:** CMP-02 ("Before every outside call: reserve usage against a ceiling per model and route, keep a receipt, release or reconcile on failure, refuse when the budget is used up. Idea: point-of-call budget ledger [G3-13]"); objective O02; ledger Q041 and Q042 (save Claude's usage); RULEBOOK standing preference 10; W9 step 1.
+**Reuse, by exact name:** `apccs_focus_pack.estimate_tokens(text)` and `apccs_focus_pack.ESTIMATE_NOTE`. Import as `import apccs_focus_pack as focus_pack`.
+**Errors:** `ValueError` whose message starts with a `UB_` code. `FP_` errors pass through unchanged.
+**Words used:** a *route* is a way to reach a model (for example `phone-local` or `own-box`). A *call* is one outside request with its own `call_id`. Usage is counted in `tokens` or in `calls`.
+**Canary:** `Canary check: BUDGET = RESERVED -> ledger`.
+
+#### CMP-02-01: LOAD_BUDGET_SETTINGS (source: CMP-02, "a ceiling per model and route"; rule 20)
+Function: `load_budget_settings(settings_json: str) -> dict`.
+Does: Read one JSON object with these keys:
+- `ceilings` (required): 1–100 objects, each exactly `{"route", "model", "unit", "ceiling", "window_hours"}`:
+  - `route` and `model` are names (rule 25), and each `(route, model)` pair appears once;
+  - `unit` is `tokens` or `calls`;
+  - `ceiling` is a whole number from 1 to 1,000,000,000;
+  - `window_hours` is a whole number from 1 to 744. It is a rolling window: 744 hours is 31 days.
+- `margin_percent` (default 10): a whole number from 0 to 100, added to every token reservation.
+- `stale_after_minutes` (default 60): a whole number from 1 to 10,080. A reservation older than this that was never settled is listed as stale.
+Return `{"ceilings"` (sorted by route, then model)`, "margin_percent", "stale_after_minutes", "defaults_used"}`.
+Refuses: `UB_BAD_SETTINGS` (not JSON, not an object, no ceilings, an unknown key, a bool where a number is wanted, a repeated pair, a value out of range).
+Tests: `test_cmp02_01_reads_ceilings_and_defaults` (one ceiling `phone-local` / `qwen3.5-4b` / `tokens` / 50,000 / 24 gives `margin_percent` 10, `stale_after_minutes` 60 and both names in `defaults_used`); `test_cmp02_01_refuses_bad_settings` (`"ceiling": true`; `unit` `dollars`; the same pair twice; the key `margin_pct`; `window_hours` 0; each raises `UB_BAD_SETTINGS`).
+Done means: every ceiling is a setting the Owner can change in one JSON text, and a typo is refused, never guessed.
+Not checked: the real limits of any route or model. Claude's usage limits are not given as numbers here; the Owner or a later research job types them in.
+
+#### CMP-02-02: RESERVE_BEFORE_A_CALL (source: CMP-02, "Before every outside call: reserve usage ... refuse when the budget is used up")
+Function: `reserve_usage(conn: sqlite3.Connection, request: dict, settings: dict) -> dict`.
+Does: `request` is exactly `{"call_id", "route", "model", "text", "expected_reply_tokens", "at"}`. `text` is what will be sent; `expected_reply_tokens` is a whole number from 0 to 1,000,000. `settings` is CMP-02-01's result, checked again with the same rules through one shared private checker. Create the add-only table `ub_events(event_id INTEGER PRIMARY KEY, call_id TEXT NOT NULL, route TEXT NOT NULL, model TEXT NOT NULL, unit TEXT NOT NULL, kind TEXT NOT NULL, amount INTEGER NOT NULL, at TEXT NOT NULL, note TEXT NOT NULL, event_sha256 TEXT NOT NULL)`.
+
+The amount:
+- unit `tokens`: `focus_pack.estimate_tokens(text) + expected_reply_tokens`, plus `margin_percent` of that, rounded up in whole-number arithmetic;
+- unit `calls`: 1.
+
+*Used* is counted over the calls of this route and model whose reservation time is after `at` minus `window_hours`, and not after `at`. A call's state is its newest event, and it counts:
+- `RESERVED`: its reserved amount;
+- `RECONCILED`: its actual amount;
+- `RELEASED`: the amount its release recorded (0 unless a partial amount was given);
+- `REFUSED`: 0.
+
+The decision:
+- no ceiling for the pair → `REFUSED`, note `no ceiling for this route and model`;
+- `used + amount > ceiling` → `REFUSED`, note `budget used up: <used> of <ceiling> <unit> used in the last <window_hours> hours; this call needs <amount>`;
+- otherwise `RESERVED`.
+
+Record one row either way. `event_sha256` is the SHA-256 of the row's canonical JSON without `event_id`. Return `{"decision", "call_id", "route", "model", "unit", "amount", "used_before", "ceiling", "left_after", "line", "estimate_note": focus_pack.ESTIMATE_NOTE}`. `left_after` is `ceiling − used_before − amount` for `RESERVED` and `ceiling − used_before` for `REFUSED` (`None` when there is no ceiling).
+Refuses: `UB_BAD_DB`; `UB_BAD_REQUEST` (the shape, a bad id or time, or a `call_id` that already has an event: a call is reserved once); `UB_BAD_SETTINGS`.
+Tests: `test_cmp02_02_reserves_then_refuses_when_used_up` (an in-memory database, ceiling 1,000 tokens, margin 10: a 2,000-character text with 100 expected reply tokens gives 500 + 100 = 600, plus 60, so 660 reserved and `left_after` 340. A second call of the same size gives `REFUSED` with the used-up note, and the table holds two rows); `test_cmp02_02_refuses_bad_requests_and_unknown_routes` (the same `call_id` twice raises `UB_BAD_REQUEST`; a pair with no ceiling gives `REFUSED` with `no ceiling for this route and model`; `at` without an offset raises `UB_BAD_REQUEST`).
+Done means: nothing goes out without a reservation, and a used-up budget stops a call before it is made.
+Not checked: how close the estimate is to a model's own count (`ESTIMATE_NOTE`: characters / 4).
+
+#### CMP-02-03: RELEASE_OR_RECONCILE (source: CMP-02, "keep a receipt, release or reconcile on failure")
+Function: `settle_usage(conn: sqlite3.Connection, call_id: str, outcome: dict) -> dict`.
+Does: `outcome` is exactly `{"result", "actual", "at"}`: `result` is `OK` or `FAILED`; `actual` is a whole number from 0 to 1,000,000,000, or None; `at` is not earlier than the reservation. The call's newest event must be `RESERVED`. Add one row:
+- `OK` → `RECONCILED`, with amount `actual` (for unit `calls`, 1). For unit `tokens` with `actual` None, `UB_BAD_OUTCOME`: the real count is given by the caller, never guessed here. When `actual` is above the reservation, the note says `over the reservation by <n> <unit>`.
+- `FAILED` → `RELEASED`, with amount `actual` when given (usage spent before the failure), otherwise 0.
+Return `{"call_id", "kind", "reserved", "amount", "difference", "receipt"}`. The `receipt` is `{"call_id", "route", "model", "unit", "reserved", "settled_as", "amount", "reserved_at", "settled_at", "receipt_sha256"}`, where `receipt_sha256` is the SHA-256 of the canonical JSON of the rest.
+Refuses: `UB_BAD_DB`; `UB_UNKNOWN_CALL`; `UB_ALREADY_SETTLED` (a call is settled once, and a refused call can't be settled); `UB_BAD_OUTCOME`.
+Tests: `test_cmp02_03_releases_and_reconciles` (ceiling 1,500 tokens: call 1 reserves 660 and is settled `OK` with `actual` 700, giving `RECONCILED`, difference 40 and the over-the-reservation note; call 2 reserves 660 and is settled `FAILED` with no actual, giving `RELEASED` and amount 0; call 3 of 660 is then `RESERVED`, because only 700 is used); `test_cmp02_03_refuses_double_or_unknown_settles` (settling call 1 again raises `UB_ALREADY_SETTLED`; call `nope` raises `UB_UNKNOWN_CALL`; `OK` with `actual` None for unit `tokens` raises `UB_BAD_OUTCOME`; an `at` before the reservation raises `UB_BAD_OUTCOME`).
+Done means: every reservation ends as a receipt, and a failed call gives its usage back.
+Not checked: the count a model really reports; `actual` is what the caller read from the reply.
+
+#### CMP-02-04: BUDGET_STATUS (source: CMP-02; O02, save usage; rule 24)
+Function: `read_budget_status(conn: sqlite3.Connection, settings: dict, at: str) -> dict`.
+Does: Read only. For each ceiling, in the settings' order, return `{"route", "model", "unit", "ceiling", "window_hours", "used", "reserved_open", "left", "percent_used", "stale"}`:
+- `used` is counted as in CMP-02-02 at `at`, and `reserved_open` is the part of it still `RESERVED`;
+- `left` is max(0, `ceiling − used`), and `percent_used` is `used × 100 ÷ ceiling`, rounded up;
+- `stale` lists the `call_id`s still `RESERVED` whose reservation is more than `stale_after_minutes` before `at`. A stale reservation keeps counting as used until it is settled, so usage is never under-counted.
+A missing table gives every ceiling `used` 0. Return `{"routes", "lines", "at"}`, with one plain line per ceiling, for example `phone-local / qwen3.5-4b: 660 of 1,000 tokens used in the last 24 hours (66%); 340 left; 1 reservation not settled for over 60 minutes.`
+Refuses: `UB_BAD_DB`; `UB_BAD_SETTINGS`; `UB_BAD_TIME`.
+Tests: `test_cmp02_04_reports_used_left_and_stale` (one 660 reservation at 09:00 and a status at 10:30 with `stale_after_minutes` 60 gives used 660, left 340, 66 percent and the call in `stale`; a status 25 hours later, with a 24-hour window, gives used 0); `test_cmp02_04_refuses_bad_time_or_settings` (`at` `today` raises `UB_BAD_TIME`; settings `{}` raise `UB_BAD_SETTINGS`).
+Done means: anyone can see, for each route, how much is used and left, and which calls were never closed.
+Not checked: nothing reads it on a schedule yet. CMP-01 reads it before each proposal.
+
+#### CMP-02-05: GUARD_AN_OUTSIDE_CALL (source: CMP-02, "Before every outside call"; rule 22)
+Function: `run_with_budget(conn: sqlite3.Connection, request: dict, settings: dict, call_fn: Callable[[str], dict]) -> dict`.
+Does: Reserve with CMP-02-02. `REFUSED` → return that result with `called: False`; `call_fn` is never called. `RESERVED` → call `call_fn(request["text"])` once. The settle time is the request's `at`, because this module reads no clock (rule 24).
+- `call_fn` raises → settle `FAILED` with `actual` None. Return `{"decision": "FAILED", "called": True, "error": <the exception's class name only>, "receipt"}`. The exception's text is never kept or returned, because it could hold private words.
+- It returns a dict holding `reply_text` (text) and, optionally, `actual` (a whole number) → settle `OK`. `actual` is the given number, or for unit `tokens` without one, `focus_pack.estimate_tokens(request["text"]) + focus_pack.estimate_tokens(reply_text)`. Return `{"decision": "OK", "called": True, "reply_text", "actual_source": "REPORTED" or "ESTIMATED", "receipt"}`.
+- Anything else → settle `FAILED` and return `{"decision": "FAILED", "called": True, "error": "BAD_REPLY_SHAPE", "receipt"}`.
+Refuses: as CMP-02-02; `UB_BAD_CALL_FN` when `call_fn` is not callable, before anything is reserved.
+Tests: `test_cmp02_05_reserves_calls_and_reconciles` (a stub returning `{"reply_text": "made-up answer"}` is called once and gives `OK`, `actual_source` `ESTIMATED` and a `RECONCILED` receipt; a second request over the ceiling gives `REFUSED`, and a stub that fails the test if it is called is never called); `test_cmp02_05_releases_when_the_call_fails` (a stub raising `RuntimeError("person@example.com")` gives `FAILED` with `error` `RuntimeError`; the email text is in no returned value and no table row; the reservation is `RELEASED`; `call_fn` None raises `UB_BAD_CALL_FN` and adds no row).
+Done means: one function is the door for every outside call, and it never forgets to give usage back.
+Not checked: any real route. Every test uses a stub, and this batch calls no route.
+
+---
+
+### Batch CMP-01 — Model route ladder and router: the cheapest route that can do the job, watch-only first
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** CMP-02 is merged.
+**New files:** `code/apccs2_route_ladder.py` and `code/test_apccs2_route_ladder.py`. Test class `ApccsBatchCMP01Tests`.
+**Source:** CMP-01 ("Rates each job and sends it to the cheapest route that can do it: phone model, then the Owner's own machine, then free cloud. A paid route is never picked silently, only flagged. Starts watch-only: it measures proposed routes before it may change any. Ideas: rightsize [17-09], delegate-router [17-38], RouteLabs [14-055], agnostic-agent [14-116], free-tier registries [14-177]"); objectives O02 and O16; ledger Q010 ("$0 budget: free tiers only") and Q049 (the route record); W9 step 2.
+**Reuse, by exact name:** `apccs_focus_pack.estimate_tokens(text)` and `apccs_focus_pack.ESTIMATE_NOTE`; `apccs2_usage_budget.read_budget_status(conn, settings, at)`; tests also use `apccs2_usage_budget.load_budget_settings(settings_json)` and `apccs2_usage_budget.reserve_usage(conn, request, settings)`. Import as `import apccs_focus_pack as focus_pack` and `import apccs2_usage_budget as budget`.
+**Errors:** `ValueError` whose message starts with an `RL_` code. `UB_` errors pass through unchanged.
+**Words used:** a *rung* is where a route sits on the ladder, cheapest first: `phone`, `own_machine`, `free_cloud`, `paid`. An *ability* is one of `text`, `code`, `pictures` or `tools`.
+**Canary:** `Canary check: ROUTE = CHEAPEST -> ladder`.
+
+#### CMP-01-01: LOAD_ROUTE_LADDER (source: CMP-01, "phone model, then the Owner's own machine, then free cloud"; Q010)
+Function: `load_route_ladder(ladder_json: str) -> dict`.
+Does: Read one JSON object `{"routes": [...]}` with 1–50 routes, each exactly `{"route", "rung", "models", "abilities", "max_input_tokens", "paid", "route_record"}`:
+- `route`: a name (rule 25), each once;
+- `rung`: `phone`, `own_machine`, `free_cloud` or `paid`;
+- `models`: 1–10 model names; the first is the route's default model;
+- `abilities`: 1–4 distinct abilities;
+- `max_input_tokens`: a whole number from 1 to 10,000,000;
+- `paid`: `true` only on rung `paid`, and rung `paid` needs `true`. A route that may cost money never sits on a free rung;
+- `route_record`: None, or exactly the five fields of rule 23.
+Return `{"routes"` (sorted by rung, cheapest first, then in the order given)`, "paid_routes", "routes_without_record"}` (the last two are lists of names).
+Refuses: `RL_BAD_LADDER`, naming the broken rule. A free rung with `paid` true gives `a route that can cost money must sit on the paid rung (Q010)`.
+Tests: `test_cmp01_01_sorts_the_ladder_cheapest_first` (made-up routes `free-cloud-a` (`free_cloud`), `phone-local` (`phone`) and `paid-api` (`paid`) come back as phone-local, free-cloud-a, paid-api; `paid_routes` is `["paid-api"]`); `test_cmp01_01_refuses_bad_ladders` (rung `free_cloud` with `paid` true; ability `magic`; a route record without `checked_by`; a route named twice; each raises `RL_BAD_LADDER`).
+Done means: the route ladder is one checked list, and a route that can cost money can't hide on a free rung.
+Not checked: which real routes exist on the Owner's phone and machine. The ladder is a setting.
+
+#### CMP-01-02: RATE_A_JOB (source: CMP-01, "Rates each job")
+Function: `rate_job(job: dict) -> dict`.
+Does: `job` is exactly `{"job_id", "text", "needs", "data", "reply_tokens"}`: `needs` is 1–4 distinct abilities; `data` is `made_up` or `real` (`real` means anything but made-up data, Q049); `reply_tokens` is a whole number from 0 to 1,000,000. Return `{"job_id", "input_tokens": focus_pack.estimate_tokens(text), "reply_tokens", "total_tokens", "needs"` (sorted)`, "data", "size", "estimate_note"}`. `size` is a word for people: `small` (total up to 4,000), `medium` (up to 32,000) or `large`; the route's `max_input_tokens` decides fit, not the word. The text itself is not returned.
+Refuses: `RL_BAD_JOB`.
+Tests: `test_cmp01_02_rates_size_needs_and_data` (12,000 characters with 500 reply tokens gives 3,000 + 500 = 3,500 and `small`; 200,000 characters gives `large`; needs `["text", "code"]` come back as `["code", "text"]`); `test_cmp01_02_refuses_bad_jobs` (`data` `secret`; `needs` `[]`; `reply_tokens` -1; each raises `RL_BAD_JOB`).
+Done means: each job gets a plain, repeatable rating before any route is considered.
+Not checked: whether the three size words match real model limits.
+
+#### CMP-01-03: PROPOSE_THE_CHEAPEST_ROUTE (source: CMP-01; W9, "asks CMP-02 before proposing a route"; Q010; Q049)
+Function: `propose_route(conn: sqlite3.Connection, rating: dict, ladder: dict, budget_settings: dict, at: str) -> dict`.
+Does: `rating` is CMP-01-02's result, `ladder` CMP-01-01's and `budget_settings` CMP-02-01's. Read `budget.read_budget_status(conn, budget_settings, at)` once. Walk the routes cheapest first. A route is skipped, with one plain reason, when:
+1. it lacks a needed ability (`cannot do: <abilities>`);
+2. `input_tokens` is above its `max_input_tokens` (`too long: <n> tokens, at most <max>`);
+3. `data` is `real` and it has no route record (`no route record yet (Q049); only made-up data may use it`);
+4. its default model has no ceiling in `budget_settings` (`no budget ceiling`), or its `left` is below `total_tokens` for unit `tokens`, or below 1 for unit `calls` (`budget: <left> left`);
+5. it is `paid`. A paid route is never proposed. When it passes rules 1–4, it is named in `flags`: `paid route <name> could do this job; it is never picked (Q010).`
+The first route not skipped is `proposed`, with its default model. If none, `proposed` is None and `line` is `No free route can do this job now.` Create the add-only table `rl_proposals(proposal_id INTEGER PRIMARY KEY, job_id TEXT NOT NULL, proposed TEXT, model TEXT, skipped_json TEXT NOT NULL, flags_json TEXT NOT NULL, at TEXT NOT NULL)` and record one row. Return `{"proposal_id", "job_id", "proposed", "model", "rung", "skipped": [{"route", "reason"}], "flags", "line"}`. This only reads the budget; a real call reserves through CMP-02-05.
+Refuses: `RL_BAD_DB`; `RL_BAD_RATING`; `RL_BAD_LADDER`; `RL_BAD_TIME`; `UB_` errors pass through.
+Tests: `test_cmp01_03_proposes_the_cheapest_route_that_fits` (a ladder of `phone-local` (text only, 8,000 tokens), `own-box` (text and code, no route record), `free-cloud-a` (text and code, with a route record) and `paid-api` (text and code, with a route record), each with a ceiling: a made-up `code` job is proposed `own-box`, with `phone-local` skipped as `cannot do: code`; the same job with `data` `real` skips `own-box` for its missing record and is proposed `free-cloud-a`; with `free-cloud-a` taken out, `proposed` is None and `flags` names `paid-api`); `test_cmp01_03_skips_a_route_whose_budget_is_used_up` (a `budget.reserve_usage` call that leaves 100 tokens on `own-box` makes a 3,500-token job skip it with `budget: 100 left`; a rating without `size` raises `RL_BAD_RATING`).
+Done means: the cheapest free route that can do the job is named, every skipped route says why, and a paid route is only ever flagged.
+Not checked: whether the proposed route does the job well. CMP-01-04 measures that.
+
+#### CMP-01-04: RECORD_HOW_ROUTES_DID (source: CMP-01, "it measures proposed routes"; W9, "it records proposed routes and how they did")
+Functions: `record_route_outcome(conn: sqlite3.Connection, proposal_id: int, outcome: dict) -> dict` and `read_route_scores(conn: sqlite3.Connection) -> dict`.
+Does: `outcome` is exactly `{"route_used", "result", "minutes", "at", "note"}`: `route_used` is a route name, or None when the job ran some other way; `result` is `OK`, `FAILED` or `NOT_RUN`; `minutes` is a whole number from 0 to 10,080, or None; `note` is 0–200 characters. Create the add-only table `rl_outcomes(outcome_id INTEGER PRIMARY KEY, proposal_id INTEGER NOT NULL, proposed TEXT, route_used TEXT, result TEXT NOT NULL, minutes INTEGER, at TEXT NOT NULL, note TEXT NOT NULL)`. A proposal has one outcome.
+`read_route_scores` returns, for each route named in any proposal or outcome, `{"route", "proposed", "used", "ok", "failed", "not_run", "ok_percent", "used_when_proposed"}`. `ok_percent` is `ok × 100 ÷ (ok + failed)`, rounded down, or None when both are 0. It also returns plain lines, for example `own-box: proposed 4 times, used 3 times, 2 OK and 1 failed (66% OK).`
+Refuses: `RL_BAD_DB`; `RL_UNKNOWN_PROPOSAL`; `RL_ALREADY_RECORDED`; `RL_BAD_OUTCOME`.
+Tests: `test_cmp01_04_scores_routes_from_outcomes` (three proposals of `own-box` with outcomes `OK`, `FAILED` and `NOT_RUN` give proposed 3, ok 1, failed 1, not_run 1 and `ok_percent` 50); `test_cmp01_04_refuses_unknown_or_repeated_outcomes` (proposal 99 raises `RL_UNKNOWN_PROPOSAL`; a second outcome for one proposal raises `RL_ALREADY_RECORDED`; `result` `GREAT` raises `RL_BAD_OUTCOME`).
+Done means: before the router may choose, there is a record of what it would have chosen and how that route did.
+Not checked: who records real outcomes. The caller that ran the job does.
+
+#### CMP-01-05: ROUTER_WATCH_ONLY_BY_DEFAULT (source: CMP-01, "Starts watch-only"; W9, "a setting, OFF by default, lets it choose"; rule 21)
+Function: `route_job(conn: sqlite3.Connection, job: dict, ladder: dict, budget_settings: dict, router_settings: dict, at: str) -> dict`.
+Does: `router_settings` is `{}` or exactly `{"router_choice": "OFF" or "ON"}`; missing means `OFF`. Rate the job (CMP-01-02), then propose a route (CMP-01-03), which records the proposal.
+- `OFF`: return `{"mode": "WATCH_ONLY", "proposal", "chosen": None, "line": "Watch-only: <route> would be proposed; the job keeps the route it already had."}`.
+- `ON`: `chosen` is `{"route", "model"}` of the proposal, which already applied the paid and route-record rules; the line is `Chosen: <route> (<rung>).` With no proposal, `chosen` is None and the line says so.
+Nothing is reserved or called here.
+Refuses: `RL_BAD_SETTINGS` (an unknown key, or a value other than `OFF` or `ON`); the steps' errors pass through.
+Tests: `test_cmp01_05_watch_only_until_switched_on` (`{}` gives `WATCH_ONLY`, `chosen` None and one recorded proposal; `{"router_choice": "ON"}` gives the proposed route as `chosen`); `test_cmp01_05_refuses_unknown_router_settings` (`{"router_choice": "AUTO"}` and `{"choose": "ON"}` raise `RL_BAD_SETTINGS`).
+Done means: the router watches and measures first, and chooses only when the Owner's setting says so.
+Not checked: when to switch it on. That waits for enough outcomes (CMP-01-04); no number for it is set here.
+
+---
+
+### Batch CMP-03 — Approval cards: a card only for the steps that truly need the Owner
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new (P0-2 is built).
+**New files:** `code/apccs2_approval_cards.py` and `code/test_apccs2_approval_cards.py`. Test class `ApccsBatchCMP03Tests`.
+**Source:** CMP-03 ("Plain-code rules decide which steps truly need the Owner (can't be undone, spends money, protected file, account change). Only those make a card with approve, deny and an expiry; everything else goes ahead. Shown on the existing Approvals screen (P0-2). Ideas: Open-Dots action approvals [14-018], Suparagent approval modes [14-017], Stapler Squad approval rules and review queue [14-164]"); objective O16; ledger Q024 ("Stop only for 'needs your OK' items: anything that cannot be undone, money, keys or accounts, protected files and the hard limits"); RULEBOOK "Hard limits" and "Conflicts between these" ("Deleting, overwriting, account changes, spending, and anything that can't be undone wait for him"); R218 (MausBot: each step needs approval until turned on, in RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED); W9 step 3.
+**Reuse, by exact name:** `apccs_p0_dashboard.build_p0_approval_request(snapshot, job_id, action, actor)`; tests also use `apccs_p0_dashboard.build_p0_dashboard_snapshot(mission_snapshot, queue_rows, now)` with made-up rows shaped like those in `code/test_apccs_p0_dashboard.py`. Import as `import apccs_p0_dashboard as dash`.
+**Errors:** `ValueError` whose message starts with an `AC_` code.
+**Canary:** `Canary check: APPROVAL = ONLY_WHEN_NEEDED -> card`.
+
+#### CMP-03-01: NEEDS_YOUR_OK_RULES (source: Q024; RULEBOOK "Hard limits" and the 25 Oct rule)
+Function: `classify_step(step: dict, settings: dict) -> dict`.
+Does: `step` is exactly `{"step_id", "action", "summary", "paths", "undo", "spends_money", "keys_or_accounts"}`:
+- `action`: 1–40 lowercase letters, digits or `_` (for example `add_file`, `delete`, `merge`);
+- `summary`: 1–300 characters;
+- `paths`: 0–200 safe relative paths (no `..`, no leading `/`);
+- `undo`: 1–300 characters saying how to reverse the step, or None when it can't be undone;
+- `spends_money` and `keys_or_accounts`: true or false.
+`settings` is `{}` or holds any of:
+- `protected_paths`, default `PROTECTED_PATHS`: `.github/`, `tools/`, `AGENTS.md`, `CLAUDE.md`, `BUILDER_RUNBOOK.md`, `PROJECTS.md`, `code/apccs_core.py`, `code/test_apccs_core.py`. An entry ending in `/` covers every path under it; any other entry covers that path only;
+- `never_actions`, default `NEVER_ACTIONS`: `merge`, `approve`, `push_main`, `read_credentials` (RULEBOOK hard limits; the server gate merges, Q041);
+- `owner_actions`, default `OWNER_ACTIONS`: `delete`, `overwrite` (the 25 Oct rule).
+Decide in this order:
+1. `NEVER` when `action` is in `never_actions`, with the reason `a hard limit: agents never <action> (RULEBOOK)`. No card is made; the step must not happen.
+2. `NEEDS_OK`, with every reason that applies: `can't be undone`; `<action>: deleting or overwriting waits for the Owner`; `spends money ($0 rule, Q010)`; `touches keys or accounts`; `changes a protected file: <path>`.
+3. Otherwise `GO_AHEAD`, with the reason `can be undone: <undo>`.
+Return `{"step_id", "decision", "reasons", "made_by": "CODE", "rule_source": "Q024"}`.
+P0-2's `FORBIDDEN_ACTIONS` also hold `close` and `delete`: those are request names a dashboard may never send. As steps, closing an issue is routine, and a delete waits for the Owner, so the lists differ on purpose.
+Refuses: `AC_BAD_STEP`; `AC_BAD_SETTINGS`.
+Tests: `test_cmp03_01_only_true_owner_steps_need_ok` (a step adding `plan/x.md` with undo `revert the commit` gives `GO_AHEAD`; the same step on `.github/workflows/a.yml` gives `NEEDS_OK` naming the path; undo None gives `NEEDS_OK` with `can't be undone`; `spends_money` true gives `NEEDS_OK`; action `delete` gives `NEEDS_OK`; action `merge` gives `NEVER`); `test_cmp03_01_refuses_bad_steps` (a path `../x`; `spends_money` `"no"`; no `undo` key; the settings key `protect`; each raises `AC_BAD_STEP` or `AC_BAD_SETTINGS`).
+Done means: plain code that anyone can read decides what truly needs the Owner; everything else goes ahead.
+Not checked: a step that hides what it touches. The rules see only the paths and flags a step gives; the guard check and the audits catch a step that lies.
+
+#### CMP-03-02: MAKE_A_CARD (source: CMP-03, "Only those make a card with approve, deny and an expiry"; W9, "cards reach the existing Approvals screen through build_p0_approval_request")
+Function: `make_approval_card(conn: sqlite3.Connection, step: dict, settings: dict, snapshot: dict, job_id: str, actor: dict, at: str, expires_minutes: int = 1440) -> dict`.
+Does: Classify the step with CMP-03-01.
+- `GO_AHEAD` → `{"status": "NOT_NEEDED", "line": "No card: this step can go ahead (log it with log_step_without_card)."}`;
+- `NEVER` → `{"status": "REFUSED", "reason": <the NEVER reason>}`;
+- `NEEDS_OK` → call `dash.build_p0_approval_request(snapshot, job_id, "request_owner_approval", actor)`. Its `BLOCKED` (stale or tampered snapshot, STOP, an anonymous actor, self-approval, an unknown job) makes no card: return `{"status": "BLOCKED", "reason": <its reason>}`.
+Otherwise create the add-only table `ac_cards(card_row INTEGER PRIMARY KEY, card_id TEXT NOT NULL UNIQUE, step_id TEXT NOT NULL, job_id TEXT NOT NULL, summary TEXT NOT NULL, reasons_json TEXT NOT NULL, request_json TEXT NOT NULL, request_sha256 TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL)`. `card_id` is `card-` plus the first 16 hex characters of the SHA-256 of the canonical JSON of `{step_id, job_id, request_sha256}`. A step has one open card at a time: while its card is neither decided nor expired, the same call returns that card with `already_open: True` and adds no row. `expires_minutes` is a whole number from 5 to 10,080. Return `{"status": "OK", "card": {"card_id", "step_id", "job_id", "summary", "reasons", "choices": ["APPROVE", "DENY"], "created_at", "expires_at", "request", "authority": "REQUEST_ONLY"}, "already_open"}`.
+Refuses: `AC_BAD_DB`; `AC_BAD_TIME`; `AC_BAD_EXPIRY`; the step and settings errors of CMP-03-01.
+Tests: `test_cmp03_02_makes_cards_only_for_needs_ok` (a snapshot from `dash.build_p0_dashboard_snapshot` with made-up rows, and an authenticated `agent` actor that holds no job: a protected-file step gives one card with `APPROVE` and `DENY`, an expiry 1,440 minutes later and `authority` `REQUEST_ONLY`; the same call again gives `already_open` True and still one row; a `GO_AHEAD` step gives `NOT_NEEDED` and no row); `test_cmp03_02_passes_on_p0_blocks` (an actor with `authenticated` false gives `BLOCKED` with P0-2's reason and no row; `expires_minutes` 1 raises `AC_BAD_EXPIRY`).
+Done means: the Owner gets a card only for a step that truly needs him, bound to the revision it was made for.
+Not checked: the Approvals page showing it. P0-2's Node-RED page sends to an approval adapter (`dash.APPROVAL_URL`) that is not built; CMP-03-05 lists the cards for that adapter (Gaps).
+
+#### CMP-03-03: LOG_THE_STEPS_THAT_GO_AHEAD (source: W9, "everything else goes ahead and is logged")
+Function: `log_step_without_card(conn: sqlite3.Connection, step: dict, settings: dict, at: str) -> dict`.
+Does: Classify with CMP-03-01. For `GO_AHEAD` and `NEVER`, add a row to the add-only table `ac_step_log(log_row INTEGER PRIMARY KEY, step_id TEXT NOT NULL, decision TEXT NOT NULL, action TEXT NOT NULL, summary TEXT NOT NULL, paths_json TEXT NOT NULL, undo TEXT, reasons_json TEXT NOT NULL, at TEXT NOT NULL)` and return `{"step_id", "decision", "logged": True, "line"}`. The line is `Going ahead (can be undone: <undo>).` or `Not done: <reason>.` A `NEEDS_OK` step is not logged here: it returns `{"step_id", "decision": "NEEDS_OK", "logged": False, "line": "This step needs a card (make_approval_card)."}`.
+Refuses: `AC_BAD_DB`; `AC_BAD_TIME`; the step and settings errors of CMP-03-01.
+Tests: `test_cmp03_03_logs_go_ahead_and_never_steps` (a `GO_AHEAD` step and a `merge` step each add one row with their decision; a `NEEDS_OK` step adds none); `test_cmp03_03_refuses_bad_input` (`at` `now` raises `AC_BAD_TIME`; `paths` given as the text `"plan/x.md"` raises `AC_BAD_STEP`).
+Done means: every step an agent takes without asking is still written down, with how to undo it.
+Not checked: that agents call it. Wiring it into the builder is a later batch.
+
+#### CMP-03-04: RECORD_THE_OWNERS_DECISION (source: CMP-03, "approve, deny and an expiry"; P0-2-02, "The authoritative adapter must revalidate the actor, the revision and STOP before any effect")
+Function: `record_card_decision(conn: sqlite3.Connection, card_id: str, decision: str, actor: dict, at: str) -> dict`.
+Does: `decision` is `APPROVE` or `DENY`. `actor` is exactly `{"actor_id", "kind", "authenticated"}`; only `kind` `owner` with `authenticated` true may decide. Create the add-only table `ac_decisions(decision_row INTEGER PRIMARY KEY, card_id TEXT NOT NULL, decision TEXT NOT NULL, actor_id TEXT NOT NULL, at TEXT NOT NULL)`.
+- `at` after the card's `expires_at` → record `EXPIRED` instead, and return `{"status": "EXPIRED", "card_id", "line": "This card expired at <expires_at>; nothing was decided. Make a new card if the step is still wanted."}`;
+- a card already decided or expired → `AC_ALREADY_DECIDED`;
+- otherwise record the decision and return `{"status": "OK", "card_id", "decision", "authority": "DECISION_RECORDED_ONLY", "revalidate": ["authenticated actor", "current revision", "STOP"], "line"}`.
+Recording a decision does nothing else. The step's own adapter checks the actor, the revision and STOP again before any effect, as P0-2-02 requires.
+Refuses: `AC_BAD_DB`; `AC_UNKNOWN_CARD`; `AC_ALREADY_DECIDED`; `AC_NOT_OWNER`; `AC_BAD_DECISION`; `AC_BAD_TIME`.
+Tests: `test_cmp03_04_owner_decides_before_expiry` (an owner's `APPROVE` before expiry is recorded with `DECISION_RECORDED_ONLY`; another card decided after its expiry gives `EXPIRED` and one `EXPIRED` row); `test_cmp03_04_refuses_agents_and_repeats` (an `agent` actor raises `AC_NOT_OWNER`; deciding the approved card again raises `AC_ALREADY_DECIDED`; decision `MAYBE` raises `AC_BAD_DECISION`).
+Done means: only the Owner decides a card, once, before it expires, and a decision is a record, never an action.
+Not checked: how the Owner's phone proves it is him. The approval adapter's sign-in is a later step.
+
+#### CMP-03-05: CARDS_FOR_THE_APPROVALS_SCREEN (source: CMP-03, "Shown on the existing Approvals screen (P0-2)")
+Function: `list_approval_cards(conn: sqlite3.Connection, at: str) -> dict`.
+Does: Read only. Return `{"open", "decided", "expired", "problems", "counts", "lines"}`. Each card is shown as in CMP-03-02, plus `state`: `OPEN`, `APPROVED`, `DENIED` or `EXPIRED`. An open card past its expiry shows `EXPIRED` without adding a row. Open cards are oldest first, and each carries P0-2's `request` exactly as recorded with its `request_sha256`, so the approval adapter can check it was not changed. A card whose stored request no longer matches its SHA-256 is listed under `problems` and never as open. Each open card has a line: `Needs your OK: <summary> (<reasons, joined by "; ">). Expires <expires_at>.` A missing table gives empty lists.
+Refuses: `AC_BAD_DB`; `AC_BAD_TIME`.
+Tests: `test_cmp03_05_lists_open_decided_and_expired` (three cards, one approved, one past its expiry and one open, give one in each list, and the open card's line); `test_cmp03_05_reports_a_changed_card` (a card whose `request_json` the test changes through its own `UPDATE` statement is listed under `problems`, not `open`; `at` `soon` raises `AC_BAD_TIME`).
+Done means: the Approvals screen has one plain list of what waits for the Owner, and a card changed after it was made is never shown as valid.
+Not checked: the Node-RED page reading this list, because its adapter is not built.
+
+---
+
+### Batch CMP-04 — Failure loop: group repeated failures by cause, tie them to the commit, keep a fix history, one fix item per cause
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/apccs2_failure_loop.py` and `code/test_apccs2_failure_loop.py`. Test class `ApccsBatchCMP04Tests`.
+**Source:** CMP-04 ("Reads run logs, groups repeated failures by cause, ties each group to the code version it ran on, opens one fix item per cause. Plain code groups; AI only to describe a group when needed. Idea: Google AQuA [17-13]"); objective O17; R224, arXiv 2611.18856, Section 3.2, read on 20 Nov 2026 and checked by Muse (Drive › Claude 2 › RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED: "each proposed edit is filed under a root-cause guess, with its reason, the predicted result, the observed result, and where it came from"); MB-2 (only tested lessons are reused); W9 step 4 ("returns one fix item per cause ... any AI description of a group is a hand-off packet, with the AI switch OFF by default").
+**Reuse, by exact name:** `apccs_focus_pack.estimate_tokens(text)` (the hand-off packet's size); `apccs2_architecture_registry.AM_PROJECTS` (the four project names). Import as `import apccs_focus_pack as focus_pack` and `import apccs2_architecture_registry as registry`.
+**Errors:** `ValueError` whose message starts with an `FL_` code.
+**Canary:** `Canary check: FAILURES = GROUPED -> loop`.
+
+#### CMP-04-01: READ_A_RUN_LOG (source: CMP-04, "Reads run logs"; rule 19)
+Function: `read_run_log(log_text: str, run: dict) -> dict`.
+Does: `run` is exactly `{"run_id", "project", "revision", "started_at", "source"}`: `project` is a key of `registry.AM_PROJECTS`; `revision` is 40 lowercase hex characters; `source` is 1–200 characters (for example `saved GitHub Actions log`). `log_text` is at most 5,000,000 characters. Find failures line by line, in order, in four formats:
+- **unittest:** a line `FAIL: <test> (<where>)` or `ERROR: <test> (<where>)` opens a block. The block's message is the last non-blank line of the traceback inside it, before the next line made only of `=` or `-` signs (for example `AssertionError: 3 != 4`). One failing test is one failure;
+- **traceback:** a `Traceback (most recent call last):` outside such a block gives one failure, with its last line as the message;
+- **GitHub Actions:** a line holding `##[error]` gives one failure with the text after it;
+- **run_all_tests:** a summary row holding `BLOCKED` or `FAIL` gives one failure, keeping the test file it names.
+Each failure is `{"kind": "TEST_FAIL", "TEST_ERROR", "EXCEPTION", "ACTION_ERROR" or "SUITE_BLOCKED", "test"` (or None)`, "where"` (or None)`, "message"` (1–500 characters, cut at 500)`, "line_number"}`. Return `{"run", "failures", "lines_read", "log_sha256", "formats_read": ["unittest", "traceback", "GitHub Actions", "run_all_tests"]}`. The log text is neither returned nor kept.
+Refuses: `FL_BAD_RUN`; `FL_BAD_LOG` (not text, or too long).
+Tests: `test_cmp04_01_finds_failures_in_a_unittest_log` (a made-up log with a `FAIL:` block ending `AssertionError: 3 != 4`, an `ERROR:` block ending `ValueError: UB_BAD_SETTINGS: unknown key x` and the line `##[error]Process completed with exit code 1.` gives three failures with those kinds, tests and messages); `test_cmp04_01_refuses_bad_runs_and_logs` (`revision` `abc`; `project` `other`; the log given as bytes).
+Done means: a saved run log becomes a plain list of failures, without anyone reading the whole log.
+Not checked: other log formats, for example Gradle and JUnit 4 for corolla-obd. Their failures are not found, and `formats_read` says which formats were read.
+
+#### CMP-04-02: CAUSE_SIGNATURE (source: CMP-04, "groups repeated failures by cause"; the AQuA idea)
+Function: `cause_signature(failure: dict) -> dict`.
+Does: Plain code turns a failure into its cause, so the same fault on other runs, lines or values falls in one group. Take the `message` and replace, in this order:
+1. 64- or 40-character hex hashes with `<hash>`;
+2. ISO dates and times with `<time>`;
+3. paths (text holding `/` and ending in a dot and 1–5 letters) with `<path>`;
+4. quoted text (`'...'` or `"..."`) with `<text>`;
+5. whole numbers with `<n>`;
+6. runs of spaces with one space.
+Then cut to 200 characters. The `signature` is `<kind> | <message after the replacements>`, and the `cause_key` is the first 16 hex characters of its SHA-256. The test name is not part of the cause, so two tests that fail the same way share one cause. Return `{"cause_key", "signature"}`.
+Refuses: `FL_BAD_FAILURE` (not shaped like a CMP-04-01 failure).
+Tests: `test_cmp04_02_same_fault_same_cause` (`AssertionError: 3 != 4` and `AssertionError: 7 != 9` share a `cause_key`; `ValueError: UB_BAD_SETTINGS: unknown key 'x'` and the same with `'y'` share one, which differs from `ValueError: UB_BAD_REQUEST: unknown key 'x'`; messages holding `/home/a/b.py` and `/tmp/c.py` share one); `test_cmp04_02_refuses_bad_failures` (a failure without `message`; `kind` `OOPS`).
+Done means: repeated failures are grouped by what went wrong, by rules a person can read.
+Not checked: two different faults with the same words fall in one group. A fix item says how many tests and runs it covers, so a person can split it.
+
+#### CMP-04-03: RECORD_RUNS_AND_GROUP_BY_CAUSE (source: CMP-04, "ties each group to the code version it ran on"; Q016)
+Functions: `record_run_failures(conn: sqlite3.Connection, run_result: dict, at: str) -> dict` and `group_failures(conn: sqlite3.Connection, project: str) -> dict`.
+Does: `run_result` is CMP-04-01's result. Create two add-only tables:
+- `fl_runs(run_row INTEGER PRIMARY KEY, run_id TEXT NOT NULL UNIQUE, project TEXT NOT NULL, revision TEXT NOT NULL, started_at TEXT NOT NULL, failure_count INTEGER NOT NULL, log_sha256 TEXT NOT NULL, recorded_at TEXT NOT NULL)`;
+- `fl_failures(failure_row INTEGER PRIMARY KEY, run_id TEXT NOT NULL, project TEXT NOT NULL, revision TEXT NOT NULL, started_at TEXT NOT NULL, cause_key TEXT NOT NULL, signature TEXT NOT NULL, kind TEXT NOT NULL, test TEXT, message TEXT NOT NULL, recorded_at TEXT NOT NULL)`, one row per failure, with its cause from CMP-04-02.
+A run is recorded once: the same `run_id` with the same `log_sha256` gives `already_recorded` True; with another hash, `FL_RUN_CHANGED`. A run with no failures is recorded too, so a cause can be seen to stop.
+`group_failures` reads one project's rows only (projects never mix, Q016). It returns `{"project", "groups"}`, one group per `cause_key`, most failures first: `{"cause_key", "signature", "failures", "runs", "repeated"` (true when the cause is in 2 or more runs)`, "tests"` (sorted)`, "first_seen": {"run_id", "revision", "started_at"}, "last_seen": {...}, "newest_run_clean"}`. `newest_run_clean` is true when the project's newest recorded run, by `started_at`, has no failure of this cause.
+Refuses: `FL_BAD_DB`; `FL_BAD_RUN`; `FL_RUN_CHANGED`; `FL_BAD_PROJECT`; `FL_BAD_TIME`.
+Tests: `test_cmp04_03_groups_by_cause_across_revisions` (three made-up apccs runs on three revisions, with the same assertion fault in runs 1 and 2 and none in run 3, give one group with `runs` 2, `repeated` true, first seen on revision 1, last seen on revision 2 and `newest_run_clean` true; a uclrcde run's failures are not in apccs's groups); `test_cmp04_03_refuses_a_changed_run` (the same `run_id` with another log raises `FL_RUN_CHANGED`; the same run again gives `already_recorded` true; project `misc` raises `FL_BAD_PROJECT`).
+Done means: every repeated failure is one group, with the commit where it started and whether the newest run is clean.
+Not checked: runs that were never saved. The loop sees only the logs it is given.
+
+#### CMP-04-04: FIX_HISTORY (source: R224, arXiv 2611.18856, Section 3.2; MB-2)
+Functions: `record_fix_attempt(conn: sqlite3.Connection, attempt: dict, at: str) -> dict` and `record_fix_result(conn: sqlite3.Connection, fix_id: str, result: dict, at: str) -> dict`.
+Does: `attempt` is exactly `{"fix_id", "cause_key", "project", "reason", "predicted", "came_from", "revision"}`. The `cause_key` must exist in `fl_failures` for that project. `reason` (why this should fix it), `predicted` (what should happen, for example `test_x passes`) and `came_from` (a person, an agent or a pull request) are each 1–300 characters. `revision` is the commit the fix is in. Create the add-only table `fl_fix_history(row_id INTEGER PRIMARY KEY, fix_id TEXT NOT NULL, cause_key TEXT NOT NULL, project TEXT NOT NULL, event TEXT NOT NULL, reason TEXT, predicted TEXT, came_from TEXT, revision TEXT, observed TEXT, outcome TEXT, proven_by TEXT, at TEXT NOT NULL)`. A fix is proposed once, as one `PROPOSED` row; return `{"fix_id", "cause_key", "state": "PROPOSED"}`.
+`record_fix_result`: `result` is exactly `{"observed", "outcome", "run_id"}`: `observed` is 1–300 characters; `outcome` is `FIXED`, `NOT_FIXED` or `MADE_WORSE`; `run_id` is a run recorded by CMP-04-03 for that project on the fix's revision. `FIXED` is refused with `FL_NOT_PROVEN` when that run still has a failure of the cause, so an outcome is never claimed against the evidence. A fix has one result, one `RESULT` row; return `{"fix_id", "cause_key", "outcome", "proven_by": run_id}`.
+Refuses: `FL_BAD_DB`; `FL_BAD_ATTEMPT`; `FL_UNKNOWN_CAUSE`; `FL_UNKNOWN_FIX`; `FL_ALREADY_RECORDED`; `FL_NOT_PROVEN`; `FL_BAD_RESULT`; `FL_BAD_TIME`.
+Tests: `test_cmp04_04_keeps_a_fix_history_per_cause` (a fix proposed for the assertion cause, then a clean run on its revision recorded as `FIXED`, gives both rows; a second fix for another cause recorded `NOT_FIXED` stays in the history); `test_cmp04_04_refuses_unproven_claims` (`FIXED` against a run that still fails with that cause raises `FL_NOT_PROVEN`; an unknown `cause_key` raises `FL_UNKNOWN_CAUSE`; a second result for one fix raises `FL_ALREADY_RECORDED`).
+Done means: every fix tried for a cause is kept with what was expected and what really happened, so a fix that failed is not tried again blindly.
+Not checked: whether a person's `observed` words are right. Only a `FIXED` claim is checked against a run.
+
+#### CMP-04-05: ONE_FIX_ITEM_PER_CAUSE (source: CMP-04, "opens one fix item per cause. Plain code groups; AI only to describe a group when needed"; rule 21)
+Function: `build_fix_items(conn: sqlite3.Connection, project: str, settings: dict) -> dict`.
+Does: `settings` is `{}` or holds `min_runs` (a whole number from 1 to 100, default 2) and `ai_hand_off` (`OFF` or `ON`, default `OFF`). Read `group_failures(conn, project)` and the fix history. Make one item for each cause seen in at least `min_runs` runs whose `newest_run_clean` is false:
+- `item_id`: `FIX-<cause_key>`;
+- `title`: `Repeated failure: <the signature's first 80 characters>`;
+- `description`, made by plain code: `Seen in <runs> runs (<failures> failures; tests: <up to 5 names>), first on <first revision's first 12 characters>, last on <last revision's first 12 characters>.`;
+- `tried`: every fix of this cause, oldest first, with `reason`, `predicted` and `outcome` (or `NO_RESULT_YET`);
+- `do_not_repeat`: the `reason` of each fix recorded `NOT_FIXED` or `MADE_WORSE`;
+- `ai`: with `OFF`, `{"status": "AI_OFF", "packet": None}`. With `ON`, `{"status": "HAND_OFF", "packet": {"task": "Describe the likely cause of this repeated failure in plain words. Do not propose code.", "facts": {"title", "description", "signature", "tried"}, "tokens_estimate"}}`. The packet holds only the item's own fields and no log text, and nothing sends it: a person or a later batch gives it to an AI and records the reply as a person's note.
+Items are sorted by `runs`, most first. Return `{"project", "items", "ai_used": False, "lines"}`. Nothing is opened on GitHub: the item is returned, and opening an issue from it is a later batch or a person.
+Refuses: `FL_BAD_DB`; `FL_BAD_PROJECT`; `FL_BAD_SETTINGS`.
+Tests: `test_cmp04_05_one_item_per_repeated_cause` (a cause in three runs with one `NOT_FIXED` fix gives one item, listing that fix under `tried` and its reason under `do_not_repeat`, with `ai` `AI_OFF`; a cause seen in one run gives no item; a cause whose newest run is clean gives no item); `test_cmp04_05_hand_off_only_when_switched_on` (`ai_hand_off` `ON` gives a `HAND_OFF` packet holding no line of the log text; `min_runs` 0 raises `FL_BAD_SETTINGS`).
+Done means: each repeated failure becomes one fix item, with its history, made by code anyone can read.
+Not checked: opening issues from the items. Where and with which label is a later choice.
+
+---
+
+### Batch CMP-07 — Health watch: every scheduled job's heartbeat, the jobs that never ran, run late or got stuck, one plain status table
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new (AM-1 is built).
+**New files:** `code/apccs2_health_watch.py` and `code/test_apccs2_health_watch.py`. Test class `ApccsBatchCMP07Tests`.
+**Source:** CMP-07 ("Every scheduled job sends a heartbeat; jobs that never ran or got stuck are caught; a plain-text status page. Extends AM-1's health receipts. Ideas: Healthchecks [B4-14], Gatus [B4-12]"); objective O07; ledger Q048 (an architecture manager) and Q044 (the server's triggers wake agents, not a clock); W9 step 5.
+**Reuse, by exact name:** `apccs2_architecture_registry.record_health_receipt(conn, receipt)`; tests also use `apccs2_architecture_registry.build_part_record(part, files)`, `register_parts(conn, records, recorded_at)` and `build_registry_table(conn, project)` to register and show made-up jobs. Import as `import apccs2_architecture_registry as registry`.
+**Errors:** `ValueError` whose message starts with an `HW_` code.
+**Canary:** `Canary check: JOBS = WATCHED -> heartbeat`.
+
+#### CMP-07-01: LOAD_WATCH_SETTINGS (source: CMP-07; rule 20)
+Function: `load_watch_settings(settings_json: str) -> dict`.
+Does: Read one JSON object `{"jobs": [...]}` with 1–200 jobs. Each job has `job_id`, `match`, `revision` and `every_minutes`, and may have `grace_minutes` and `max_run_minutes`:
+- `job_id`: the job's part id in AM-1's registry (`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`);
+- `match`: exactly `{"kind": "github_workflow", "repository": "<owner>/<name>", "path": ".github/workflows/<file>.yml"}` or `{"kind": "scheduled_task", "trigger_id": "trig_<letters and digits>"}`;
+- `revision`: the job's registered revision (40 lowercase hex characters);
+- `every_minutes`: a whole number from 5 to 44,640, or None for a job that runs only when started (fire-only, such as the wording audit);
+- `grace_minutes`: 0 to 1,440, default 30;
+- `max_run_minutes`: 1 to 1,440, default 120.
+Each `job_id` and each `match` appears once. Return `{"jobs"}`, sorted by `job_id`, each with its `defaults_used`.
+Refuses: `HW_BAD_SETTINGS`.
+Tests: `test_cmp07_01_reads_jobs_with_defaults` (a workflow job every 1,440 minutes and a fire-only scheduled task, without the two optional keys, get 30 and 120); `test_cmp07_01_refuses_bad_settings` (`every_minutes` 2; match kind `cron`; the same trigger twice; `revision` `HEAD`).
+Done means: what "on time" means for each job is written down as settings.
+Not checked: the real intervals. Whoever sets up the watch types them in (for example 180 minutes for this work-order runner).
+
+#### CMP-07-02: READ_SAVED_RUN_LISTS (source: CMP-07, "Every scheduled job sends a heartbeat"; rule 19)
+Function: `read_saved_runs(saved_text: str, kind: str, settings: dict) -> dict`.
+Does: `kind` is `github_workflow` or `scheduled_task`, and `settings` is CMP-07-01's result. The text is a saved reply; nothing is fetched here.
+- `github_workflow`: GitHub's REST reply listing workflow runs: a JSON object with `workflow_runs`, each with `id`, `path`, `head_sha`, `status`, `conclusion`, `run_started_at`, `updated_at` and `repository.full_name`. A run belongs to the job whose match has that repository and path. Its state: `status` `queued`, `waiting`, `requested` or `pending` → `QUEUED`; `in_progress` → `RUNNING`; `completed` with `conclusion` `success` → `PASSED`; `failure`, `timed_out` or `startup_failure` → `FAILED`; `cancelled` or `skipped` → `CANCELLED`; anything else → `OTHER`. A finished run's `finished_at` is its `updated_at`.
+- `scheduled_task`: a JSON array of objects with `id` and optional `last_run` (`{"status", "fired_at", "finished_at"}`), shaped like the scheduled-task list. `SUCCEEDED` → `PASSED`; `FAILED` → `FAILED`; a `fired_at` with no `finished_at` → `RUNNING`; anything else → `OTHER`. An entry without `last_run` gives no heartbeat.
+Each heartbeat is `{"job_id", "kind", "run_id", "state", "started_at", "finished_at"` (None unless finished)`, "commit"` (the run's `head_sha`, or None)`, "raw_state"}`. Runs that match no watched job are counted in `unmatched`, not dropped silently. Return `{"heartbeats"` (oldest first)`, "unmatched", "kind"}`.
+Refuses: `HW_BAD_KIND`; `HW_BAD_SAVED_TEXT` (not JSON, the wrong shape, a time without an offset); `HW_BAD_SETTINGS`.
+Tests: `test_cmp07_02_reads_saved_workflow_runs_and_task_list` (a made-up reply with three runs of `.github/workflows/daily-status.yml`, one `success`, one `failure` and one `in_progress`, gives `PASSED`, `FAILED` and `RUNNING`; a made-up task list with `SUCCEEDED` gives `PASSED`; a run of another workflow is counted in `unmatched`); `test_cmp07_02_refuses_bad_saved_text` (`[]` for `github_workflow`; a run without `status`; kind `rss`).
+Done means: GitHub's and the scheduler's own records become heartbeats of one shape, for every job.
+Not checked: the scheduler's full list of status words. Only `SUCCEEDED` and `FAILED` are known from its own description; any other word is kept as `OTHER` with its text. Who saves the replies is in Gaps.
+
+#### CMP-07-03: HEARTBEAT_AS_A_HEALTH_RECEIPT (source: W9, "every scheduled job's heartbeat is a health receipt (reuse record_health_receipt in code/apccs2_architecture_registry.py)")
+Function: `record_heartbeat(conn: sqlite3.Connection, heartbeat: dict, settings: dict, evidence_kind: str, at: str) -> dict`.
+Does: `evidence_kind` is `observed` (from a saved real reply) or `fixture` (tests). Create the add-only table `hw_heartbeats(row_id INTEGER PRIMARY KEY, job_id TEXT NOT NULL, run_id TEXT NOT NULL, state TEXT NOT NULL, started_at TEXT, finished_at TEXT, commit_sha TEXT, raw_state TEXT NOT NULL, receipt_status TEXT NOT NULL, receipt_note TEXT NOT NULL, recorded_at TEXT NOT NULL)`. The same `run_id` and `state` is recorded once (`already_recorded`); a run seen `RUNNING` and later `PASSED` has two rows.
+For a finished heartbeat (`PASSED`, `FAILED` or `CANCELLED`), call `registry.record_health_receipt(conn, receipt)` with exactly:
+- `part_id`: the `job_id`;
+- `result`: `PASS`, `FAIL` or `NOT_RUN`;
+- `evidence_kind`: as given;
+- `source`: `heartbeat <kind> <run_id>`;
+- `revision`: the job's `revision` from the settings;
+- `test_count`: 1 for `PASS` and `FAIL` (a heartbeat is one check of one run), 0 for `NOT_RUN`;
+- `checked_at`: `finished_at`.
+AM-1's answer is kept: `receipt_status` `RECORDED` with the receipt row, or `BLOCKED` with AM-1's reason (for example `the part is not registered`), so a missing registration is shown, never hidden. A heartbeat that is not finished gets `NOT_FINISHED`. Return `{"job_id", "run_id", "state", "already_recorded", "receipt_status", "receipt_note", "health"}`, where `health` is AM-1's (`NOT_CHECKED` for a fixture).
+Refuses: `HW_BAD_DB`; `HW_BAD_HEARTBEAT`; `HW_UNKNOWN_JOB` (not in the settings); `HW_BAD_EVIDENCE`; `HW_BAD_TIME`.
+Tests: `test_cmp07_03_heartbeat_becomes_a_receipt` (a made-up job registered with `registry.register_parts`: a `PASSED` heartbeat gives `RECORDED`, and `registry.build_registry_table` then shows its health as `NOT_CHECKED (fixture)`; the same heartbeat again gives `already_recorded`); `test_cmp07_03_shows_receipt_refusals` (a job never registered gives `BLOCKED` with `the part is not registered`, and its heartbeat row is still kept; a `RUNNING` heartbeat gives `NOT_FINISHED`; `evidence_kind` `guess` raises `HW_BAD_EVIDENCE`).
+Done means: each finished run of a watched job is a health receipt in the architecture registry, or the reason it is not is shown.
+Not checked: a real heartbeat. Tests use `fixture`; a real one waits for a saved reply.
+
+#### CMP-07-04: FIND_MISSED_LATE_OR_STUCK_JOBS (source: CMP-07, "jobs that never ran or got stuck are caught"; W9, "never ran, ran late or got stuck")
+Function: `check_job_health(conn: sqlite3.Connection, settings: dict, now: str) -> dict`.
+Does: Read only `hw_heartbeats`. For each watched job, take each run's newest state, then give one status, in this order:
+1. `NEVER_RAN`: no heartbeat at all;
+2. `STUCK`: a run whose newest state is `RUNNING` or `QUEUED` started (for `QUEUED`, was first recorded) more than `max_run_minutes` before `now`;
+3. `LATE`: `every_minutes` is set and the newest run started more than `every_minutes + grace_minutes` before `now`;
+4. `FAILING`: the newest finished run is `FAILED`;
+5. `OK`.
+A fire-only job is never `LATE`. Each job is `{"job_id", "status", "every_minutes", "grace_minutes", "last_started", "last_finished", "last_state", "minutes_since_start", "runs_seen", "fails_in_last_10", "receipt_problems"}`; `receipt_problems` holds the newest three `BLOCKED` receipt notes. Return `{"jobs", "counts", "now", "worst"}`, where `worst` is the first status present in the order `NEVER_RAN`, `STUCK`, `LATE`, `FAILING`, `OK`.
+Refuses: `HW_BAD_DB`; `HW_BAD_SETTINGS`; `HW_BAD_TIME`.
+Tests: `test_cmp07_04_finds_never_late_stuck_and_failing` (four made-up jobs and `now` `2026-11-23T12:00:00+00:00`: one with no heartbeat gives `NEVER_RAN`; a daily job last started 26 hours earlier, with 30 minutes' grace, gives `LATE`; a job `RUNNING` for 3 hours with `max_run_minutes` 120 gives `STUCK`; a job whose newest run `FAILED` an hour earlier gives `FAILING`; `worst` is `NEVER_RAN`); `test_cmp07_04_fire_only_is_never_late` (a fire-only job last run 9 days earlier gives `OK`; `now` without an offset raises `HW_BAD_TIME`).
+Done means: a job that stopped running, runs late, hangs or keeps failing is named, by plain rules.
+Not checked: why it stopped. The table points to the job; the failure loop (CMP-04) reads its logs.
+
+#### CMP-07-05: PLAIN_TEXT_STATUS_TABLE (source: CMP-07, "a plain-text status page"; W9, "returns a plain-text status table")
+Function: `build_health_table(check: dict) -> dict`.
+Does: `check` is CMP-07-04's result. Return `{"text", "rows", "text_sha256"}`. The text starts with the line `Health watch at <now>: <n> jobs; <count of each status, in the order above>.` A fixed-width table follows, with the columns `Job | Status | Last start | Last state | Minutes since start | Fails (last 10) | Receipt problems`, worst first. Then comes one plain line for each job that is not `OK`, for example `daily-status: LATE: last started 1,560 minutes ago; expected every 1,440 minutes (+30).` Each status is a word, so colour is never the only signal.
+Refuses: `HW_BAD_CHECK` (not shaped like CMP-07-04's result).
+Tests: `test_cmp07_05_builds_a_plain_text_table` (CMP-07-04's four jobs give a table whose first job row is the `NEVER_RAN` job, and a `LATE` line with its minutes; the same input gives the same `text_sha256` twice); `test_cmp07_05_refuses_a_bad_check` (`{}`; a job with status `GREEN`).
+Done means: one plain-text table shows which jobs are healthy, without opening five apps.
+Not checked: where it is shown. A screen or the daily email can carry the text later; this batch only builds it.
+
+---
+
+### Batch CMP-10 — Prompt brief builder: a rough request becomes a complete brief, in plain code
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/apccs2_prompt_brief.py` and `code/test_apccs2_prompt_brief.py`. Test class `ApccsBatchCMP10Tests`.
+**Source:** CMP-10 ("Turns a rough request into a complete brief (intent, context, expectations, done-when, limits), asks only for the missing parts and estimates its size. The prompt optimizer of O04, in plain code. Ideas: ICED [14-129], OpenDone [14-131], Matt Pocock's requirements questions [17-07]"); objective O04; ledger Q046 (plain code first); RULEBOOK "Behaviour shapes" (questions one at a time, always with a recommended answer); W9 step 6 ("asks only about the missing parts; estimates the brief's size with estimate_tokens; no AI").
+**Reuse, by exact name:** `apccs_focus_pack.estimate_tokens(text)` and `apccs_focus_pack.ESTIMATE_NOTE`. Import as `import apccs_focus_pack as focus_pack`.
+**Errors:** `ValueError` whose message starts with a `PB_` code.
+**Words used:** the five *parts* of a brief, in this order, are `BRIEF_PARTS`: `intent`, `context`, `expectations`, `done_when` and `limits`.
+**Canary:** `Canary check: BRIEF = COMPLETE -> blueprint`.
+
+#### CMP-10-01: SPLIT_A_ROUGH_REQUEST (source: CMP-10, "Turns a rough request into a complete brief")
+Function: `split_rough_request(text: str) -> dict`.
+Does: `text` is 1–20,000 characters. Plain rules, in order:
+1. **Labelled lines.** A line that starts (in any case) with a label and `:` belongs to that part until the next labelled line: `intent`, `goal`, `aim` and `want` → intent; `context`, `background` and `situation` → context; `expect`, `expectations`, `output` and `deliverable` → expectations; `done when`, `finished when` and `success` → done_when; `limits`, `constraints`, `rules` and `never` → limits.
+2. **Other sentences** (split at `.`, `!`, `?` or a line end), first rule that fits:
+   - holding `done when`, `finished when` or `it is done if` → done_when;
+   - holding `never`, `don't`, `do not`, `must not`, `only use`, `no more than` or `at most` → limits;
+   - the first sentence that holds `I want`, `I need`, `the goal is` or `so that`, or starts with `make`, `build`, `write` or `find` → intent; later ones → expectations;
+   - holding `should`, `must`, `include`, `show`, `list` or `return` → expectations;
+   - anything else → context.
+Return `{"parts": {part: [sentences]}, "rules_used": [{"sentence", "part", "rule"}], "ai_used": False}`. The input is never changed.
+Refuses: `PB_BAD_TEXT` (not text, blank, or over 20,000 characters).
+Tests: `test_cmp10_01_splits_labelled_and_plain_sentences` (`Goal: a budget page.` then `Context: phone only.` then `It is done when the page shows three totals. Never use a paid service.` gives one sentence in each of intent, context, done_when and limits, each with its rule, and an empty expectations); `test_cmp10_01_refuses_bad_text` (`""`; 20,001 characters; bytes).
+Done means: a rough request is sorted into the five parts by rules a person can read and change.
+Not checked: meaning. A sentence can land in the wrong part; `rules_used` shows why, so a person can move it.
+
+#### CMP-10-02: ASK_ONLY_FOR_WHAT_IS_MISSING (source: CMP-10, "asks only for the missing parts"; RULEBOOK, one question at a time with a recommended answer)
+Function: `ask_missing_parts(parts: dict) -> dict`.
+Does: `parts` is CMP-10-01's `parts`. For each empty part, in `BRIEF_PARTS` order, give one fixed question with a suggested answer:
+- intent: `What do you want at the end, in one sentence?`, suggesting None;
+- context: `What should the helper know first (where it runs, what exists already)?`, suggesting `Phone first; free routes only; made-up data in tests.` (RULEBOOK preferences 16, 11 and 12);
+- expectations: `What should the result be (a file, a screen, a list or a reply)?`, suggesting None;
+- done_when: `How will you check it is finished (a test, a number, something you can see)?`, suggesting None;
+- limits: `What must it never do?`, suggesting `No paid services, no keys, no real case data (RULEBOOK hard limits).`
+Return `{"questions": [{"part", "question", "suggested"}], "complete"` (true when no part is empty)`, "ask_first"` (the first question only, or None)`}`.
+Refuses: `PB_BAD_PARTS` (an unknown part, a missing part, or a part that is not a list of text).
+Tests: `test_cmp10_02_asks_only_missing_parts` (parts with only intent and limits filled give three questions, for context, expectations and done_when, and `ask_first` is the context question; all five filled give none and `complete` true); `test_cmp10_02_refuses_bad_parts` (a part named `mood`; a part given as text instead of a list).
+Done means: the person is asked only for what is missing, one question at a time, each with a suggested answer where there is one.
+Not checked: whether the suggested answers suit every request. They are suggestions; the person's own answer replaces them.
+
+#### CMP-10-03: FILL_THE_BRIEF (source: CMP-10, "a complete brief")
+Function: `fill_brief(parts: dict, answers: dict) -> dict`.
+Does: `answers` maps parts to one answer each (1–2,000 characters). Only an empty part may be answered, so nothing the person already wrote is replaced. Each part's text is its sentences joined by one space, or its answer. Return `{"brief": {part: text or None}, "missing", "complete"}`.
+Refuses: `PB_BAD_PARTS`; `PB_BAD_ANSWERS` (an unknown part, a part already filled, a blank or too long answer).
+Tests: `test_cmp10_03_fills_only_the_empty_parts` (the three missing parts of CMP-10-02's test, answered, give `complete` true and the two filled parts unchanged); `test_cmp10_03_refuses_overwriting_a_part` (an answer for `intent`, which is filled, raises `PB_BAD_ANSWERS`; an answer of 2,001 characters raises `PB_BAD_ANSWERS`).
+Done means: the brief is finished from the person's own words and answers, and never overwrites them.
+Not checked: whether the answers are good; CMP-10-05 flags vague ones.
+
+#### CMP-10-04: BRIEF_TEXT_AND_SIZE (source: CMP-10, "estimates its size")
+Function: `build_brief_text(brief: dict, settings: dict) -> dict`.
+Does: `brief` is CMP-10-03's complete `brief`. `settings` is `{}` or holds `max_tokens` (a whole number from 100 to 200,000, default 4,000). Build the text in the fixed order, each heading on its own line followed by the part's text: `Intent:`, `Context:`, `Expectations:`, `Done when:`, `Limits:`. Its size is `focus_pack.estimate_tokens(text)`. Return `{"status": "OK" or "TOO_LONG", "text", "tokens_estimate", "max_tokens", "over_by", "estimate_note", "text_sha256"}`; `TOO_LONG` still returns the text, with `over_by`.
+Refuses: `PB_NOT_COMPLETE` (naming each missing or blank part); `PB_BAD_SETTINGS`.
+Tests: `test_cmp10_04_builds_the_text_and_counts_it` (a complete made-up brief gives the five headings in order and `tokens_estimate` equal to `focus_pack.estimate_tokens` of the text; `max_tokens` 100 with a brief whose built text is 600 characters gives `TOO_LONG` and `over_by` 50); `test_cmp10_04_refuses_an_incomplete_brief` (`limits` None raises `PB_NOT_COMPLETE` naming `limits`; `max_tokens` 50 raises `PB_BAD_SETTINGS`).
+Done means: every brief has the same five parts in the same order, and its size is known before it is sent.
+Not checked: a model's own count; `ESTIMATE_NOTE` applies.
+
+#### CMP-10-05: CHECK_A_BRIEF (source: CMP-10; ICED and OpenDone, the done-when idea)
+Function: `check_brief_text(text: str) -> dict`.
+Does: Check any brief text, including one a person wrote. Problems, which give `FAIL`: a heading missing, repeated, out of order, or followed by no text. Flags, which give `FLAGS` and never block:
+- `VAGUE_WORD`, with the part it is in: `etc`, `stuff`, `something`, `somehow`, `asap`, `maybe`, `whatever`, `and so on`;
+- `DONE_WHEN_NOT_CHECKABLE`: the done-when holds no number, no file or test name (a word with `.` or `_` in it), and none of `passes`, `shows`, `returns`, `lists` or `opens`;
+- `LIMITS_HAVE_NO_RULE`: the limits hold none of `never`, `no`, `not` or `only`.
+Return `{"status": "PASS", "FLAGS" or "FAIL", "problems", "flags", "tokens_estimate"}`.
+Refuses: `PB_BAD_TEXT`.
+Tests: `test_cmp10_05_passes_a_good_brief_and_flags_vague_ones` (CMP-10-04's text gives `PASS`; the same with `etc` in context and done-when `it works` gives `FLAGS` with `VAGUE_WORD` and `DONE_WHEN_NOT_CHECKABLE`); `test_cmp10_05_fails_a_broken_brief` (a brief without `Limits:` gives `FAIL`; None given as the text raises `PB_BAD_TEXT`).
+Done means: a brief can be checked before it goes out, by anyone, without AI.
+Not checked: whether a brief that passes gets a good answer. The check is about shape and plain words only.
+
+---
+
+### Batch CMP-06 — Prior-art check: similar projects and their licences, before a new app or feature is worded
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/apccs2_prior_art.py` and `code/test_apccs2_prior_art.py`. Test class `ApccsBatchCMP06Tests`.
+**Source:** CMP-06 ("Before a new app or feature is worded: search GitHub and, when the web switch is on, a free search or news source; list similar projects with licences; say how ours differs. Ideas: Craft Anything's no-AI inspection [17-32]; the Owner's O13 links (FreeSerp, freenewsapi; ledger R151–R153), whose research is outside V3: NOT CHECKED until read"); objective O13 (the Owner: "check whether an app has been made before"); RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED ("the prior-art check (CMP-06) is queued for wording, with FreeSerp as its free search source"); ledger Q043 and Q045 (judge by features, flag terms, never reject for them), Q049; BR-1-03's web step (uclrcde), whose pattern is written again here because apccs never imports uclrcde (rule 7); W9 step 7.
+**Reuse:** none required.
+**Errors:** `ValueError` whose message starts with a `PA_` code.
+**Canary:** `Canary check: IDEA = CHECKED_FIRST -> compass`.
+
+#### CMP-06-01: PRIOR_ART_SETTINGS (source: W9, "a free search or news source only when the web switch is ON (OFF by default, returning BLOCKED, as in BR-1)"; rules 20, 21 and 23)
+Function: `load_prior_art_settings(settings_json: str) -> dict`.
+Does: Read one JSON object, all keys optional:
+- `web_step`: `OFF` or `ON`, default `OFF`;
+- `route_record`: None (the default) or exactly the five fields of rule 23;
+- `web_sources`: 1–10 objects `{"source", "label"}`. The default, `DEFAULT_WEB_SOURCES`, is `freeserp`, labelled `NOT CHECKED: FreeSerp's terms and limits were not read (ledger R151)`, and `freenewsapi`, labelled `NOT CHECKED: freenewsapi's terms and limits were not read (ledger R152, R153)`. The label is a label, not a block (Q052);
+- `blocked_words`: 0–200 words that must never leave the phone, default none;
+- `max_results`: 1–100, default 20.
+Return the full settings and `defaults_used`.
+Refuses: `PA_BAD_SETTINGS`.
+Tests: `test_cmp06_01_web_step_off_by_default` (`{}` gives `OFF`, no route record, the two sources each labelled `NOT CHECKED`, and `max_results` 20); `test_cmp06_01_refuses_bad_settings` (`web_step` `MAYBE`; a route record without `date`; the key `sources`).
+Done means: the web step is off until the Owner's setting turns it on, and the two sources he named carry their honest labels.
+Not checked: FreeSerp's and freenewsapi's terms, limits and reply shapes. Their research is outside V3.
+
+#### CMP-06-02: READ_SAVED_GITHUB_RESULTS (source: CMP-06, "search GitHub ... list similar projects with licences")
+Function: `read_github_search_reply(saved_text: str, settings: dict) -> dict`.
+Does: The text is a saved reply of GitHub's REST repository search (a person or job runs it, rule 19): a JSON object with `total_count` and `items`. Each item has `full_name`, `html_url` (starting `https://github.com/`), `description` (text or null), `license` (null or an object with `spdx_id`), `stargazers_count`, `pushed_at`, `archived` and, optionally, `topics`. Keep the first `max_results`. Each result is `{"name", "url", "description"` (at most 300 characters; `""` for null)`, "licence", "licence_kind", "stars", "last_push", "archived", "topics", "source": "GitHub search (saved reply)", "label": "NEEDS VALIDATION"}`:
+- `licence` is the `spdx_id`, or `NOT STATED` for null or `NOASSERTION`;
+- `licence_kind` is `permissive` (`MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`, `Unlicense`, `Zlib`), `copyleft` (`GPL-2.0`, `GPL-3.0`, `AGPL-3.0`, `LGPL-2.1`, `LGPL-3.0`, `MPL-2.0`, `EPL-2.0`, and the same ids ending `-only` or `-or-later`), `not stated`, or `other`.
+This reply is not the web step: GitHub search is allowed with the web step OFF (W9).
+Refuses: `PA_BAD_SAVED_TEXT` (not JSON, `items` not a list, an item without `full_name`, or an `html_url` that is not on `https://github.com/`); `PA_BAD_SETTINGS`.
+Tests: `test_cmp06_02_reads_projects_and_licences` (a made-up reply with two items, one `MIT` and one with a null licence, gives `permissive` and `not stated`, both labelled `NEEDS VALIDATION`); `test_cmp06_02_refuses_bad_replies` (`{"items": "x"}`; an item with `html_url` `http://evil.example/x`).
+Done means: GitHub's own search reply becomes a plain list of similar projects with their licences.
+Not checked: whether a listed project works. Search results are leads, not proof.
+
+#### CMP-06-03: WEB_RESULTS_ONLY_WHEN_SWITCHED_ON (source: BR-1-03's rule, "nothing reaches the web unless the switch is on, a route record exists and the words are public"; Q049)
+Function: `read_web_results(query: str, source: str, saved_text: str | None, settings: dict) -> dict`.
+Does: `query` is 1–300 characters.
+- `OFF`: return `{"step": "web", "status": "BLOCKED", "reason": "the web step is OFF", "items": []}`. `saved_text` is not read at all.
+- `ON`: in this order, each failure giving `BLOCKED` with its reason: no route record (`no route record (Q049)`); a `source` not in `web_sources`; a query holding a `blocked_words` entry (whole word, any case), an email address, seven or more digits in a row (spaces, `-` and `.` allowed between them) or `MATTER-` (`private words never leave the phone`); `saved_text` None (`no saved results were given`). Otherwise read `saved_text`: a JSON array of 0 to `max_results` objects `{"title", "url"` (starting `https://`)`, "snippet"}`; any other shape gives `BLOCKED` (`the saved results have a bad shape`). Each item comes back with `label` `NEEDS VALIDATION` and the source's `source_label`.
+Every result has `query_allowed` (true or false) and `decision_steps` `[{"step": "web_step", "made_by": "CODE"}]`. This module opens no network connection; a person or a later batch with its own route record runs the search.
+Refuses: `PA_BAD_SETTINGS`; `PA_BAD_QUERY`.
+Tests: `test_cmp06_03_off_never_reads_the_saved_text` (settings `{}` with a `saved_text` that is not JSON give `BLOCKED` with `the web step is OFF`, not an error; with `ON`, a route record and source `freeserp`, a made-up array of one `https://example.com/made-up` item comes back labelled `NEEDS VALIDATION` with FreeSerp's `NOT CHECKED` label); `test_cmp06_03_blocks_private_queries_and_missing_records` (`ON` without a route record gives `BLOCKED`; a query holding `person@example.com` gives `BLOCKED`; source `bing` gives `BLOCKED`; a blank query raises `PA_BAD_QUERY`).
+Done means: nothing from the web is used unless the switch is on, a route record exists and the query holds no private words.
+Not checked: the real reply shapes of FreeSerp and freenewsapi. A saved copy must be turned into the plain shape above by whoever saves it.
+
+#### CMP-06-04: HOW_OURS_DIFFERS (source: CMP-06, "say how ours differs"; Q045, the licence lets us use the code or borrow the idea)
+Function: `compare_with_ours(our_features: list, found: list) -> dict`.
+Does: `our_features` is 1–50 objects `{"feature_id", "words"}`, with 1–10 key words or short phrases each. `found` is the results of CMP-06-02 and the items of CMP-06-03. A feature matches a found item when at least half of its words (rounded up) appear, as whole words in any case, in the item's name, description, topics or snippet. Return:
+- `similar`: the items that match at least one feature, most matches first, each `{"name", "url", "licence", "licence_kind", "matched_features", "match_count", "licence_note"}`. `licence_note` is `Permissive licence (<id>): code and ideas may be reused under its terms.`, `Copyleft licence (<id>): borrow the idea; reusing code brings its terms.`, `No licence stated: borrow the idea only.` or `Licence <id>: NOT CHECKED.`;
+- `only_ours`: the feature ids that no item matches;
+- `lines`, for example `Ours differs: no similar project found for court-days.`
+Refuses: `PA_BAD_FEATURES`; `PA_BAD_FOUND`.
+Tests: `test_cmp06_04_lists_similar_projects_and_what_is_only_ours` (two features, `budget-ledger` with the words `phone`, `budget` and `ledger`, and `court-days` with the phrase `court day table`, and one item whose description is `A budget ledger for phones` give that item as similar for `budget-ledger` (two of its three words), and `court-days` in `only_ours`); `test_cmp06_04_refuses_bad_features` (a feature with `words` `[]`; two features with the same id).
+Done means: before anything new is worded, there is a plain list of who did something similar, under which licence, and what only ours does.
+Not checked: whether matching words mean the same thing. A person reads the `similar` list.
+
+#### CMP-06-05: PRIOR_ART_REPORT (source: CMP-06; Craft Anything's no-AI inspection idea)
+Function: `build_prior_art_report(conn: sqlite3.Connection, check: dict, at: str) -> dict`.
+Does: `check` is exactly `{"check_id", "idea", "query", "github", "web", "comparison"}`: `idea` is 1–300 characters, and the last three are the results of CMP-06-02, CMP-06-03 and CMP-06-04. Build a plain text in this order: the idea and the query; how many GitHub results and web items were read; up to 10 similar projects, each with its licence note; the `Ours differs` lines; the web step's status and reason; then `Not checked:` lines (each web source's label, and `Search results are leads, not proof that a project works.`). Create the add-only table `pa_checks(check_row INTEGER PRIMARY KEY, check_id TEXT NOT NULL UNIQUE, idea TEXT NOT NULL, report_text TEXT NOT NULL, report_sha256 TEXT NOT NULL, at TEXT NOT NULL)`. The same `check_id` with the same report gives `already_recorded` True; with another report, `PA_ALREADY_RECORDED`. Return `{"check_id", "text", "report_sha256", "already_recorded"}`.
+Refuses: `PA_BAD_DB`; `PA_BAD_CHECK`; `PA_ALREADY_RECORDED`; `PA_BAD_TIME`.
+Tests: `test_cmp06_05_builds_and_keeps_the_report` (the results of the CMP-06-02 to CMP-06-04 tests give a report holding the `Ours differs` line and `the web step is OFF`; recording it again gives `already_recorded` True); `test_cmp06_05_refuses_a_changed_report_or_bad_check` (the same `check_id` with another idea raises `PA_ALREADY_RECORDED`; a check without `comparison` raises `PA_BAD_CHECK`).
+Done means: every prior-art check is kept as one plain report, so the architect reads it before wording a new app or feature.
+Not checked: that the architect's wording runs it first. That is a rule for a later wording pass, not code.
+
+---
+
+### Batch CMP-09 — Toolbox view, and the door that lets more screens join the control panel
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** this plan is merged. Needs nothing new (CP-1 and CP-2 are built).
+**New files:** `code/apccs2_toolbox.py`, `code/apccs2_more_screens.py`, `code/test_apccs2_toolbox.py` (it tests both modules), and in `web/panel/`: `more.html`, `screen_more.js` and `screen_toolbox.js`. Test class `ApccsBatchCMP09Tests`. In `apccs2_toolbox`, `SCREEN_ID = "toolbox"`.
+**Source:** CMP-09 ("The researched tools and abilities from the compilation, searchable by feature, decision and licence: the tool kit the Owner asked for. Reads a supplied copy of the detail sheet; never fetches it. Ideas: MCP Market / Smithery [14-180], Treasure Boxes catalog [14-093]"); objective O01; W9 step 8 ("reads a supplied CSV copy of PRODUCT_MAP_DETAIL_2026-11-20 and PRODUCT_MAP_SUPPLEMENT_2026-11-20; searchable by feature, decision and licence, as a screen on the control-panel page"); rule 26 (why the door is needed); the two sheets' header rows, read on 2026-11-23.
+**Reuse, by exact name:** `apccs2_control_panel.handle_panel_request(config, request, handlers)`, `build_panel_handlers()`, `check_panel_web_files(web_dir)`, `CSP_LINE`, `ICON_STEPS`, `ALLOWED_HOSTS` and `DEFAULT_PORT`. Import as `import apccs2_control_panel as panel`; `apccs2_toolbox` and the test file import the door as `import apccs2_more_screens as more`.
+**Errors:** `ValueError` whose message starts with a `TB_` code (toolbox) or an `MS_` code (the door).
+**Canary:** `Canary check: TOOLS = FOUND -> toolbox`.
+
+#### CMP-09-01: READ_THE_TOOLBOX_SHEETS (source: W9, "reads a supplied CSV copy"; the sheets' header rows)
+Function: `read_toolbox_sheets(detail_csv_text: str, supplement_csv_text: str | None = None) -> dict`.
+Does: Read CSV text with `csv.reader` (RFC 4180 quoting). The detail sheet's header must be exactly these 11 cells, `DETAIL_HEADER`: `Feature`, `Branch`, `Ability in plain words`, `Comes from (tool and its V3 row)`, `Fits the Owner's preferences? (phone/free · plain code · licence)`, `Overlaps with`, `Fits together or competes`, `Decision`, `Status`, `Serves objective`, `Changed 2026-11-20 (Muse audit corrections; C5 rewrote the phone/free segment on every row)`. The supplement's header must be exactly these 13 cells, `SUPPLEMENT_HEADER`: `Feature`, `Branch`, `Ability in plain words`, `Comes from (your research item)`, `Fits the Owner's preferences? (phone/free · plain code · licence)`, `Overlaps with`, `Fits together or competes`, `Decision`, `Status`, `Serves objective`, `Ledger items`, `Research read (document or log entry)`, `Evidence on main, or NOT CHECKED`. Each row becomes:
+- `sheet` (`detail` or `supplement`) and `row_number` (the header is row 1);
+- `feature`, and `feature_number`: its leading whole number, or None;
+- `branch`, `ability`, `comes_from`, `overlaps`, `fits`, `objective`;
+- `tool`: the text of `comes_from` before ` [`; `source_row`: the text inside its last `[...]`, or None;
+- `preferences`, and `licence`: the text after `licence:` up to ` (`, ` ·` or the end, trimmed. It is `NOT CHECKED` when that text says so or when there is no `licence:` segment;
+- `decision`, and `decision_word`: `Adopt now`, `Adopt later`, `Borrow the idea`, `Not used` or `NOT CHECKED` when the decision starts with one of them (any case), otherwise `OTHER`;
+- `status`: one of `✅`, `🛠`, `⬜` or `⏸`, otherwise `OTHER`;
+- `evidence`: the supplement's last column, or None for the detail sheet.
+A row whose cells are all blank is skipped and counted. Return `{"rows", "counts": {"detail", "supplement", "skipped_blank"}, "detail_sha256", "supplement_sha256"}`.
+Refuses: `TB_BAD_CSV` (not text, over 10,000,000 characters, a header that is not exactly as listed, or a row with another number of cells, naming its row number).
+Tests: `test_cmp09_01_reads_both_sheets` (made-up CSV texts with the two real headers: a detail row with `1 Main brain`, `Node-RED [14-001]`, `phone/free: yes · plain code: Yes · licence: Apache-2.0 (official)`, `Adopt now — already in the plan` and `✅` gives `feature_number` 1, `tool` `Node-RED`, `source_row` `14-001`, `licence` `Apache-2.0`, `decision_word` `Adopt now` and `status` `✅`; a supplement row with `licence: NOT CHECKED` gives `NOT CHECKED`); `test_cmp09_01_refuses_wrong_headers` (a header without `Status`; a row of 10 cells in the detail sheet).
+Done means: the compilation's sheets, saved as CSV, become rows the panel can search, with nothing guessed.
+Not checked: who saves the CSV copies. This batch never fetches the sheets (W9), and Drive files are never changed.
+
+#### CMP-09-02: SEARCH_THE_TOOLBOX (source: CMP-09, "searchable by feature, decision and licence")
+Function: `search_toolbox(rows: list, query: dict) -> dict`.
+Does: `rows` are CMP-09-01's rows. `query` may hold any of:
+- `feature`: a whole number from 1 to 12 (the product map's twelve features), or text found in `feature` (any case);
+- `decision`: a `decision_word`;
+- `licence`: text found in `licence` (any case);
+- `status`: one of the four marks;
+- `objective`: `O01` to `O21`, found in `objective`;
+- `words`: 1–5 words, all of which must appear in `ability`, `tool`, `branch` or `overlaps` (any case);
+- `sheet`: `detail` or `supplement`;
+- `limit`: 1–500, default 100.
+An empty query keeps every row. Results are sorted by `feature_number` (None last), then `branch`, `sheet` and `row_number`. Return `{"results", "total", "shown", "counts": {"by_decision", "by_feature", "licences_to_check"}}`; `licences_to_check` counts the results whose licence is `NOT CHECKED` or `NOT STATED`.
+Refuses: `TB_BAD_ROWS`; `TB_BAD_QUERY` (an unknown key, a value of the wrong kind or out of range).
+Tests: `test_cmp09_02_searches_by_feature_decision_and_licence` (three made-up rows: `decision` `Adopt now` keeps one; `words` `event flows` keeps the Node-RED row; `licence` `apache` keeps it too; feature 1 keeps the two rows of feature 1); `test_cmp09_02_refuses_bad_queries` (the key `colour`; `feature` 13; `limit` 0).
+Done means: the Owner can find any researched tool or ability by what it is for, what was decided and its licence.
+Not checked: the sheets' own correctness; Muse checked them (W7 notes).
+
+#### CMP-09-03: KEEP_THE_NEWEST_COPY (source: CMP-09, "Reads a supplied copy ... never fetches it")
+Functions: `record_toolbox_snapshot(conn: sqlite3.Connection, sheets: dict, source_note: str, at: str) -> dict` and `read_toolbox_snapshot(conn: sqlite3.Connection) -> dict`.
+Does: `sheets` is CMP-09-01's result; `source_note` is 1–200 characters (for example `CSV copy of PRODUCT_MAP_DETAIL_2026-11-20, saved 2026-11-23`). Create the add-only table `tb_snapshots(snapshot_row INTEGER PRIMARY KEY, rows_json TEXT NOT NULL, rows_sha256 TEXT NOT NULL, detail_sha256 TEXT NOT NULL, supplement_sha256 TEXT, source_note TEXT NOT NULL, at TEXT NOT NULL)`. When the newest snapshot has the same `rows_sha256`, nothing is added and `already_recorded` is True. Return `{"snapshot_row", "rows", "already_recorded"}` (`rows` is the count). `read_toolbox_snapshot` returns the newest copy, `{"status": "OK", "rows", "source_note", "at", "rows_sha256"}`, after checking that `rows_json` still matches its SHA-256 (`{"status": "BLOCKED", "reason": "the saved toolbox copy does not match its hash"}` when not), or `{"status": "NOT_CHECKED", "reason": "no toolbox copy has been given yet"}`.
+Refuses: `TB_BAD_DB`; `TB_BAD_SHEETS`; `TB_BAD_NOTE`; `TB_BAD_TIME`.
+Tests: `test_cmp09_03_keeps_and_reads_the_newest_copy` (a recorded copy reads back with its rows; recording it again gives `already_recorded` True; an empty database gives `NOT_CHECKED`); `test_cmp09_03_refuses_bad_input` (a blank `source_note`; `at` `later`).
+Done means: the panel works from its last saved copy, offline, and knows when that copy was given.
+Not checked: how old the copy is compared with the sheets in Drive; the `at` and `source_note` say when it was given.
+
+#### CMP-09-04: THE_DOOR_FOR_MORE_PANEL_SCREENS (source: rule 26; rules 13–15; CP-1-05's server pattern)
+In `code/apccs2_more_screens.py`. Functions: `handle_more_request(config: dict, request: dict, panel_handlers: dict | None = None, more_handlers: dict | None = None) -> dict`, `build_more_handlers() -> dict`, `check_more_page_files(web_dir: str) -> dict` and `run_more_server(config: dict, host: str = "127.0.0.1", port: int = panel.DEFAULT_PORT, ready_event: threading.Event | None = None) -> None`. The constant `MORE_PLAN` holds two entries, each `{"screen_id", "title", "module", "script", "batch"}`: `toolbox`, `Toolbox`, `apccs2_toolbox`, `screen_toolbox.js`, `CMP-09`; and `logs`, `Logs`, `apccs2_log_search`, `screen_logs.js`, `CMP-05`.
+Does:
+- **Every request goes to CP-1 first.** `panel.handle_panel_request(config, request, panel_handlers)`, with `panel_handlers` defaulting to `panel.build_panel_handlers()`, applies all of rule 14's refusals and answers everything CP-1 knows. Its reply is returned unchanged, except one: CP-1's 404 reply `{"status": "BLOCKED", "reason": "not found"}` for one of the paths below, which has already passed every CP-1 check, is answered by the door:
+  - `GET /more.html` and `GET /screen_more.js`;
+  - `GET /screen_<id>.js` for an id in `MORE_PLAN`;
+  - `GET /api/more/screens`: the `MORE_PLAN` entries, each with `built` (its script file exists and its handler is in `more_handlers`);
+  - `/api/more/<id>/...`: to `more_handlers[id]` with the sub-request `{"method", "path"` (the part after `/api/more/<id>`)`, "query", "body"}`, or, when it is not built, 404 with `{"status": "NOT_BUILT", "reason": "The <title> screen is not built yet (batch <batch>)."}`. A POST body has already passed CP-1's JSON-object check; the door reads it again with `json.loads` for the handler.
+  Files come from the panel's web folder (`config["web_dir"]`, or `<repo_root>/web/panel`), read as text. A symlink, or a file that resolves outside the folder, gives 403. Replies carry `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`, and HTML replies carry `Content-Security-Policy: <panel.CSP_LINE>`; no reply carries a CORS header. A handler's `ValueError` gives 400 with its message; any other exception gives 500 with `{"status": "ERROR", "reason": "internal error"}` and never a traceback. Unknown `/api/more/` ids give 404.
+- **The page.** `more.html` has `<html lang="en">`, a `<title>`, a viewport meta tag, `<link rel="stylesheet" href="style.css">` (CP-1's style, which CP-1 serves), exactly one `<h1>` reading `More screens`, the link `<a href="/">Back to the control panel</a>`, an empty `<nav id="tabs">`, `<main id="screens">`, `<p id="status">`, the three steps of `panel.ICON_STEPS` (so this page can have its own home-screen icon), and one script tag, `<script src="screen_more.js"></script>`. `screen_more.js` sets `window.apccsMore = { register }`, fetches `/api/more/screens`, makes one tab button and one `<section id="more-<id>">` per screen with `createElement` and `textContent`, loads `screen_<id>.js` for each built screen, and gives `mount(section, api)` the same `api.get(path)` and `api.post(path, body)` as CP-1, on `/api/more/<id>/<path>`. It follows rule 13. Its name matches CP-1's `screen_[a-z]+\.js` pattern, so `panel.check_panel_web_files` checks it with CP-1's script rules as well, and must still give `PASS` for the folder.
+- `check_more_page_files(web_dir)` checks `more.html` for the items above and for the HTML parts of rule 13 (no inline script, no `on...=` handler, no address of another website, no positive `tabindex`, headings in order, a `<label for>` for every input, select and textarea). It checks `screen_more.js` for `window.apccsMore`, `register` and `/api/more/screens`, and it includes `panel.check_panel_web_files(web_dir)`. Return `{"status", "problems", "files_checked", "panel_check"}`; `status` is `FAIL` when either has a problem. It never raises; a missing folder gives `FAIL`.
+- `build_more_handlers()` imports `apccs2_toolbox` and `apccs2_log_search` with plain `import` inside `try`, as CP-1's `build_panel_handlers` does: a module is skipped only when the missing name is that module itself; each module's `SCREEN_ID` must match its plan entry and its `handle_screen_request` must be a function (`MS_BAD_SCREEN`). No `importlib`, `__import__` or `getattr`.
+- `run_more_server` works like `panel.run_panel_server`: only `panel.ALLOWED_HOSTS`, port 0 picks a free port, `config["port"]` is set to the port really used, and `ready_event` gets `server_port` and `server` before it is set. It builds both sets of handlers once at start, sends replies with `handler.connection.sendall`, and never logs request lines. It serves the control panel and the more screens on one port; once this batch is merged, it is the one to start, and `run_panel_server` keeps working as before.
+Refuses: `MS_HOST_REFUSED`, `MS_BAD_PORT` and `MS_BAD_CONFIG` before any socket opens; `MS_BAD_SCREEN`; every refused request is an HTTP reply.
+Tests: `test_cmp09_04_door_serves_the_panel_and_more_screens` (port 0 in a thread, with `conn` an in-memory database and `install` listing `AGENTS.md` and `plan/RULEBOOK.md`, as in CP-1's test: `GET /` gives CP-1's page, 200, holding `Control panel`; `GET /more.html` gives 200 with the `Content-Security-Policy` header; `GET /api/more/screens` lists `toolbox` as built and holds a `logs` entry; then shut down. `more.check_more_page_files` on the repository's `web/panel/` gives `PASS`, with `panel_check` `PASS`); `test_cmp09_04_door_keeps_cp1_refusals` (`handle_more_request` called directly: Host `evil.example:8766` on `/more.html` gives 403; `GET /../more.html` gives 400; `GET /api/more/nope/x` gives 404; with `more_handlers` `{}`, `GET /api/more/toolbox/search` gives the `NOT_BUILT` reply naming CMP-09; host `0.0.0.0` raises `MS_HOST_REFUSED`).
+Done means: new screens join the control panel on the same local server, behind all of CP-1's checks, without changing any CP-1 file.
+Not checked: a link from CP-1's Home tab to `more.html`, because `index.html` can't change. The Owner opens `/more.html` and can add it as its own icon (Gaps).
+
+#### CMP-09-05: TOOLBOX_SCREEN (source: CMP-09; W9, "as a screen on the control-panel page"; rules 13–15)
+In `code/apccs2_toolbox.py`. Function: `handle_screen_request(config: dict, request: dict) -> dict`, and the screen script `web/panel/screen_toolbox.js`.
+Does: `config["toolbox"]` is optional and holds `detail_csv_path` or `detail_csv_text`, and `supplement_csv_path` or `supplement_csv_text`, never both forms for one sheet. A path is relative to `repo_root`, stays inside it and is read only; inline text is what the tests use, so no test writes a file. The database is `config["conn"]`, as CP-1's. Under `/api/more/toolbox/`:
+- `POST load` (body `{}`): read the configured copies, run CMP-09-01, and record CMP-09-03 with the source note `CSV copy named in the panel's config` at the current time (rule 24). No copy configured gives 404 `NOT_CHECKED`;
+- `GET search?feature=&decision=&licence=&status=&objective=&words=&sheet=&limit=`: CMP-09-02 over the newest snapshot, with `words` split at spaces and blank fields left out; no snapshot gives `NOT_CHECKED`;
+- `GET summary`: the counts of CMP-09-02 for an empty query, with the snapshot's `source_note` and `at`.
+`screen_toolbox.js` calls `window.apccsMore.register("toolbox", mount)`. It shows filter boxes for feature, decision, licence, status and words, each with a `<label>` whose `htmlFor` names it, a `Search` button, a `Load the saved copy` button, the counts, and one list line per result: `<feature> › <branch>: <ability> — <tool> [<source_row>] · licence <licence> · <decision_word> <status>`. It follows rule 13.
+Refuses: `TB_BAD_CONFIG` (a path outside `repo_root`, or both forms for one sheet); the handler gives 400 for a `ValueError` and 404 for an unknown path.
+Tests: `test_cmp09_05_toolbox_screen_searches_the_saved_copy` (through `more.handle_more_request` with `more.build_more_handlers()` and inline made-up CSV texts: `POST /api/more/toolbox/load` gives the row counts; `GET /api/more/toolbox/search?decision=Adopt+now` gives the one matching row; `panel.check_panel_web_files` on `web/panel/` still gives `PASS` with `screen_toolbox.js` present); `test_cmp09_05_refuses_paths_outside_the_repository` (a `detail_csv_path` of `../x.csv` gives 400 naming `TB_BAD_CONFIG`; `GET search` before any load gives `NOT_CHECKED`; `feature=13` gives 400).
+Done means: the Owner searches his whole researched tool kit by feature, decision and licence, from the control panel.
+Not checked: a CSV copy of the real sheets on the phone, and who saves it (Gaps).
+
+---
+
+### Batch CMP-05 — Log viewer: only the part CP-2 does not cover (one search and one timeline across all projects)
+
+**What CP-2 already covers (evidence).** CP-2-02, `read_project_log(records_text, view, tag)` in `code/apccs2_project_switcher.py` (line 120), gives CMP-05's four views (summary, full, milestones and chronological) and tag search, for one project at a time. CP-2-05's `GET log?id=&view=&tag=` shows them on the Projects tab, one project at a time. That part of CMP-05 is covered by CP-2-02 and is not worded again. **Left:** one search across all projects, a date and agent filter for it, one timeline across all projects, and a screen for them. So CMP-05 is worded as one batch.
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** CMP-09 is merged (the door).
+**New files:** `code/apccs2_log_search.py`, `code/test_apccs2_log_search.py` and `web/panel/screen_logs.js`. Test class `ApccsBatchCMP05Tests`. `SCREEN_ID = "logs"`.
+**Source:** CMP-05 ("One screen with summary, full, milestones and timeline views of the logs in the Owner's format, searchable by tag. Belongs beside CP-2 in slice 2. Ideas: Stapler Squad [14-164]; Design Decision Pack menu map"); objective O12; slice 2 Gap 9; ledger Q016 (projects stay separate); W9 step 9 ("word only what is left, for example one search across all projects").
+**Reuse, by exact name:** `apccs2_project_switcher.read_project_log(records_text, view, tag)`; `apccs_events.TIMELINE_VIEWS`; `apccs_logs.ALLOWED_AGENT_CODES`. Tests also use `apccs_logs.make_log_v2_correlation_id(timestamp_text, agent_code)` and `apccs_logs.build_eight_line_log_v2_record(record_fields)` to make records, and `apccs2_more_screens.handle_more_request`, `apccs2_more_screens.build_more_handlers`, `apccs2_more_screens.check_more_page_files` and `apccs2_control_panel.check_panel_web_files`. Import as `switcher`, `events`, `logs`, `more` and `panel`.
+**Errors:** `ValueError` whose message starts with an `LV_` code. `PS_` errors from `read_project_log` pass through unchanged.
+**Canary:** `Canary check: LOGS = ALL_PROJECTS -> lantern`.
+
+#### CMP-05-01: READ_EVERY_PROJECTS_LOG (source: CMP-05; CP-2-05's config shape)
+Function: `read_all_project_logs(config: dict) -> dict`.
+Does: `config["switcher"]` has CP-2-05's shape: each project id maps to its parts, of which this batch reads only `log_text` or `log_path` (never both). A path is relative to `repo_root`, stays inside it (after `Path.resolve()`) and is read only. For each project, in id order, run `switcher.read_project_log(text, "full")` once to check it. A project with no log, or whose log file is missing, is `NOT_CHECKED`. Return `{"logs": {project_id: text}` (only the projects with a log)`, "projects": [{"project_id", "status": "OK" or "NOT_CHECKED", "count", "bad_records"}], "total"}`. Each project's text stays under its own id; two projects' logs are never joined into one text.
+Refuses: `LV_BAD_CONFIG` (no `switcher`, a bad project id, a path outside `repo_root`, both forms given); `PS_` errors pass through.
+Tests: `test_cmp05_01_reads_every_projects_log` (two projects with inline logs of two and one made-up records, and a third whose `log_path` names a missing file inside the repository: counts 2 and 1, and the third `NOT_CHECKED`); `test_cmp05_01_refuses_paths_outside_the_repository` (`log_path` `../secret.txt` raises `LV_BAD_CONFIG`; both `log_text` and `log_path` for one project raise `LV_BAD_CONFIG`).
+Done means: every project's log is read once, by CP-2's own checker, and kept apart.
+Not checked: who saves the logs (slice 2 Gap 7).
+
+#### CMP-05-02: SEARCH_ACROSS_PROJECTS (source: W9, "one search across all projects")
+Function: `search_all_logs(all_logs: dict, words: str | None, tag: str | None, view: str) -> dict`.
+Does: `all_logs` is CMP-05-01's result. For each project, call `switcher.read_project_log(text, view, tag)`; then, when `words` is given (1–100 characters, split at spaces into 1–5 words), keep only the records holding every word in some field (any case). Return `{"view", "groups": [{"project_id", "records", "count", "bad_records"}], "total", "lines"}`. Groups are in project id order and keep the view's record order; each group holds one project's records only. Lines: one per project, for example `apccs: 2 records match.`
+Refuses: `LV_BAD_SEARCH` (`all_logs` not shaped like CMP-05-01's result, or bad `words`); `PS_BAD_VIEW` and `PS_BAD_TAG` pass through.
+Tests: `test_cmp05_02_searches_every_project_at_once` (made-up records for `apccs` and `uclrcde`, two of them holding `SG-1`: tag `SG-1` gives one match in each group; words `module limit` keeps only the apccs record holding both words; view `summary` keeps four fields); `test_cmp05_02_refuses_bad_searches` (words of six words raises `LV_BAD_SEARCH`; view `daily` raises `PS_BAD_VIEW`).
+Done means: one search finds an item in every project's log at once, and the answer still says which project each record came from.
+Not checked: logs in other formats. Only eight-line Log v2 records are read, as in CP-2-02.
+
+#### CMP-05-03: DATE_AND_AGENT_FILTER (source: CMP-05, "searchable"; the correlation ID `YYYYMMDD-HHMM-<agent>`)
+Function: `filter_logs_by_date_and_agent(search: dict, since: str | None, until: str | None, agents: list | None) -> dict`.
+Does: `search` is CMP-05-02's result. Keep the records whose ID date (its first eight digits, as a real date) is on or after `since` and on or before `until` (real dates, `YYYY-MM-DD`), and whose agent code (the ID's last part) is in `agents` (1–5 codes from `logs.ALLOWED_AGENT_CODES`). None means no limit. The summary view keeps `ID`, so it can be filtered too. Return the same shape as CMP-05-02, with new counts, lines and `filter: {"since", "until", "agents"}`.
+Refuses: `LV_BAD_FILTER` (a date that is not real, `until` before `since`, an unknown agent code such as `XX`); `LV_BAD_SEARCH`.
+Tests: `test_cmp05_03_filters_by_date_and_agent` (records on 2026-11-19 by `CL` and 2026-11-20 by `MU`: `since` `2026-11-20` keeps the second; `agents` `["CL"]` keeps the first); `test_cmp05_03_refuses_bad_filters` (`until` `2026-11-01` with `since` `2026-11-20`; agent `XX`; `since` `2026-02-30`).
+Done means: the Owner can ask what one agent did across all projects in any span of days.
+Not checked: records whose ID time is not Vancouver time. The ID is read as written; no time zone is added.
+
+#### CMP-05-04: ONE_TIMELINE_ACROSS_PROJECTS (source: CMP-05, "timeline views"; Q016)
+Function: `build_cross_project_timeline(all_logs: dict, view: str, limit: int = 200) -> dict`.
+Does: `view` is `milestones` (newest first) or `chronological` (oldest first); `limit` is 1–2,000. Records of every project, from `switcher.read_project_log(text, view)`, are merged by the ID's date and time; ties go by project id, then the record's order. Each record gets a line, cut at 160 characters: `<ID> [<project_id>] <RESULT> <ASK>`. Every line names its project, so projects stay apart even in one list. Return `{"view", "lines", "records"` (each with its `project_id`)`, "count", "shown"}`.
+Refuses: `LV_BAD_VIEW` (`summary` or `full`, which CMP-05-02 gives); `LV_BAD_LIMIT`; `LV_BAD_SEARCH` for a bad `all_logs`.
+Tests: `test_cmp05_04_merges_projects_by_time` (an apccs record at `20261120-0930`, a uclrcde one at `20261120-0800` and an apccs one at `20261119-1200` give, `chronological`, the order 19th, 08:00, 09:30, each line naming its project; `limit` 2 shows two); `test_cmp05_04_refuses_other_views` (`summary` raises `LV_BAD_VIEW`; `limit` 0 raises `LV_BAD_LIMIT`).
+Done means: one timeline shows what happened in every project, in time order, each line labelled with its project.
+Not checked: two agents' clocks agreeing. The order comes only from the IDs.
+
+#### CMP-05-05: LOGS_SCREEN (source: CMP-05, "One screen"; rule 26; rules 13–15)
+Function: `handle_screen_request(config: dict, request: dict) -> dict`, and the screen script `web/panel/screen_logs.js`.
+Does: Under `/api/more/logs/`:
+- `GET projects`: CMP-05-01's `projects` list;
+- `GET search?words=&tag=&view=&since=&until=&agents=`: CMP-05-02, then CMP-05-03 when a date or agent is given. `agents` is comma-separated; `view` defaults to `summary`; blank fields are left out;
+- `GET timeline?view=&limit=`: CMP-05-04, `view` defaulting to `milestones`.
+`screen_logs.js` calls `window.apccsMore.register("logs", mount)`. It shows a words box, a tag box, a view picker with the four views, `since` and `until` date boxes, and one checkbox per agent code, each with a `<label>` whose `htmlFor` names it, plus a `Search` button and a `Timeline` button. Results come under one `<h3>` heading per project; the timeline is one list. It follows rule 13.
+Refuses: the handler gives 400 for a `ValueError` (including `LV_` and `PS_` errors) and 404 for an unknown path.
+Tests: `test_cmp05_05_logs_screen_plugs_into_the_door` (`more.build_more_handlers()` holds `logs`; `GET /api/more/screens` through `more.handle_more_request` shows `logs` built; `GET /api/more/logs/search?tag=SG-1` with inline logs for two projects gives two groups; `panel.check_panel_web_files` and `more.check_more_page_files` on `web/panel/` give `PASS` with `screen_logs.js` present); `test_cmp05_05_refuses_bad_screen_requests` (`view=daily` gives 400; a `log_path` outside the repository gives 400; `GET /api/more/logs/nope` gives 404).
+Done means: from the control panel, the Owner searches every project's log at once and sees one timeline, each project still labelled.
+Not checked: the screen on the Owner's phone (a live step).
+
+---
+
+### Batch CMP-08 — Screen accessibility and plain-language check
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** CMP-05 is merged, so every screen file named in this section exists.
+**New files:** `code/apccs2_screen_check.py` and `code/test_apccs2_screen_check.py`. Test class `ApccsBatchCMP08Tests`.
+**Source:** CMP-08 ("Checks every slice 2 screen for labels, alt text, headings, keyboard order and reading level, with written exceptions for legal terms. Ideas: axe-core rules and textstat [G3-15]"); objective O18; ledger Q016; RULEBOOK standing preference 8 (plain English); W9 step 10 ("reads only the screen files it is given (uclrcde ui/ and apccs web/panel/), the way AM-1 covers every project without mixing them ... reuses what check_panel_web_files already checks, and words only the rest").
+**Reuse, by exact name:** `apccs2_control_panel.check_panel_web_files(web_dir)` and `apccs2_more_screens.check_more_page_files(web_dir)`. Import as `panel` and `more`. uclrcde's own checker, `uclrcde_ui.check_legal_ui_files`, can't be imported into apccs (rule 7), so for uclrcde's `ui/` the rules it shares with CP-1 are checked here.
+**What is reused and what is new:**
+
+| Check | apccs `web/panel/` | uclrcde `ui/` |
+|---|---|---|
+| `<label for>` for inputs, heading order and positive `tabindex` in the HTML | reused: `check_panel_web_files` (index.html) and `check_more_page_files` (more.html) | checked here (CMP-08-02) |
+| Fonts, widths, print rules and rule 13's script rules | reused, as above | not checked here: UI-1-01's own checker covers them in uclrcde |
+| Alt text, button names, link text, unique ids, `aria-controls` targets, `lang`, `<title>` | checked here | checked here |
+| Controls built by scripts | checked here (CMP-08-03) | checked here |
+| Reading level, with written exceptions | checked here (CMP-08-04) | checked here |
+
+**Errors:** `ValueError` whose message starts with an `SC_` code.
+**Canary:** `Canary check: SCREENS = READABLE -> lighthouse`.
+
+#### CMP-08-01: READ_ONE_PROJECTS_SCREEN_FILES (source: W9, "reads only the screen files it is given ... without mixing them"; Q016)
+Function: `read_screen_files(project: str, folder: str) -> dict`.
+Does: `project` is `apccs` (whose folder must end in `web/panel`) or `uclrcde` (whose folder must end in `ui`). Read the `.html`, `.js` and `.css` files directly in that folder, not in sub-folders, as UTF-8 text, read only. A symlink, a file over 2,000,000 characters or a file that is not UTF-8 is listed under `skipped` with its reason, not read. Return `{"project", "folder_kind": "web/panel" or "ui", "files": {name: text}, "sha256": {name: hash}, "skipped"}`. One call reads one project; two projects' files are never in one result.
+Refuses: `SC_BAD_PROJECT` (any other project); `SC_BAD_FOLDER` (missing, or not that project's screen folder by its last parts).
+Tests: `test_cmp08_01_reads_one_projects_files` (the repository's `web/panel/` gives `index.html`, `app.js`, `style.css`, `sw.js` and the `screen_*.js` files, each with its SHA-256; a temporary folder named `ui` holding a symlink lists it under `skipped`); `test_cmp08_01_refuses_other_projects_and_folders` (project `omniguide`; `apccs` with a temporary folder named `ui`; a missing folder).
+Done means: the check reads exactly one project's screens, and nothing else.
+Not checked: screens outside these two folders. OmniGuide and corolla-obd screens are not covered here.
+
+#### CMP-08-02: HTML_CHECKS (source: CMP-08, "labels, alt text, headings, keyboard order"; the axe-core rule idea)
+Function: `check_screen_html(name: str, html: str, reused: list) -> dict`.
+Does: Plain checks of one HTML text, each problem a line `<name>: <rule>: <detail>`:
+- `html-lang`: `<html>` has a `lang`;
+- `page-title`: a non-empty `<title>`;
+- `image-alt`: every `<img>` has an `alt`; an empty `alt=""` is allowed and listed as decorative;
+- `button-name`: every `<button>` has text or an `aria-label`;
+- `link-name`: every `<a>` has text, and its text is not only `here`, `click here`, `more` or `link`;
+- `duplicate-id`: no `id` is used twice;
+- `aria-controls`: each one names an `id` in the page;
+- `label`, `heading-order` and `tabindex`: as rule 13 says, unless `reused` names them, because a reused checker already covers that file.
+`reused` lists 0–3 of `label`, `heading-order` and `tabindex`. Return `{"name", "problems", "rules_checked", "rules_reused"}`.
+Refuses: `SC_BAD_INPUT` (not text, or an unknown name in `reused`).
+Tests: `test_cmp08_02_catches_html_problems` (a made-up page with an `<img>` without `alt`, an empty `<button>`, a `click here` link and one `id` used twice gives four lines with those rules; with `reused` `["label"]`, an input without a label gives no `label` line); `test_cmp08_02_refuses_bad_input` (`reused` `["colour"]`; `html` given as bytes).
+Done means: every screen page is checked for the things a screen reader and a keyboard need.
+Not checked: anything only a browser shows, such as contrast and the real focus order.
+
+#### CMP-08-03: CONTROLS_BUILT_BY_SCRIPTS (source: CMP-08, "labels ... keyboard order"; the screens build their controls in scripts)
+Function: `check_screen_script(name: str, js: str) -> dict`.
+Does: The screens build their controls in scripts, through `createElement` or a small helper such as `make("input", ...)`. This static check reads the script text only:
+- it counts quoted element names that start a control: `"input"`, `"select"`, `"textarea"`, `"img"` and `"button"`, and quoted `"label"`;
+- it counts label links: `.htmlFor =`, `{ for:` and `setAttribute("for"`.
+Findings, each a line, which give `REVIEW`, never `FAIL`:
+- `label`: fewer labels, or fewer label links, than inputs, selects and textareas;
+- `image-alt`: an `"img"` with no `.alt =` or `setAttribute("alt"` in the file;
+- `button-name`: a `"button"` with no `textContent` or `aria-label` in the file;
+- `tabindex`: `tabIndex =` or `setAttribute("tabindex"` with a number above 0.
+Return `{"name", "status": "OK" or "REVIEW", "findings", "counts": {"controls", "labels", "label_links", "images", "buttons"}, "note": "Static check of the script text; what the browser shows is NOT CHECKED."}`. A service worker (`sw.js`) is not checked, because it builds no screen.
+Refuses: `SC_BAD_INPUT`.
+Tests: `test_cmp08_03_counts_controls_and_labels` (a made-up script making two inputs and one label with one `htmlFor` gives `REVIEW` with a `label` finding; one making an input with a label and `htmlFor` gives `OK`; `tabIndex = 3` gives a `tabindex` finding); `test_cmp08_03_refuses_bad_input` (`js` None; `name` `""`).
+Done means: controls that only exist once a script runs still get their labels and keyboard order checked, honestly marked as a static check.
+Not checked: a control built in a way the counts can't see. A `REVIEW` asks a person to look; nothing is blocked.
+
+#### CMP-08-04: READING_LEVEL_WITH_WRITTEN_EXCEPTIONS (source: CMP-08, "reading level, with written exceptions for legal terms"; the textstat idea)
+Function: `check_reading_level(text: str, settings: dict) -> dict`.
+Does: `settings` is `{}` or holds `target_grade` (1–16, default 8), `max_sentence_words` (5–60, default 25) and `exceptions` (1–200 objects `{"term", "reason"}`, each reason 1–200 characters: an exception is never silent). The default, `LEGAL_TERM_EXCEPTIONS`, lists these terms, each with the reason `legal term: kept as the court uses it`: `affidavit`, `applicant`, `respondent`, `plaintiff`, `defendant`, `claimant`, `adjournment`, `chambers`, `registry`, `jurisdiction`, `exhibit`, `notice of civil claim`, `notice of application`, `limitation period`, `proceeding`, `duty counsel`, `tribunal`, `interlocutory`. Count, in code:
+- words: runs of letters, with `'` and `-` inside a word;
+- sentences: text ending in `.`, `!` or `?`, or at a line end;
+- syllables: groups of the vowels `a e i o u y`, less one for a silent final `e` (not `le`), at least 1 per word;
+- each exception found (whole words, any case) counts as one word of one syllable.
+Grade = 0.39 × words ÷ sentences + 11.8 × syllables ÷ words − 15.59 (the Flesch–Kincaid grade), rounded to one decimal place. Text of fewer than 20 words gives `TOO_SHORT_TO_SCORE`. Return `{"status": "OK", "REVIEW" or "TOO_SHORT_TO_SCORE", "grade", "target_grade", "long_sentences"` (over `max_sentence_words`, each as its first 60 characters)`, "hard_words"` (words of three or more syllables that are not exceptions, most frequent first, at most 20)`, "exceptions_used"` (each with its reason)`}`. `REVIEW` means over the target; a person rewrites or adds an exception with its reason.
+Refuses: `SC_BAD_TEXT`; `SC_BAD_SETTINGS` (an exception without a reason, a value out of range).
+Tests: `test_cmp08_04_scores_plain_text_and_legal_terms` (`Tap the button. Your file is saved on this phone. You can print it later.` repeated to over 20 words gives `OK`; one 40-word sentence gives `REVIEW` with it in `long_sentences`; a text using `affidavit` does not list it in `hard_words` and lists it in `exceptions_used`); `test_cmp08_04_refuses_silent_exceptions` (an exception without `reason`; `target_grade` 0).
+Done means: every screen's words are scored for plain English, and every legal word kept on purpose is written down with its reason.
+Not checked: the formula's fit for legal text, and the syllable count, which is a rule of thumb. The default list is not checked by a lawyer.
+
+#### CMP-08-05: ONE_PROJECTS_SCREEN_REPORT (source: CMP-08, "Checks every slice 2 screen"; W9, "reuses what check_panel_web_files already checks")
+Function: `check_project_screens(project: str, folder: str, settings: dict) -> dict`.
+Does: Read the files with CMP-08-01. For apccs `web/panel`, run `panel.check_panel_web_files(folder)` and `more.check_more_page_files(folder)` and keep their results under `reused`; for `index.html` and `more.html`, `reused` covers `label`, `heading-order` and `tabindex`. uclrcde gets no reused checker (rule 7). Then run CMP-08-02 on each `.html` file, CMP-08-03 on each `.js` file except `sw.js`, and CMP-08-04 on each file's words: in HTML, the text outside tags, `<script>` and `<style>`; in scripts, quoted strings of three or more words. `settings` is passed to CMP-08-04. Return `{"project", "status", "files": [{"name", "problems", "findings", "reading"}], "reused", "lines", "report_sha256"}`. `status` is `FAIL` when an HTML check or a reused checker has a problem, `REVIEW` when only script or reading-level findings remain, and `PASS` otherwise. Nothing is changed.
+Refuses: CMP-08-01's and CMP-08-04's errors.
+Tests: `test_cmp08_05_reports_the_panel_screens` (the repository's `web/panel/` gives a report naming every `.html` file and every `.js` file except `sw.js`, with both reused checkers' `PASS` under `reused`); `test_cmp08_05_keeps_projects_apart` (a temporary folder named `ui` with made-up uclrcde-like files gives `project` `uclrcde` and an empty `reused`; the same folder as `apccs` raises `SC_BAD_FOLDER`).
+Done means: one report per project says, in plain lines, what on its screens needs fixing and what only needs a person's look.
+Not checked: the uclrcde screens as they are on uclrcde main. apccs never reads another repository; a person or a runner copies `ui/` into a folder named `ui` and runs the check (Gaps).
+
+---
+
+### Gaps (what this wording could not check)
+
+1. **The door's link.** CP-1's Home tab can't link to `more.html`, because CP-1's files never change (rule 26). The Owner opens `/more.html` on the same address and can add it to his home screen as a second icon. A later control-panel batch could join the two pages; whether he wants one icon or two is NOT CHECKED.
+2. **Saved data.** CMP-04 (run logs), CMP-06 (GitHub and web search results), CMP-07 (GitHub run lists and the scheduled-task list) and CMP-09 (CSV copies of the two sheets) read saved text, as CP-2 does (slice 2 Gap 7). No job saves any of it yet. The daily-status workflow is in `.github/`, which only the Owner changes, so a later batch or work order adds a saver outside `.github/`. Until then these show `NOT_CHECKED` or `NEVER_RAN`.
+3. **Wiring.** No agent reserves usage through CMP-02, routes through CMP-01, makes cards through CMP-03 or logs its steps yet. Wiring them into the builder and the runners is a later batch, after each is built and audited.
+4. **The Approvals adapter.** P0-2's `APPROVAL_URL` is `http://127.0.0.1:8766/approval-requests`, the same port as the control panel's `DEFAULT_PORT` 8766. The adapter is not built. Which of the two moves to another port is NOT CHECKED; CMP-03-05's list is ready for whichever adapter is built.
+5. **The scheduler's status words.** Only `SUCCEEDED` and `FAILED` are known from the scheduled-task list's own description; other words are kept as `OTHER` (CMP-07-02).
+6. **Log formats.** CMP-04-01 reads unittest, traceback, GitHub Actions and `run_all_tests.py` lines. Gradle and JUnit 4 (corolla-obd) and OmniGuide's build logs are NOT CHECKED.
+7. **Reading level.** Flesch–Kincaid is an English-language formula, and the syllable count is a rule of thumb. The default legal-term list is not checked by a lawyer.
+8. **FreeSerp and freenewsapi.** Their terms, limits and reply shapes were never read (ledger R151–R153). They stay labelled `NOT CHECKED`, a label and not a block (Q052). No adapter for them is worded.
+9. **The AI hand-off packet** of CMP-04-05 is never sent by code. Recording an AI's reply as a person's note is not worded here.
+10. **Health pings.** Healthchecks' idea of a job calling a ping address is not worded: rule 19 keeps every batch reading saved records instead of receiving calls. A later batch could add `POST /api/more/health/ping` behind the door.
+11. **CMP-08 and uclrcde.** CMP-08 checks a copy of uclrcde's `ui/` folder that a person or runner gives it, because apccs never reads another repository. The uclrcde screens are also checked in uclrcde by UI-1-01's own checker.
+12. **Names.** Every new file, module, function, table, test name, test class, canary and error prefix here (`UB_`, `RL_`, `AC_`, `FL_`, `HW_`, `PB_`, `PA_`, `TB_`, `MS_`, `LV_`, `SC_`) was checked unused on apccs main `2388392` (both `code/apccs_*.py` and `code/apccs2_*.py`) and uclrcde main `0e20fd5` on 2026-11-23. Every reused function was read on main, with the signature given here. If a reused contract changes before a build, the builder says so in its pull request instead of guessing (AGENTS.md rule 12).
+13. **Test run times** are NOT CHECKED until each batch is built. Each new test file should finish in a few seconds, and the server tests stop their servers.
+14. **Live steps.** No route, scheduled job or screen is run live by this wording. Starting the door's server on the Owner's phone, and both icons on his home screen, are live steps for a later run.
+
+UNDO: before merge, close the draft pull request. After merge, a later add-only section can hold, correct or replace any batch here. Nothing in this section changes code, runtime or any existing text.
+
+### Wording audit of the compilation batches (independent Claude auditor, 2026-11-23)
+
+Written by a separate Claude run that did not write the wording above (ledger Q039). It checked all ten batches against the template, the readability gate (Q036–Q038 and slice 1 rules 3–5), the code on apccs main `2388392` and uclrcde main `0e20fd5`, and the sources the section cites (the ten items in "Approved features waiting for wording — from the product compilation", W9 in `plan/WORK_ORDERS.md`). Every reused function, constant and signature named above exists on main as written, and every new name is unused in both repositories. Where a correction below differs from the wording above, the correction wins; everything else above stands.
+
+**Status: CMP-02, CMP-01, CMP-03, CMP-04, CMP-07, CMP-10, CMP-06, CMP-09, CMP-05 and CMP-08 are Ready to build**, in that order, with these corrections.
+
+#### Corrections for all ten batches
+
+- **A1 (rule 22).** `urllib.parse.parse_qsl` may be imported and used to read query strings, as CP-1 does; it opens no connection. The ban in rule 22 is on `urllib.request`, `http.client`, `socket` and `ssl` in the new code modules. A test file that starts a local server (CMP-09-04) may import `http.client` to talk to `127.0.0.1` only, as `code/test_apccs2_control_panel.py` does.
+- **A2 (slice 1 rule 4, "No file is written anywhere").** No test writes, copies or links a file, a temporary folder included. A test may make an empty folder inside `tempfile.TemporaryDirectory()`. CMP-08's tests change as said under CMP-08.
+
+#### CMP-01
+
+- **CMP-01-03, first test.** The last step uses the same `real`-data `code` job: with `free-cloud-a` taken out, `phone-local` can't do code and `own-box` has no route record, so `proposed` is None and `flags` names `paid-api`.
+- **CMP-01-03, second test.** Use one ceiling of 760 tokens on `own-box` and its default model, with `margin_percent` 10, and reserve a 2,000-character text with 100 expected reply tokens (660 tokens) through `budget.reserve_usage`. That leaves 100, so the 3,500-token job skips `own-box` with `budget: 100 left`.
+- **CMP-01-04, counting.** An outcome counts for its `route_used`; when `route_used` is None, it counts for its proposal's `proposed` route. `proposed` counts the proposals that named the route; `used` counts the outcomes whose `route_used` is the route; `ok`, `failed` and `not_run` count the outcomes that count for the route, by `result`; `used_when_proposed` counts the outcomes whose `route_used` equals their proposal's `proposed`. In the first test, the `OK` and `FAILED` outcomes have `route_used` `own-box` and the `NOT_RUN` outcome has None, giving `used` 2 and `used_when_proposed` 2.
+
+#### CMP-03
+
+- **CMP-03-02, card id.** `card_id` is `card-` plus the first 16 hex characters of the SHA-256 of the canonical JSON of `{step_id, job_id, request_sha256, created_at}`, so a new card for the same step after an old one expired gets a new id (the `UNIQUE` column never clashes).
+- **CMP-03-02, stored request.** `request_json` is the canonical JSON of P0-2's returned `request`, and `request_sha256` is P0-2's returned `request_sha256`, which equals the SHA-256 of that canonical JSON. CMP-03-05 checks a card by computing the SHA-256 of `request_json` again and comparing.
+- **CMP-03-04, order of checks.** In this order: `AC_BAD_DB`; `AC_BAD_TIME`; `AC_UNKNOWN_CARD`; `AC_NOT_OWNER`; `AC_BAD_DECISION`; `AC_ALREADY_DECIDED` (a card with a decision or `EXPIRED` row); then the expiry check and the record. An `EXPIRED` row keeps the caller's `actor_id`.
+
+#### CMP-04
+
+- **CMP-04-01, unittest blocks.** In unittest's own output the header line `FAIL: ...` or `ERROR: ...` is followed at once by a line of `-` signs. The block's traceback starts after that line and ends at the next line made only of 10 or more `=` signs, the next line made only of 10 or more `-` signs, or the log's end; the message is the last non-blank line of that traceback.
+- **CMP-04-01, run_all_tests rows.** Only a row of the summary table (a line starting `| ` with three cells, as `tools/run_all_tests.py` prints) whose result cell is `❌ fail` gives a `SUITE_BLOCKED` failure: `where` is the first cell, `test` is None and `message` is the third cell. The `**Result: ...**` line and unittest's `FAILED (failures=...)` line give no failure.
+- **CMP-04-02, paths.** Rule 3 replaces each run of non-space characters that holds `/` and ends in `.` and 1–5 letters.
+
+#### CMP-07
+
+- **CMP-07-02, run ids and times.** For `github_workflow`, `id` must be a whole number, and the heartbeat's `run_id` is its decimal text. For `scheduled_task`, `last_run` must hold `fired_at` (a time with an offset) for a heartbeat: the `run_id` is `<id>:<fired_at>` and `started_at` is `fired_at`. A `last_run` without `fired_at` gives no heartbeat and is counted in a returned `skipped` number. A heartbeat `run_id` is 1–200 characters; rule 25 does not apply to it, because it comes from saved text.
+
+#### CMP-10
+
+- **CMP-10-01, labels.** A label covers the rest of its own line only; the next line is sorted again by rule 1 or rule 2. So in the first test, `It is done when the page shows three totals. Never use a paid service.` gives one done_when and one limits sentence. A labelled line's sentence is its text after the `:`, trimmed.
+- **CMP-10-01, matching.** Every word or phrase in rule 2 matches as whole words, in any case. `rule` is `label <label>` for rule 1, `holds "<word>"` or `starts with "<word>"` for rule 2 (the word that matched), and `no rule matched` for context.
+
+#### CMP-06
+
+- **CMP-06-03, tests and reasons.** In the tests, `settings` is always `load_prior_art_settings(...)`'s result (`{}` means `load_prior_art_settings("{}")`). A `source` not in `web_sources` gives `BLOCKED` with the reason `the source is not in web_sources`.
+
+#### CMP-09
+
+- **CMP-09-04, handlers.** `more_handlers` None means `build_more_handlers()`; an empty dict stays empty (the `NOT_BUILT` test needs this). The query of a sub-request is read with `urllib.parse.parse_qsl(query_text, keep_blank_values=True)` into a dict, as CP-1 does. A handler is called through a small private helper (as CP-1's `_call`), because the readability gate refuses a call written on a dictionary item.
+- **CMP-09-04, host test.** The last check of `test_cmp09_04_door_keeps_cp1_refusals` calls `more.run_more_server(config, host="0.0.0.0", port=0)`, which raises `MS_HOST_REFUSED` before any socket opens.
+- **CMP-09-05, query values.** In the screen handler, a `feature` or `limit` made only of digits is turned into a whole number before CMP-09-02, so `feature=13` raises `TB_BAD_QUERY` (400). `GET search` and `GET summary` with no snapshot answer 404 with `read_toolbox_snapshot`'s `NOT_CHECKED` body, as `POST load` does with no copy.
+- **CMP-09-01, headers.** NOT CHECKED in full by this audit: the Drive reader showed the supplement's 13 header cells only cut short, and their starts match the list above. If a real CSV copy's header differs, `TB_BAD_CSV` refuses it loudly; the tests use the headers as listed.
+
+#### CMP-08
+
+- **CMP-08-01, first test.** No symlink is made (correction A2). The repository's `web/panel/` gives the files listed; an empty temporary folder named `ui` gives `project` `uclrcde`, `folder_kind` `ui` and no files. Skipping a symlink stays in the instruction but is not tested.
+- **CMP-08-04, REVIEW.** `REVIEW` is given when the grade is over `target_grade` or any sentence is over `max_sentence_words`.
+- **CMP-08-05, second test.** The temporary folder named `ui` is empty (correction A2): as `uclrcde` it gives `project` `uclrcde`, no files, an empty `reused` and `PASS`; as `apccs` it raises `SC_BAD_FOLDER`.
+
+UNDO: a later add-only section can hold or correct any batch here. This audit changes no code and no earlier text.
