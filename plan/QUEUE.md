@@ -9514,3 +9514,648 @@ Written by a separate Claude run that did not write the wording above (ledger Q0
 - **CMP-08-05, second test.** The temporary folder named `ui` is empty (correction A2): as `uclrcde` it gives `project` `uclrcde`, no files, an empty `reused` and `PASS`; as `apccs` it raises `SC_BAD_FOLDER`.
 
 UNDO: a later add-only section can hold or correct any batch here. This audit changes no code and no earlier text.
+
+## Slice 3 — swarm, live research, database management, legal library, trials and safety layers (Claude, work-order runner W10, 2026-11-23)
+
+Written by the Claude work-order runner on 2026-11-23, about 10:40 UTC, under work order W10 (`plan/WORK_ORDERS.md`) and ledger Q024, Q046, Q052 and Q056. It words the six "Slice 3" items of "Approved features waiting for wording" (2026-11-19) as eight batches, with the ideas listed for them under "Ideas added to items already approved". The wording auditor checks this section before it merges (Q039). **Every batch here is NOT ready to build until the wording audit marks it ready.**
+
+This section is written after the compilation batches (pull request #206, audited 2026-11-23 08:01 UTC), because SW-1 and LR-1 spend through CMP-02's budget ledger. Only the text from this heading down is new.
+
+Build order (one open pull request per repository, so this is also each repository's queue order):
+- `someonee12345678-hue/uclrcde`: **SL-2, DM-1, DM-2, LL-1**.
+- `someonee12345678-hue/apccs`, after the compilation batches: **SL-1, SW-1, LR-1, TR-1**.
+
+Safety comes first in each repository, so the guards exist before more data moves.
+
+Which item became which batch:
+
+| Item (2026-11-19 list) | Batches | Repository |
+|---|---|---|
+| Safety layers S1–S4 | SL-1 (S1 secrets, S2 log chain, S3 sandbox policy); SL-2 (S4 personal information and review) | apccs; uclrcde (Q016: each guards its own repository's data) |
+| Database management (B5) | DM-1 (migration plan, change log, case roles, read-only view); DM-2 (three checked copies, case-file backup to an SD card or USB stick) | uclrcde |
+| Legal library pilot (B2) | LL-1 | uclrcde |
+| Swarm setting (NOV1 item 28) | SW-1 | apccs |
+| Research agent on a free live search | LR-1 | apccs |
+| Phase 1 trials T1, T3–T8 | TR-1 | apccs |
+
+Sources read for this wording: the six items and their ideas (above); BUILD_PLAN_V1_2026-11-17 (Drive 1ybzH-MUNIEnceIrP5E7bfO1VpE7UugqnikK4ZH3axuo), Phase 1, Phase 2 B2 and B5, Phase 3 S1–S4; NOV1_CONTROL_PANEL_UPGRADE_LIST item 28; PRODUCT_MAP_SUPPLEMENT_2026-11-20 (its ⬜ rows for these items: the research board, one router with workers behind it, three checked copies, the case-file backup and tool-blocking rules); `plan/PRODUCT_MAP.md`; the compilation batches above (CMP-02's exact names); ledger Q009, Q010, Q016, Q024, Q026, Q046, Q049 and Q052; the code on apccs main `2388392` and uclrcde main `0e20fd5`.
+
+### Rules for all eight slice 3 batches (read with each batch)
+
+Rules 1–11 of slice 1, rules 12–18 of slice 2 and rules 19–25 of the compilation batches apply unchanged in both repositories, with the compilation audit's correction A1. Rule 26 is not used: no batch here adds a screen. Where a batch says more, both hold. These rules are added:
+
+27. **Outside calls in apccs go through CMP-02.** SW-1-04 and LR-1-03 are the only slice 3 instructions that reach anything outside their module, each through exactly one `apccs2_usage_budget.run_with_budget` call per outside call, with the caller's `call_fn`. No uclrcde batch here makes an outside call of any kind.
+28. **Files are read only where an instruction says so, and never written.** Only DM-2-02 and DM-2-03 read files, inside the folder the caller names; every other instruction takes text the caller gives (rule 19). They read regular files only. A symlink, a name holding `..`, or a path that resolves outside the named folder is skipped and listed, never followed. Bytes are read with `open(path, "rb")` in chunks of 1,048,576 bytes. No instruction creates, changes, moves or deletes a file. A test may make files only the way the batch's tests say (a SQLite database through `core.open_uclrcde_db` in a temporary folder), never with `.write(`, `write_text` or `write_bytes`.
+29. **Secrets and personal words are never echoed.** A finding shows its kind, its place (path and line, or start and end) and a masked preview: the first 2 characters, then `…`, then the length, for example `gh… (40 chars)`. The found text itself is in no returned value, table row, log line or exception message. Tests build secret-like strings at run time from pieces (for example `"gh" + "p_" + "A" * 36`), so no file in either repository holds one whole; GitHub's push protection and the repository's own checks would rightly stop a whole one.
+30. **Case data stays on the phone** (rulebook hard limits). DM-2 refuses a `cloud` copy place for data marked `CASE_FILE`, which is the default. SL-2 never sends anything. LL-1 works only on public-law texts, and its tests use made-up statute text (`Made-up Example Act`), never a real Act.
+31. **Live work is labelled, never assumed.** TR-1 records supplied results, and a trial without them is `NOT CHECKED`. No batch here installs, downloads or runs a tool, a vault, a sandbox, a timestamp service or a search engine. A passing test proves the plain-code check only.
+32. **Names.** Every new file, function, table, test name, test class, canary and error prefix here (`SL_`, `SW_`, `LR_`, `TR_`, `PV_`, `DM_`, `BK_`, `LL_`) was checked unused on apccs main `2388392` (both `code/apccs_*.py` and `code/apccs2_*.py`), on uclrcde main `0e20fd5` and in every earlier section of this queue, on 2026-11-23.
+
+---
+
+### Batch SL-2 — Personal-information check and a person's review before anything leaves the phone (safety layer S4)
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** this plan is merged. Needs nothing new.
+**New files:** `code/uclrcde_privacy.py` and `code/test_uclrcde_privacy.py`. Test class `UclrcdeBatchSL2Tests`.
+**Source:** slice 3 item "safety layers S1–S4"; BUILD_PLAN_V1 Phase 3, "S4 Presidio + human review before anything leaves"; the idea "Presidio [G3-07]"; `plan/PRODUCT_MAP.md`, "privacy filter (Presidio, S4) ⏸"; W10 step 6; ledger Q009 and Q016.
+**Reuse, by exact name:** `uclrcde_core.open_uclrcde_db`; `uclrcde_ui_review.REDACTED` (the text `[REDACTED]`, as UI-5's binder uses it). Import as `core` and `review`. Tests also use `uclrcde_core.init_uclrcde_db_and_register_matter(db_path, matter_id, title, jurisdiction, court_level, filing_role)`.
+**Errors:** `ValueError` whose message starts with a `PV_` code. A `ValueError` from `core` passes through unchanged.
+**Words used:** a *finding* is one piece of text that looks personal: its kind, start and end. A *release* is any text about to leave the phone: an AI hand-off packet (UI-2's `build_rewording_packet`), a lawyer brief, a search query, a copy for another person.
+**Canary:** `Canary check: RELEASE = REVIEWED -> doorkeeper`.
+
+#### SL-2-01: LOAD_PRIVACY_SETTINGS (source: S4; rule 20 of the compilation batches)
+Function: `load_privacy_settings(settings_json: str) -> dict`.
+Does: Read one JSON object with these keys, all optional:
+- `names` (default `[]`): 0–200 names of people in the matter, each 2–80 characters of letters, spaces, `.`, `'` or `-`. The person types them; code never guesses a name.
+- `terms` (default `[]`): 0–200 other words or phrases the person wants caught (a street, a workplace, a file number), each 2–80 characters with no control character.
+- `kinds` (default all of `PV_KINDS`): which built-in recognizers run, a list from the constant `PV_KINDS = ("EMAIL", "PHONE", "POSTAL_CODE", "SIN", "CARD", "BIRTH_DATE", "STREET_ADDRESS")`, each once.
+- `max_chars` (default 200,000): a whole number from 1 to 2,000,000.
+A name or term that repeats another after `casefold()` is refused. Return `{"names", "terms", "kinds", "max_chars", "defaults_used"}`, with names and terms sorted by their casefolded text and kinds in `PV_KINDS` order.
+Refuses: `PV_BAD_SETTINGS` (not JSON, not an object, an unknown key, a wrong type, a bool where a number is wanted, a value out of range, a repeat).
+Tests: `test_sl2_01_reads_names_and_defaults` (`{"names": ["Jane Roe"]}` gives all seven kinds, `max_chars` 200000 and `defaults_used` `["kinds", "max_chars", "terms"]`); `test_sl2_01_refuses_bad_settings` (a one-letter name; the kind `NAME`; `["Jane Roe", "jane roe"]`; the key `name`; `"max_chars": true`; each raises `PV_BAD_SETTINGS`).
+Done means: the person decides which names and words count as personal, in one JSON text, and a typo is refused.
+Not checked: whether these seven kinds are enough for every document; the person adds the rest as terms.
+
+#### SL-2-02: FIND_PERSONAL_INFORMATION (source: S4, Presidio's analyzer idea, in plain code; Q046)
+Function: `find_personal_information(text: str, settings: dict) -> dict`.
+Does: `settings` is SL-2-01's result, checked again with the same rules through one shared private checker. Run these plain rules (Python `re`), only for the kinds in `settings["kinds"]`, plus `NAME` and `TERM` when given:
+- `NAME` and `TERM`: each name or term as whole words (`\b` at both ends, spaces matching any run of spaces), ignoring case.
+- `EMAIL`: `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`.
+- `PHONE`: `(?<!\d)(?:\+?1[ .-]?)?\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}(?!\d)`.
+- `POSTAL_CODE` (Canadian), ignoring case: `\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z] ?\d[ABCEGHJ-NPRSTV-Z]\d\b`.
+- `SIN`: nine digits written `ddd ddd ddd`, `ddd-ddd-ddd` or `ddddddddd`, with no digit just before or after, whose digits pass the Luhn check.
+- `CARD`: 13 to 19 digits, optionally in groups split by single spaces or hyphens, with no digit just before or after, whose digits pass the Luhn check.
+- `BIRTH_DATE`: a date written `YYYY-MM-DD` or `<Month> <day>, <year>` (an English month name), starting within 30 characters after `born`, `DOB`, `D.O.B.` or `date of birth` (any case).
+- `STREET_ADDRESS`, ignoring case: `\b\d{1,6}(?: [A-Za-z][A-Za-z.'-]*){1,4}? (?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Way|Crescent|Cres|Lane|Ln|Court|Ct|Place|Pl)\b` (1–6 digits, 1–4 words, then a street word; single spaces only, so a comma ends the match).
+
+Where two findings overlap, the longer is kept; at the same length, the kind earlier in the order `NAME`, `TERM`, then `PV_KINDS`. Return `{"findings": [{"kind", "start", "end", "preview"}]` (sorted by start; `preview` as rule 29)`, "counts"` (every kind that ran, zeros included)`, "clean"` (True when there are no findings)`, "chars"}`.
+Refuses: `PV_BAD_TEXT` (not text, or longer than `max_chars`); `PV_BAD_SETTINGS`.
+Tests: `test_sl2_02_finds_each_kind` (with `names` `["Jane Roe"]`, the made-up text `Jane Roe, born 1980-03-04, lives at 12 Example Street, V9Z 9Z9. Call 604-555-0100 or write to person@example.com. SIN <n>.`, where `<n>` is built at run time by a private helper that adds a Luhn check digit to `12345678` and writes it `ddd ddd ddd`: the counts are `NAME` 1, `BIRTH_DATE` 1, `STREET_ADDRESS` 1, `POSTAL_CODE` 1, `PHONE` 1, `EMAIL` 1, `SIN` 1 and `CARD` 0, and neither `person@example.com` nor the SIN digits appear in any returned value); `test_sl2_02_refuses_bad_text_and_skips_bad_numbers` (nine digits that fail the Luhn check give no `SIN`; a text of `max_chars` + 1 characters and `b"bytes"` each raise `PV_BAD_TEXT`).
+Done means: every release can be checked for the personal words the person cares about, by rules anyone can read.
+Not checked: names the person did not type, and personal facts written in plain words ("my neighbour's son"). A rule list catches patterns, not meaning; the person's review (SL-2-05) is the real check.
+
+#### SL-2-03: BUILD_A_REDACTED_COPY (source: S4, Presidio's anonymizer idea)
+Function: `build_redacted_copy(text: str, settings: dict, keep_kinds: list) -> dict`.
+Does: Run SL-2-02. `keep_kinds` lists the kinds the person chose to leave in (for example `["NAME"]` for a brief to his own lawyer), each from `NAME`, `TERM` and `PV_KINDS`, each once. Replace every other finding with `review.REDACTED`, working from the end of the text so the earlier offsets hold. Then run SL-2-02 again on the result: if any kind not kept is still found, refuse with `PV_REDACTION_INCOMPLETE`. Return `{"text", "text_sha256", "source_sha256", "replaced": {kind: n}, "kept": {kind: n}}`.
+Refuses: `PV_BAD_TEXT`; `PV_BAD_SETTINGS`; `PV_BAD_KINDS` (not a list, an unknown kind, a repeat); `PV_REDACTION_INCOMPLETE`.
+Tests: `test_sl2_03_redacts_all_but_the_kept_kinds` (the SL-2-02 text with `keep_kinds` `["NAME"]` keeps `Jane Roe`, holds `[REDACTED]` six times, and a second SL-2-02 run finds only `NAME`); `test_sl2_03_refuses_bad_kinds` (`["NAMES"]`, `["EMAIL", "EMAIL"]` and `"EMAIL"` each raise `PV_BAD_KINDS`).
+Done means: the person can send a copy with the personal parts taken out, and code proves none of them is left.
+Not checked: whether a redacted document still makes sense to its reader.
+
+#### SL-2-04: RECORD_A_RELEASE_REQUEST (source: S4, "human review before anything leaves")
+Function: `record_release_request(db_path: str, case_id: str, outbound: dict, settings: dict, at: str) -> dict`.
+Does: `outbound` is exactly `{"what"` (1–200 characters, for example `AI hand-off packet`)`, "destination"` (1–200 characters, for example `ChatGPT, copied by hand`)`, "text"}`. The matter must be registered (its `matters` row). Run SL-2-02 on the text. Open the database only through `core.open_uclrcde_db` and add one row to the add-only table `pv_release_requests(request_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, what TEXT NOT NULL, destination TEXT NOT NULL, text_sha256 TEXT NOT NULL, chars INTEGER NOT NULL, counts_json TEXT NOT NULL, clean INTEGER NOT NULL, at TEXT NOT NULL, row_sha256 TEXT NOT NULL)`. Only the text's SHA-256 is kept, never the text, so the request table holds no personal words. `row_sha256` is the SHA-256 of the row's canonical JSON without `request_id` and `row_sha256`. Every request, a clean one too, waits for a person. Return `{"request_id", "status": "NEEDS_REVIEW", "text_sha256", "counts", "clean", "line"}`, where `line` is, for example, `Before this leaves: 1 email address and 1 phone number were found. A person must look at it first.` (or `Before this leaves: nothing personal was found by the rules. A person must still look at it first.`).
+Refuses: `PV_BAD_RELEASE` (the shape); `PV_UNKNOWN_MATTER`; `PV_BAD_TIME` (not ISO 8601 with an offset); `PV_BAD_TEXT`; `PV_BAD_SETTINGS`; `core`'s errors unchanged.
+Tests: `test_sl2_04_records_a_request_without_the_text` (a made-up matter `MATTER-SYNTH-0001` in a temporary folder; the SL-2-02 text gives `NEEDS_REVIEW`, `clean` False and one table row; no column of that row holds `person@example.com`); `test_sl2_04_refuses_unknown_matters_and_bad_shapes` (matter `MATTER-SYNTH-9999` raises `PV_UNKNOWN_MATTER`; a missing `destination` raises `PV_BAD_RELEASE`; `at` `2026-11-23T10:00` raises `PV_BAD_TIME`).
+Done means: everything that would leave the phone is listed first, with what the rules found.
+Not checked: nothing calls this yet. Wiring UI-2's packet, UI-5's binder and BR-1's web step through it is a later batch (Gaps).
+
+#### SL-2-05: DECIDE_A_RELEASE (source: S4; Q009)
+Function: `decide_release(db_path: str, request_id: int, review: dict, text: str) -> dict`.
+Does: `review` is exactly `{"decision"` (`RELEASE` or `HOLD`)`, "reviewed_by"` (1–80 characters)`, "accept_findings"` (a bool)`, "at"}`. `text` is the text about to leave. Checks, in this order: `PV_UNKNOWN_REQUEST`; `PV_ALREADY_DECIDED` (a request is decided once); `PV_BAD_REVIEW` (the shape, or `at` earlier than the request's `at`). Then the decision: `allowed` is True only when the decision is `RELEASE`, the SHA-256 of `text` equals the request's `text_sha256`, and the request was clean or `accept_findings` is True. Otherwise `allowed` is False with the first matching reason: `held by <reviewed_by>`; `the text changed after the request; make a new request`; `personal information was found and <reviewed_by> did not accept it`. Add one row to the add-only table `pv_release_decisions(decision_id INTEGER PRIMARY KEY, request_id INTEGER NOT NULL UNIQUE, decision TEXT NOT NULL, reviewed_by TEXT NOT NULL, accept_findings INTEGER NOT NULL, text_sha256 TEXT NOT NULL, allowed INTEGER NOT NULL, reason TEXT NOT NULL, at TEXT NOT NULL)`. Return `{"request_id", "allowed", "reason", "decision", "reviewed_by", "text_sha256"}` (`reason` None when allowed). Code never sends anything; a caller sends only when `allowed` is True.
+Refuses: as listed; `PV_BAD_TEXT`; `core`'s errors unchanged.
+Tests: `test_sl2_05_allows_only_the_reviewed_text` (a clean made-up text reviewed `RELEASE` by `Jane Roe` gives `allowed` True; a second request whose text then changes by one character gives False with the changed-text reason; a third with findings and `accept_findings` False gives False with the findings reason); `test_sl2_05_refuses_second_and_unknown_decisions` (deciding the first request again raises `PV_ALREADY_DECIDED`; request 999 raises `PV_UNKNOWN_REQUEST`; `decision` `SEND` raises `PV_BAD_REVIEW`).
+Done means: nothing can be marked ready to leave unless a named person looked at exactly that text.
+Not checked: that every sender asks this gate; that is the wiring in Gaps. The person's review itself can't be checked by code.
+
+---
+
+### Batch DM-1 — Database management: migration plan with verify steps, change log, case roles and a read-only view
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** SL-2 is merged (queue order only; DM-1 uses nothing from it).
+**New files:** `code/uclrcde_database.py` and `code/test_uclrcde_database.py`. Test class `UclrcdeBatchDM1Tests`.
+**Source:** slice 3 item "database management (BUILD_PLAN_V1 B5)"; B5, "Database management: Litestream, pgBackRest ≥ 2.60.1, Sqitch or Alembic, pgAudit + own append-only log, SQLCipher, Datasette, pgAdmin/CloudBeaver"; the ideas "Sqitch-style migration plan with verify scripts [B3-07]; pgAudit-style change log [B3-08]; Datasette-style read-only view [B3-20]; per-case access roles [B3-01]; SQLCipher [B3-19]"; ledger Q048 ("database-management features"); W10 step 3.
+**Reuse, by exact name:** `uclrcde_core.open_uclrcde_db`. Import as `core`. Tests also use `uclrcde_core.init_uclrcde_db_and_register_matter` and `uclrcde_core.ingest_and_lock_legal_source_document(db_path, case_id, doc_id, title, raw_text, source_type)`.
+**Errors:** `ValueError` whose message starts with a `DM_` code. A `ValueError` from `core` passes through unchanged.
+**Words used:** a *change* is one named step of the database's layout (a new table, index or view). A *plan* is the ordered list of changes. The *change log* records who added, corrected, read or copied out which row, and why.
+**Canary:** `Canary check: CHANGE = VERIFIED -> registrar`.
+
+#### DM-1-01: LOAD_A_MIGRATION_PLAN (source: B5, "Sqitch"; the idea "migration plan with verify scripts [B3-07]"; slice 1 rule 5)
+Function: `load_migration_plan(plan_json: str) -> dict`.
+Does: Read one JSON object, exactly `{"plan_id", "changes"}`. `plan_id` is 1–80 letters, digits, `.`, `_` or `-`. `changes` holds 1–100 objects, each exactly `{"change_id", "requires", "deploy_sql", "verify_sql", "note"}`:
+- `change_id`: 1–60 lowercase letters, digits or `_`, each used once;
+- `requires`: a list of `change_id`s that come earlier in the list (so a plan never has a loop);
+- `deploy_sql`: 1–20,000 characters, split into statements by adding lines until `sqlite3.complete_statement` is true. Every statement starts, after spaces and in any case, with `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `CREATE UNIQUE INDEX IF NOT EXISTS`, `CREATE VIEW IF NOT EXISTS` or `CREATE VIRTUAL TABLE IF NOT EXISTS`;
+- `verify_sql`: 1–2,000 characters, exactly one statement, starting with `SELECT`;
+- `note`: 0–500 characters.
+Neither SQL text may hold, as a whole word in any case, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `REPLACE`, `INSERT`, `ATTACH`, `DETACH`, `PRAGMA`, `VACUUM` or `TRIGGER` (add-only, slice 1 rule 5). Return `{"plan_id", "changes"` (in order, each with its `statements` list and `deploy_sha256`, the SHA-256 of its `deploy_sql`)`, "plan_sha256"}`, where `plan_sha256` is the SHA-256 of the canonical JSON of the plan as read.
+Refuses: `DM_BAD_PLAN`, with the change and the reason.
+Tests: `test_dm1_01_reads_a_two_change_plan` (change `example_notes` creates `dm_example_notes(note_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, body TEXT NOT NULL)` and verifies with `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'dm_example_notes'`; change `example_notes_index` requires it and creates an index: two changes, the second with one statement); `test_dm1_01_refuses_unsafe_or_tangled_plans` (`DROP TABLE matters;`; a deploy holding `UPDATE`; a verify starting `DELETE`; `requires` naming a later change; one `change_id` twice; each raises `DM_BAD_PLAN`).
+Done means: every change to the database's layout is written down, in order, with its own check, and can only add.
+Not checked: a word ban is strict: a foreign key written `ON DELETE CASCADE` is refused too. That is safe, and a plan can leave such clauses out.
+
+#### DM-1-02: DEPLOY_AND_VERIFY (source: B5, "Sqitch"; the idea "verify scripts")
+Function: `deploy_migration_plan(db_path: str, plan: dict, at: str) -> dict`.
+Does: `plan` is DM-1-01's result, checked again through one shared private checker (the hashes are worked out again and must match). Open the database only through `core.open_uclrcde_db`. Create the add-only table `dm_deployed_changes(row_id INTEGER PRIMARY KEY, plan_id TEXT NOT NULL, change_id TEXT NOT NULL, deploy_sha256 TEXT NOT NULL, result TEXT NOT NULL, verify_rows INTEGER NOT NULL, at TEXT NOT NULL, row_sha256 TEXT NOT NULL)`. For each change, in order:
+- a `VERIFIED` row exists for this `change_id` with the same `deploy_sha256` → `SKIPPED`;
+- a `VERIFIED` row exists with a different `deploy_sha256` → stop with `DM_CHANGE_REWORKED` (a deployed change is never edited; add a new change instead);
+- a required change has no `VERIFIED` row → `NOT_DEPLOYED`, and every later change is `NOT_DEPLOYED` too;
+- otherwise run `BEGIN`, then each statement, then `verify_sql`, on the same connection. Python's `sqlite3` does not open a transaction by itself before `CREATE`, so `BEGIN`, `COMMIT` and `ROLLBACK` are run as statements. If a statement fails, or the verify gives an error or no row, run `ROLLBACK`, so the change leaves nothing behind, then add a `FAILED` row in its own transaction and mark every later change `NOT_DEPLOYED`. Otherwise run `COMMIT` and add a `VERIFIED` row with the number of rows the verify returned.
+Return `{"plan_id", "results": [{"change_id", "result", "verify_rows"}], "deployed"` (the count of `VERIFIED` this run)`, "stopped_at"` (the first `FAILED` change, or None)`}`.
+Refuses: `DM_BAD_PLAN`; `DM_BAD_TIME`; `DM_CHANGE_REWORKED`; `core`'s errors unchanged.
+Tests: `test_dm1_02_deploys_once_then_skips` (a temporary database: the DM-1-01 plan gives `VERIFIED` twice, a second run gives `SKIPPED` twice, and the table `dm_deployed_changes` holds two rows); `test_dm1_02_rolls_back_a_failed_change_and_refuses_rework` (a change whose verify is `SELECT 1 FROM sqlite_master WHERE name = 'not_there'` gives `FAILED`, its table is not in `sqlite_master` afterwards, and the next change is `NOT_DEPLOYED`; deploying a plan whose `example_notes` has a changed `deploy_sql` after it was `VERIFIED` raises `DM_CHANGE_REWORKED`).
+Done means: the database's layout changes one checked step at a time, and a step that fails its check leaves nothing half done.
+Not checked: Alembic, Sqitch itself and PostgreSQL. Their ideas are used; nothing installs them.
+
+#### DM-1-03: RECORD_A_DATA_CHANGE (source: B5, "pgAudit + own append-only log"; the idea "pgAudit-style change log [B3-08]")
+Function: `record_data_change(db_path: str, change: dict) -> dict`.
+Does: `change` is exactly `{"case_id", "table", "row_key", "action", "by", "why", "at"}`:
+- `case_id` is a registered matter;
+- `table` is 1–60 lowercase letters, digits or `_`, and is a table in the database (`sqlite_master`);
+- `row_key` is 1–200 characters; `by` is 1–80; `why` is 1–500;
+- `action` is `ADD`, `CORRECT`, `READ` or `COPY_OUT`.
+The add-only table `dm_change_log(seq INTEGER PRIMARY KEY, case_id TEXT NOT NULL, table_name TEXT NOT NULL, row_key TEXT NOT NULL, action TEXT NOT NULL, by_person TEXT NOT NULL, why TEXT NOT NULL, at TEXT NOT NULL, prev_sha256 TEXT NOT NULL, entry_sha256 TEXT NOT NULL)` is a hash chain: `prev_sha256` is the newest entry's `entry_sha256`, or 64 zeros for the first; `entry_sha256` is the SHA-256 of the canonical JSON of the row without `entry_sha256`. Before adding, check the whole chain again from `seq` 1; a broken chain is refused with `DM_LOG_BROKEN` naming the first bad `seq`, and nothing is added to a broken log. Return `{"seq", "entry_sha256", "prev_sha256", "chain_length", "chain_ok": True}`.
+Refuses: `DM_BAD_CHANGE` (the shape, an unknown table or action); `DM_UNKNOWN_MATTER`; `DM_BAD_TIME`; `DM_LOG_BROKEN`.
+Tests: `test_dm1_03_chains_three_changes` (three changes to `docket_events` give `seq` 1–3, each `prev_sha256` the one before, and `chain_ok`); `test_dm1_03_refuses_a_broken_log_and_bad_changes` (after a plain `sqlite3.connect` changes `why` in `seq` 2, as slice 1 rule 5 allows a test to do, the next change raises `DM_LOG_BROKEN` naming `seq 2`; table `no_such_table` and action `DELETE` each raise `DM_BAD_CHANGE`).
+Done means: every addition, correction, read and copy-out of case data can be written down, and any later edit to that record shows.
+Not checked: that every module records its changes here. The older modules can't change (AGENTS.md rule 3); new batches can call it (Gaps).
+
+#### DM-1-04: CASE_ROLES (source: the idea "per-case access roles [B3-01]"; B3, "row-level security per case")
+Function: `record_case_role(db_path: str, grant: dict) -> dict`.
+Does: `grant` is exactly `{"case_id", "person", "role", "granted_by", "at"}`; `person` and `granted_by` are 1–80 characters; `role` is `OWNER`, `EDITOR`, `READER` or `NONE` (`NONE` takes access away). The add-only table `dm_case_roles(row_id INTEGER PRIMARY KEY, case_id TEXT NOT NULL, person TEXT NOT NULL, role TEXT NOT NULL, granted_by TEXT NOT NULL, at TEXT NOT NULL)` keeps every grant; the newest row for a case and person is that person's role. Rules:
+- the first grant for a case must be `OWNER`, given by the person to themself (`granted_by` equals `person`);
+- after that, only a person whose current role is `OWNER` may grant;
+- the case's last `OWNER` can't be given another role (`DM_LAST_OWNER`).
+Each grant is also recorded through DM-1-03 with `table` `dm_case_roles`, `action` `ADD`, `row_key` `<case_id>:<person>` and `why` `role <role> for <person>`. Return `{"case_id", "person", "role", "granted_by", "roles"` (every person's current role for the case, sorted by person)`}`.
+Refuses: `DM_BAD_GRANT`; `DM_UNKNOWN_MATTER`; `DM_NOT_OWNER`; `DM_LAST_OWNER`; `DM_BAD_TIME`.
+Tests: `test_dm1_04_grants_and_takes_back_roles` (`Jane Roe` makes herself `OWNER` of `MATTER-SYNTH-0001`, gives `John Doe` `READER`, then `NONE`: `roles` ends `{"Jane Roe": "OWNER", "John Doe": "NONE"}` and the change log holds three entries); `test_dm1_04_refuses_grants_by_others_and_the_last_owner` (a first grant of `READER` raises `DM_BAD_GRANT`; `John Doe` granting raises `DM_NOT_OWNER`; `Jane Roe` making herself `READER` raises `DM_LAST_OWNER`).
+Done means: each case says who may see it and who may change it, and every change of role is in the log.
+Not checked: these roles are a record that this module's view obeys, not an operating-system lock. Anyone holding the phone and the database file can open it with other tools; encryption (SQLCipher, the "Later" adapter in B5) is listed in Gaps.
+
+#### DM-1-05: READ_ONLY_VIEW (source: B5, "Datasette"; the idea "Datasette-style read-only view [B3-20]")
+Function: `run_read_only_view(db_path: str, case_id: str, person: str, query: dict) -> dict`.
+Does: `person`'s current role for the case (DM-1-04) must be `READER`, `EDITOR` or `OWNER`. `query` is exactly `{"table", "columns", "where", "limit"}`:
+- `table` is a table that has a `case_id` column;
+- `columns` is a list of 1–30 of its columns, each once;
+- `where` is an object of 0–5 of its columns, each equal to a text or a whole number;
+- `limit` is a whole number from 1 to 500.
+Read the table's columns with `PRAGMA table_info` first. Then build the statement in code, never from the caller's text: `SELECT <columns> FROM <table> WHERE case_id = ? [AND <column> = ?]... ORDER BY rowid LIMIT ?`, with every name double-quoted after the check and every value a `?` parameter. Before running it, install a SQLite authorizer (`conn.set_authorizer`) that allows only `SQLITE_SELECT`, `SQLITE_READ` and `SQLITE_FUNCTION`; anything else is denied and gives `DM_NOT_READ_ONLY`. Read up to `limit` + 1 rows so `truncated` is known. After the read, record it through DM-1-03 with `action` `READ`, `row_key` `<table>:<row count>` and `why` `read-only view by <person>`. Return `{"table", "columns", "rows"` (a list of dicts)`, "row_count", "truncated", "logged_seq"}`.
+Refuses: `DM_NO_ACCESS`; `DM_NOT_CASE_TABLE` (no `case_id` column, the `matters` table included); `DM_BAD_QUERY` (the shape, an unknown column); `DM_NOT_READ_ONLY`; `DM_UNKNOWN_MATTER`.
+Tests: `test_dm1_05_shows_only_this_cases_rows` (two made-up matters, one locked made-up document in each through `core.ingest_and_lock_legal_source_document`; `Jane Roe` as `OWNER` of the first reads `source_documents` columns `doc_id` and `title` and gets one row, the first matter's; the change log gains a `READ` entry); `test_dm1_05_refuses_without_a_role_or_with_a_bad_query` (`John Doe` with `NONE` raises `DM_NO_ACCESS`; table `matters` raises `DM_NOT_CASE_TABLE`; column `secret_column` raises `DM_BAD_QUERY`).
+Done means: a person can look at a case's rows without any way to change them, and the look is logged.
+Not checked: a screen for this view; it is returned data until a later screen batch shows it.
+
+---
+
+### Batch DM-2 — Three checked copies, and the case-file backup to an SD card or USB stick
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** DM-1 is merged (queue order only; DM-2 uses nothing from it).
+**New files:** `code/uclrcde_backup.py` and `code/test_uclrcde_backup.py`. Test class `UclrcdeBatchDM2Tests`.
+**Source:** PRODUCT_MAP_SUPPLEMENT_2026-11-20, two ⬜ rows: "Copy data forward to three places … with a yearly check that they match, plus a one-page 'if everything breaks' restore guide" (7b, "Borrow the idea (test T31)"), and "Case-file backup to an SD card or USB stick you choose: a fingerprint per file, a restore test and a monthly reminder; nothing goes to a cloud or an AI" (7c, "Borrow the idea (test T30)"); W10 step 3; B5 (Litestream and pgBackRest as later adapters); P0-6 (`uclrcde_p0_search.build_p0_sqlite_snapshot`, the safe way to copy a live database).
+**Reuse, by exact name:** `uclrcde_core.open_uclrcde_db`; `uclrcde_ui_creator.build_reminder_ics(title, on_date, note, made_at)`. Import as `core` and `creator`. Tests also use `uclrcde_core.init_uclrcde_db_and_register_matter` and `uclrcde_core.add_and_list_legal_docket_events(db_path, case_id, event_date, filing_type, title, quote_ref)`.
+**Errors:** `ValueError` whose message starts with a `BK_` code. `DC_` errors from `creator` and `core`'s errors pass through unchanged.
+**Words used:** a *place* is where one copy lives: the phone itself (`device`), an SD card or USB stick (`removable`), or a cloud drive (`cloud`). A *fingerprint* is a file's SHA-256 and size. A *manifest* is the sorted list of a folder's fingerprints.
+**Canary:** `Canary check: COPIES = MATCHED -> archivist`.
+
+#### DM-2-01: LOAD_BACKUP_SETTINGS (source: both supplement rows; rule 30)
+Function: `load_backup_settings(settings_json: str) -> dict`.
+Does: Read one JSON object:
+- `places` (required): 1–5 objects, each exactly `{"place", "kind", "label"}`: `place` is 1–40 lowercase letters, digits, `_` or `-`, each used once; `kind` is `device`, `removable` or `cloud`; `label` is what the person calls it (1–80 characters, for example `SD card, blue`). At least one place is a `device`.
+- `data_class` (default `CASE_FILE`): `CASE_FILE`, `PUBLIC_LAW` or `MADE_UP`. With `CASE_FILE`, a `cloud` place is refused with `BK_CLOUD_REFUSED` (case files never leave the phone).
+- `copies_wanted` (default 3): a whole number from 2 to 5, and no more than the number of places.
+- `reminder_days` (default 30): 1–365. `match_check_days` (default 365): 30–730.
+- `max_files` (default 5,000): 1–50,000. `max_file_bytes` (default 200,000,000): 1–2,000,000,000.
+Strict as rule 20. Return the checked settings with `defaults_used`.
+Refuses: `BK_BAD_SETTINGS`; `BK_CLOUD_REFUSED`.
+Tests: `test_dm2_01_reads_places_and_defaults` (places `phone` (`device`), `sd` (`removable`) and `usb` (`removable`) give `CASE_FILE`, 3 copies wanted, 30 and 365 days); `test_dm2_01_refuses_cloud_for_case_files_and_bad_settings` (adding `drive` (`cloud`) raises `BK_CLOUD_REFUSED`, but the same places with `data_class` `MADE_UP` pass; no `device` place, `copies_wanted` 4 with three places, and the key `copies` each raise `BK_BAD_SETTINGS`).
+Done means: the person names his copy places once, and case files can't be pointed at a cloud.
+Not checked: which SD card or stick he uses, and its health.
+
+#### DM-2-02: FINGERPRINT_A_FOLDER (source: 7c, "a fingerprint per file"; rule 28)
+Function: `record_folder_fingerprints(db_path: str, place: str, folder: str, settings: dict, at: str) -> dict`.
+Does: `place` is one of the settings' places; `folder` is an existing folder. The database at `db_path` must not be inside `folder`, because recording would change what is fingerprinted (`BK_DB_INSIDE_FOLDER`). Walk the folder in sorted order, at most 10 levels deep, reading only regular files (rule 28: a symlink, or a path that resolves outside the folder, is skipped and listed in `skipped` with its reason). A file whose name ends `-wal`, `-shm` or `-journal` is not fingerprinted; it is listed in `live_database_parts`, with the line `A live database is copied only as a P0-6 snapshot (build_p0_sqlite_snapshot), never as its files.` More than `max_files` files gives `BK_TOO_MANY_FILES`; a file over `max_file_bytes` is skipped with the reason `too big`. Each file gives `{"path"` (relative, with `/`)`, "bytes", "sha256"}`. The manifest is that list, sorted by path; `manifest_sha256` is the SHA-256 of its canonical JSON, so the same files in two places give the same manifest. Keep one row in the add-only table `bk_manifests(manifest_id INTEGER PRIMARY KEY, place TEXT NOT NULL, files_json TEXT NOT NULL, file_count INTEGER NOT NULL, total_bytes INTEGER NOT NULL, manifest_sha256 TEXT NOT NULL, at TEXT NOT NULL)`; the folder's path is not kept. Return `{"manifest_id", "place", "file_count", "total_bytes", "manifest_sha256", "skipped", "live_database_parts"}`.
+Refuses: `BK_BAD_PLACE`; `BK_BAD_FOLDER` (missing, not a folder); `BK_DB_INSIDE_FOLDER`; `BK_TOO_MANY_FILES`; `BK_BAD_TIME`; `BK_BAD_SETTINGS`.
+Tests: `test_dm2_02_fingerprints_a_folder_twice_the_same` (the repository's own `ui/` folder, read only, fingerprinted twice as `phone` gives the same `manifest_sha256` and a `file_count` equal to the number of regular files there; the record database sits in a temporary folder); `test_dm2_02_lists_live_database_parts_and_refuses_bad_folders` (a temporary folder holding a database opened through `core.open_uclrcde_db` and still open lists its `-wal` file under `live_database_parts`; a missing folder raises `BK_BAD_FOLDER`; the record database inside the folder raises `BK_DB_INSIDE_FOLDER`).
+Done means: every file of a copy has a fingerprint that anyone can check with a standard SHA-256 tool.
+Not checked: the phone's own file-access limits (Android storage rules) for a folder on an SD card.
+
+#### DM-2-03: RESTORE_TEST_OF_A_COPY (source: 7c, "a restore test")
+Function: `check_backup_copy(db_path: str, manifest_id: int, place: str, copy_folder: str, settings: dict, at: str) -> dict`.
+Does: `manifest_id` is a recorded manifest; its `manifest_sha256` is worked out again from its `files_json` and must match (`BK_MANIFEST_CHANGED` otherwise). Fingerprint `copy_folder` as DM-2-02 does, as `place` (this reads every byte back, which is the restore test), and keep that manifest too. Compare by path: `MATCH`, `CHANGED` (same path, different SHA-256 or size), `MISSING` (only in the recorded manifest) or `EXTRA` (only in the copy). The result is `PASS` when nothing is `CHANGED` or `MISSING`; `EXTRA` files are listed but don't fail it. Keep one row in the add-only table `bk_checks(check_id INTEGER PRIMARY KEY, kind TEXT NOT NULL, place TEXT NOT NULL, manifest_id INTEGER NOT NULL, copy_manifest_id INTEGER NOT NULL, result TEXT NOT NULL, counts_json TEXT NOT NULL, at TEXT NOT NULL)` with `kind` `RESTORE_TEST`. Return `{"check_id", "result", "counts"` (`MATCH`, `CHANGED`, `MISSING`, `EXTRA`)`, "problems"` (each non-`MATCH` path with its state, at most 200)`, "copy_manifest_id"}`.
+Refuses: `BK_UNKNOWN_MANIFEST`; `BK_MANIFEST_CHANGED`; and DM-2-02's refusals.
+Tests: `test_dm2_03_passes_a_matching_copy_and_finds_a_changed_file` (`ui/` checked against its own manifest gives `PASS`; a temporary folder holding a made-up matter's closed database is fingerprinted, then `core.add_and_list_legal_docket_events` adds a made-up event, which opens and closes its own connection; checking the same folder again gives `FAIL` with that database file `CHANGED`); `test_dm2_03_fails_an_empty_copy_and_refuses_tampered_manifests` (an empty temporary folder gives `FAIL` with every file `MISSING`; a manifest whose `files_json` a plain `sqlite3.connect` changed raises `BK_MANIFEST_CHANGED`; manifest 999 raises `BK_UNKNOWN_MANIFEST`).
+Done means: a copy on the SD card is proven readable and the same, file by file, before anyone needs it.
+Not checked: restoring onto a new phone; the guide (DM-2-05) gives the steps, and a person does them.
+
+#### DM-2-04: THREE_COPIES_MATCH (source: 7b, "three places … with a yearly check that they match")
+Function: `check_copies_match(db_path: str, settings: dict, at: str) -> dict`.
+Does: For each place in the settings, take its newest manifest. If fewer than `copies_wanted` places have one, the result is `NOT_ENOUGH_COPIES`, listing the places without one. Otherwise compare every place's `manifest_sha256` with the newest `device` manifest's: `MATCHED` when all are equal, else `DIFFERENT`, listing each place that differs and its counts from the same comparison as DM-2-03. Keep one `bk_checks` row with `kind` `COPIES_MATCH` (`place` is `all`; `manifest_id` and `copy_manifest_id` are the device manifest). The yearly check: `next_match_check` is the date of the newest `MATCHED` row (this check's row included) plus `match_check_days`, counted in code with `datetime.date` (rule 24), and `due` is True when there is no `MATCHED` row or the date of `at` is on or after it. Return `{"check_id", "result", "places": [{"place", "label", "kind", "manifest_id", "same_as_device"}], "next_match_check", "due", "line"}`.
+Refuses: `BK_BAD_SETTINGS`; `BK_BAD_TIME`.
+Tests: `test_dm2_04_matches_three_copies_and_sets_the_next_check` (`ui/` fingerprinted as `phone`, `sd` and `usb` gives `MATCHED`, `next_match_check` 365 days after the date of `at` and `due` False; then a newer `usb` manifest of an empty temporary folder, checked with `at` 366 days later, gives `DIFFERENT` naming `usb` and `due` True); `test_dm2_04_reports_missing_copies` (only `phone` and `sd` recorded gives `NOT_ENOUGH_COPIES` naming `usb`, and `due` True because nothing ever matched; settings `{}` raise `BK_BAD_SETTINGS`).
+Done means: once a year at least, code proves the three copies are the same.
+Not checked: that the copies are physically apart (a phone and an SD card inside it can be lost together); the guide says so.
+
+#### DM-2-05: BACKUP_STATUS_REMINDER_AND_GUIDE (source: 7c, "a monthly reminder"; 7b, "a one-page 'if everything breaks' restore guide")
+Function: `build_backup_status(db_path: str, settings: dict, at: str) -> dict`.
+Does: Read only. For each place that is not a `device` (the phone holds the originals): the newest `RESTORE_TEST` row; `next_due` is its date plus `reminder_days` (a place with no passing test is due on the date of `at`); `overdue` is True when the date of `at` is after `next_due`. Build a reminder with `creator.build_reminder_ics("Back up your case files", <the earliest next_due>, <the note>, at)`, where the note is `Copy the case folder to <labels of the removable places>, then run the restore test.` Build the guide from the constant `RESTORE_GUIDE_LINES`, exactly these 8 lines, with `<labels>` filled from the settings:
+1. `If everything breaks: how to get your case files back`
+2. `1. Find a copy: <labels>.`
+3. `2. Put it on a working phone or computer. Do not change anything on it.`
+4. `3. Check it: every file's SHA-256 must match the list from the last restore test.`
+5. `4. Copy the folder back. The database is restored only from a P0-6 snapshot, never from -wal or -shm files.`
+6. `5. Open the legal workspace and search one document you know. If it is found, the restore worked.`
+7. `6. Make a new copy on the SD card or USB stick as soon as you can.`
+8. `Keep at least one copy away from the phone. A phone and a card inside it can be lost together.`
+Return `{"places": [{"place", "label", "last_test", "result", "next_due", "overdue"}], "lines", "reminder"` (the `.ics` result)`, "guide": {"text", "line_count": 8}}`.
+Refuses: `BK_BAD_SETTINGS`; `BK_BAD_TIME`; `DC_BAD_REMINDER` unchanged.
+Tests: `test_dm2_05_sets_the_monthly_reminder_and_guide` (a passing `sd` restore test on 2026-11-23 gives `next_due` 2026-12-23, an `.ics` text holding `BEGIN:VEVENT`, and a guide of 8 lines naming `SD card, blue`); `test_dm2_05_marks_overdue_and_untested_places` (with `at` on 2026-12-24 `sd` is overdue; `usb`, never tested, is due on the date of `at`; settings `{}` raise `BK_BAD_SETTINGS`).
+Done means: the person is reminded every month, and the one page he needs on his worst day is ready.
+Not checked: whether he does the copying; code can only remind him and check what he did.
+
+---
+
+### Batch LL-1 — Legal library pilot: BC Acts as Akoma Ntoso-shaped records built from locked originals
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`.
+**Build only after:** DM-2 is merged (queue order only; LL-1 uses nothing from it).
+**New files:** `code/uclrcde_library.py` and `code/test_uclrcde_library.py`. Test class `UclrcdeBatchLL1Tests`.
+**Source:** slice 3 item "legal library pilot (B2)"; B2, "Legal library pilot: Laws.Africa Indigo + Peachjam (+ Cobalt/Bluebell, Akoma Ntoso). Settle Indigo licence (LGPL-3+ vs README GPL). BC adaptation."; B1, "Originals store (append-only, fingerprint, source, in-force dates)"; the ideas "Indigo, Peachjam, Cobalt, Bluebell, Akoma Ntoso, SALI [B4-29–B4-33, B4-35]"; W10 step 4; ledger Q026 and Q048.
+**Reuse, by exact name:** `uclrcde_core.open_uclrcde_db` and `uclrcde_core.LEGAL_INFORMATION_NOTICE`; `uclrcde_sources.verify_quote_in_locked_document(db_path, doc_id, quote)` (returns `{"verified", "status", ...}`) and `uclrcde_sources.check_section_in_force_on(db_path, doc_id, section_ref, event_date)` (returns `{"status", "warning", "event_date", "doc_id", "section_ref"}`). Import as `core` and `sources`. Tests also use `uclrcde_core.init_uclrcde_db_and_register_matter`, `uclrcde_core.ingest_and_lock_legal_source_document` and `uclrcde_sources.record_law_section_dates(db_path, doc_id, section_ref, in_force_from, in_force_to=None, source_url="", entered_by="")`.
+**Errors:** `ValueError` whose message starts with an `LL_` code. `core`'s and `sources`' errors pass through unchanged.
+**Words used:** a *work* is an Act as a whole; an *expression* is its text as it stood on one date; an *eId* is the address of one provision, for example `sec_2__subsec_2__para_a`. These are Akoma Ntoso's own words (FRBR).
+**Canary:** `Canary check: ACT = ADDRESSED -> librarian`.
+
+#### LL-1-01: BUILD_THE_WORK_IDENTITY (source: B2, "Akoma Ntoso", "BC adaptation")
+Function: `build_work_identity(identity: dict) -> dict`.
+Does: `identity` is exactly `{"series", "year", "chapter", "short_title", "version_date", "source_url", "licence"}`:
+- `series` is `rsbc` (Revised Statutes of British Columbia) or `sbc` (Statutes of British Columbia);
+- `year` is a whole number from 1871 to 2100; `chapter` is 1–10 characters of digits and `.`, starting with a digit;
+- `short_title` is 1–200 characters; `version_date` is a real date;
+- `source_url` starts with `https://` and is at most 500 characters; `licence` is 1–200 characters (`NOT CHECKED` is allowed and is the honest value until someone reads the licence).
+Build the three FRBR addresses: `work_uri` = `/akn/ca-bc/act/<series>/<year>/<chapter>`; `expression_uri` = `<work_uri>/eng@<version_date>`; `manifestation_uri` = `<expression_uri>/!main.xml`. Return `{"work_uri", "expression_uri", "manifestation_uri", "country": "ca-bc", "short_title", "version_date", "source_url", "licence", "naming_note"}`, where `naming_note` is `Shaped like the Akoma Ntoso naming convention (/akn/<country>/<type>/<subtype>/<year>/<number>); NOT CHECKED against the OASIS text.`
+Refuses: `LL_BAD_IDENTITY`.
+Tests: `test_ll1_01_builds_the_frbr_addresses` (`sbc`, 2099, `7`, `Made-up Example Act`, `2026-01-01`, `https://example.org/made-up-example-act`, `NOT CHECKED` gives `/akn/ca-bc/act/sbc/2099/7` and `/akn/ca-bc/act/sbc/2099/7/eng@2026-01-01`); `test_ll1_01_refuses_bad_identities` (series `rsa`; year 1800; date `2026-02-30`; a `http://` link; a missing `licence`; each raises `LL_BAD_IDENTITY`).
+Done means: every BC Act and version gets one stable, standard address.
+Not checked: the OASIS naming convention's exact text, and whether BC regulations need a third series; regulations are left for a later batch (Gaps).
+
+#### LL-1-02: SPLIT_INTO_PROVISIONS (source: B2, "Indigo" (its idea of marking up an Act's structure), "BC adaptation")
+Function: `split_act_provisions(text: str) -> dict`.
+Does: Plain rules over the text's lines (split on `\n`), in order:
+- **Part:** a line starting `Part <n>` (then an end of line, a space, `—` or `-`) → `part_<n>`.
+- **Division:** a line starting `Division <n>` → `part_<p>__dvs_<n>` inside the current part, or `dvs_<n>` when there is none.
+- **Section:** a line starting with a number (`\d+(\.\d+)?`), then a space, then a capital letter or `(`, where the number is greater than the previous section's number → `sec_<n>`, with `.` written `-` (`3.1` → `sec_3-1`). Sections are numbered across the whole Act, so their eIds are not put under parts. A line that starts with a number but breaks this rule is text.
+- **Subsection:** `(<digits>)` at the start of a line, or straight after a section's number → `<section eId>__subsec_<n>`.
+- **Paragraph:** `(<lowercase letters>)` at the start of a line → `<parent>__para_<letters>`, under the current subsection, or under the section when there is none.
+- **Subparagraph:** a lowercase Roman numeral in brackets at the start of a line, inside a paragraph → `<paragraph eId>__subpara_<numeral>`. A label that is both a letter and a numeral (`(i)`, `(v)`, `(x)`) is a paragraph when the paragraph before it at that level is the letter just before it (`(h)`, `(u)`, `(w)`), and a subparagraph otherwise.
+- **Text:** any other line belongs to the provision before it. Lines before the first provision are listed in `unplaced_lines`.
+Each provision is `{"eid", "kind"` (`part`, `division`, `section`, `subsection`, `paragraph` or `subparagraph`)`, "num"` (its label as written, for example `(a)`)`, "start", "end", "end_with_children"}`. `start` and `end` are character offsets into `text`: `end` is where the next provision of any kind starts; `end_with_children` is where the next provision of the same or a higher level starts (or the end of the text). The text itself is never changed. An eId that would repeat is refused. Return `{"provisions", "counts"` (per kind)`, "unplaced_lines"}`.
+Refuses: `LL_BAD_TEXT` (not text, blank, over 2,000,000 characters); `LL_NO_PROVISIONS` (no section found); `LL_REPEATED_EID`.
+Tests: `test_ll1_02_splits_a_made_up_act` (the made-up text below gives, in order, `part_1`, `sec_1`, `sec_2`, `sec_2__subsec_1`, `sec_2__subsec_2`, `sec_2__subsec_2__para_a`, `sec_2__subsec_2__para_b`, `part_2`, `sec_3`; `unplaced_lines` is `["Made-up Example Act"]`; and `text[start:end]` of `sec_2__subsec_2__para_a` is `(a) label it, and\n`); `test_ll1_02_tells_paragraph_i_from_subparagraph_i_and_refuses_bad_text` (paragraphs `(a)` to `(h)` then `(i)` give `para_i`; `(a)` then `(i)` and `(ii)` give `para_a__subpara_i` and `para_a__subpara_ii`; blank text raises `LL_BAD_TEXT`; text with no section raises `LL_NO_PROVISIONS`).
+
+The made-up text for the tests (not a real Act):
+```
+Made-up Example Act
+Part 1 — Words used
+1 In this Act, "example" means a made-up thing.
+2 (1) A person may keep an example.
+(2) A person who keeps an example must
+(a) label it, and
+(b) keep it dry.
+Part 2 — Other rules
+3 Nothing in this Act is real.
+```
+Done means: every provision of an Act has a standard address that points at the exact words of the locked original.
+Not checked: real BC statute layouts (schedules, tables, definitions written as their own lines, amendment notes). The rules are tested on made-up text only (rule 30); a real Act may need more rules, and anything they can't place stays text, never guessed.
+
+#### LL-1-03: BUILD_A_LIBRARY_RECORD (source: B2, "Akoma Ntoso"; B1, "Originals store"; Q026)
+Function: `build_library_record(db_path: str, library_case_id: str, doc_id: str, identity: dict, at: str) -> dict`.
+Does: The document must be a locked original of the matter `library_case_id` (its `source_documents` row has that `case_id`). Work out the SHA-256 of its `raw_text` again; it must equal the stored `sha256`. Build the identity with LL-1-01 and the provisions with LL-1-02. Then build:
+- **a JSON record** shaped like Akoma Ntoso: `{"akomaNtoso": {"act": {"meta": {"identification": {"FRBRWork": {"this", "country", "name"}, "FRBRExpression": {"this", "language": "eng", "date"}, "FRBRManifestation": {"this"}}, "source": {"doc_id", "sha256", "source_url", "licence"}}, "body": [<the provisions>]}}}`. The body holds offsets into the locked original, never a changed copy of its words.
+- **an XML text**, built with `xml.etree.ElementTree` (`Element`, `SubElement` and `tostring(..., encoding="unicode")`) in the namespace `http://docs.oasis-open.org/legaldocml/ns/akn/3.0`: `akomaNtoso` › `act` › `meta` › `identification` (with `FRBRWork`, `FRBRExpression` and `FRBRManifestation`, each holding `FRBRthis` and `FRBRuri` with a `value`, and `FRBRdate` with a `date`; the work also holds `FRBRcountry`, and the expression `FRBRlanguage`), then `body`, with the provisions nested as `part`, `division`, `section`, `subsection`, `paragraph` and `subparagraph` elements. Each has an `eId` attribute, a `num` child, and a `content` › `p` child holding the provision's own text (`text[start:end]`, with its label and outer spaces taken off).
+- **the public-law basis** (Q026): `source_provenance` or `official_law_provenance` when the document has a row in that table (the table may not exist yet), otherwise `NOT CHECKED`.
+Keep one row in the add-only table `ll_records(record_id INTEGER PRIMARY KEY, library_case_id TEXT NOT NULL, doc_id TEXT NOT NULL, work_uri TEXT NOT NULL, expression_uri TEXT NOT NULL UNIQUE, version_date TEXT NOT NULL, record_json TEXT NOT NULL, record_sha256 TEXT NOT NULL, xml_sha256 TEXT NOT NULL, provision_count INTEGER NOT NULL, public_law_basis TEXT NOT NULL, at TEXT NOT NULL)`. The same expression built again from the same document with the same record gives `already_recorded` True and adds nothing; anything else for a recorded expression gives `LL_EXPRESSION_EXISTS`. Return `{"record_id", "work_uri", "expression_uri", "provision_count", "record_sha256", "xml_text", "xml_sha256", "public_law_basis", "already_recorded", "licence_note"}`, where `licence_note` is `Indigo and Peachjam lend ideas only; no code is copied. Indigo's licence (LGPL-3+ or the README's GPL): NOT CHECKED.`
+Refuses: `LL_NOT_LOCKED`; `LL_ORIGINAL_CHANGED`; `LL_EXPRESSION_EXISTS`; `LL_BAD_TIME`; LL-1-01's and LL-1-02's refusals; `core`'s errors unchanged.
+Tests: `test_ll1_03_records_a_made_up_act` (a made-up library matter registered with `init_uclrcde_db_and_register_matter` in a temporary folder, and the made-up Act locked with `ingest_and_lock_legal_source_document`: the record has 9 provisions, `public_law_basis` `NOT CHECKED`, and `xml.etree.ElementTree.fromstring(xml_text)` gives the root tag `{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}akomaNtoso` with `sec_2__subsec_2__para_a`'s `p` text `label it, and`; the same call again gives `already_recorded` True and one table row); `test_ll1_03_refuses_unlocked_changed_or_clashing_documents` (a document of another matter raises `LL_NOT_LOCKED`; after a plain `sqlite3.connect` changes the locked `raw_text`, `LL_ORIGINAL_CHANGED`; a second made-up document under the same expression raises `LL_EXPRESSION_EXISTS`).
+Done means: a BC Act in the library has an open-standard record that any Akoma Ntoso tool, or a person, can read.
+Not checked: validation against the official Akoma Ntoso 3.0 schema (not in the standard library), and the BC Laws licence for copying Act text; `licence` stays the person's words.
+
+#### LL-1-04: LOOK_UP_A_PROVISION (source: B2, Peachjam's idea of one page per provision; B1, "in-force dates")
+Function: `look_up_provision(db_path: str, expression_uri: str, eid: str, on_date: str | None) -> dict`.
+Does: Find the expression's newest record and the eId in its body. The provision's text is the locked original's `raw_text[start:end_with_children]`, with outer spaces taken off; check it with `sources.verify_quote_in_locked_document(db_path, doc_id, text)`, and refuse with `LL_ORIGINAL_CHANGED` unless `verified` is True. With `on_date` (a real date), call `sources.check_section_in_force_on(db_path, doc_id, <section num>, on_date)`, where `<section num>` is the number of the section that holds the eId, as written in the text (for example `2` or `3.1`), the same text a person gives `record_law_section_dates`. A `part` or `division` eId with `on_date` gives `in_force` None and the note `in-force dates are kept per section`. Return `{"expression_uri", "eid", "kind", "num", "text", "quote_check", "in_force"` (that call's result, or None)`, "source": {"doc_id", "sha256", "source_url", "licence"}, "notice": core.LEGAL_INFORMATION_NOTICE}`. The code never says what a provision means; it shows the words and their dates.
+Refuses: `LL_UNKNOWN_EXPRESSION`; `LL_UNKNOWN_EID`; `LL_BAD_DATE`; `LL_ORIGINAL_CHANGED`.
+Tests: `test_ll1_04_shows_the_words_and_their_dates` (after LL-1-03, `sec_2__subsec_2` gives the text from `(2)` to `keep it dry.` with `quote_check` verified; with `record_law_section_dates` for section `2` from `2026-01-01` by `Jane Roe` and `on_date` `2026-03-01`, `in_force` is `IN_FORCE`; section `3` with no dates gives `DATE_NOT_CHECKED`); `test_ll1_04_refuses_unknown_addresses_and_bad_dates` (`sec_9`; an unknown expression; `on_date` `2026-13-01`; each raises its code).
+Done means: anyone can open one provision by its address and see its exact words, its source and whether a person recorded it in force on a date.
+Not checked: whether a person's in-force dates are right; that stays their label (`DATE_NOT_CHECKED` until recorded).
+
+#### LL-1-05: COMPARE_TWO_VERSIONS (source: B2, Indigo's and Peachjam's point-in-time versions)
+Function: `compare_expressions(db_path: str, older_uri: str, newer_uri: str) -> dict`.
+Does: Both must be recorded expressions of the same work (`LL_DIFFERENT_WORKS`), and the older one's `version_date` must be earlier (`LL_BAD_ORDER`). For every eId in either: `SAME` when the two own texts are equal after runs of spaces and line ends become one space; `CHANGED` when they differ; `ADDED` when it is only in the newer; `REMOVED` when it is only in the older. Return `{"work_uri", "older", "newer", "counts"` (per state)`, "changes"` (every eId that is not `SAME`, in the newer version's order and then the removed ones)`, "lines"` (one plain line each, for example `sec_2__subsec_2__para_b: CHANGED`)`, "notice": core.LEGAL_INFORMATION_NOTICE}`. It says what changed in the words, never what the change means.
+Refuses: `LL_UNKNOWN_EXPRESSION`; `LL_DIFFERENT_WORKS`; `LL_BAD_ORDER`.
+Tests: `test_ll1_05_lists_changed_and_added_provisions` (versions of 2026-01-01 and 2026-06-01, where `(b)` reads `keep it dry and safe.` and a section `4 Examples may be shared.` is added: `CHANGED` 1, `ADDED` 1, `REMOVED` 0); `test_ll1_05_refuses_wrong_order_and_different_works` (the two the other way round raise `LL_BAD_ORDER`; a different made-up Act's expression raises `LL_DIFFERENT_WORKS`).
+Done means: when an Act changes, the person sees exactly which provisions changed.
+Not checked: amendment notes and repeal markers in real BC texts.
+
+---
+
+### Batch SL-1 — Safety layers S1–S3: a secret check before every commit, the log chain ready for timestamps, and a sandbox and tool policy
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** the compilation batches are merged (queue order only; SL-1 needs nothing new).
+**New files:** `code/apccs2_safety.py` and `code/test_apccs2_safety.py`. Test class `ApccsBatchSL1Tests`.
+**Source:** slice 3 item "safety layers S1–S4"; BUILD_PLAN_V1 Phase 3, "S1 Gitleaks + SOPS/age. S2 OpenTimestamps for the log hash chain. S3 Wasmtime/WASI sandbox."; the ideas "Gitleaks + SOPS/age [G3-03]; OpenTimestamps [G3-04]; Wasmtime/WASI [G3-05]"; PRODUCT_MAP_SUPPLEMENT_2026-11-20 ⬜ row "Rules that block which tools an agent may use" (Flightdeck, 4e); W10 step 6; rulebook hard limit "No keys, tokens or passwords".
+**Reuse, by exact name:** `apccs_gate.SECRET_MASK_PATTERNS` (three compiled patterns); `apccs_logs.parse_and_check_log_v2_record(raw_text)` (returns `{"status", ...}`, `PASS` for a good record). Import as `import apccs_gate as gate` and `import apccs_logs as logs`. Tests also use `apccs_logs.build_eight_line_log_v2_record(record_fields)`.
+**Errors:** `ValueError` whose message starts with an `SL_` code.
+**Words used:** a *diff* is the text `git diff --cached` prints for the changes about to be committed. A *chain* is the JSON-lines log that `apccs_logs.append_and_verify_log_v2_chain` (A204) keeps: one row `{"seq", "id", "prev_sha256", "record_text", "entry_sha256"}` per line. A *policy* says which tools, folders and network an agent's job may use.
+**Canary:** `Canary check: SECRET = CAUGHT -> lookout`.
+
+#### SL-1-01: LOAD_SAFETY_SETTINGS (source: S1, Gitleaks' allow list idea; S3; rule 20)
+Function: `load_safety_settings(settings_json: str) -> dict`.
+Does: Read one JSON object, all keys optional:
+- `extra_rules` (default `[]`): 0–50 objects, each exactly `{"rule_id", "pattern", "level"}`: `rule_id` is 1–40 uppercase letters, digits or `_`, not one of the built-in rule ids; `pattern` is 1–300 characters that `re.compile` accepts; `level` is `BLOCK` or `WARN`.
+- `allow` (default `[]`): 0–100 objects, each exactly `{"path", "rule_id", "why"}`: an exact repository path, a rule id, and a reason of 1–200 characters. A finding of that rule in that file is listed under `allowed` with its reason, not counted.
+- `sandbox` (default `{"agents": {}, "env_allow": []}`): exactly `{"agents", "env_allow"}`. `agents` maps 0–20 agent names (rule 25 names) to exactly `{"tools", "dirs", "network", "max_seconds", "max_memory_mb"}`: `tools` 0–50 tool names (rule 25 names); `dirs` 0–20 objects `{"path", "access"}` (a relative POSIX path with no `..`, no leading `/` and no empty part; `access` `read` or `write`); `network` a bool; `max_seconds` 1–86,400; `max_memory_mb` 1–65,536. `env_allow` lists 0–50 environment variable names (`[A-Z][A-Z0-9_]{0,63}`), and none may contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL` (`SL_SECRET_ENV_NAME`).
+Return `{"extra_rules", "allow", "sandbox", "defaults_used"}`.
+Refuses: `SL_BAD_SETTINGS`; `SL_SECRET_ENV_NAME`.
+Tests: `test_sl1_01_reads_rules_and_policy` (one extra rule `MADE_UP_KEY` with pattern `madeup_[0-9]{8}` and level `BLOCK`, and agent `builder` with tool `git`, folder `code` for `write` and no network, give those values and `defaults_used` `["allow"]`); `test_sl1_01_refuses_bad_settings` (pattern `(`; the built-in rule id `GITHUB_TOKEN`; a folder `../outside`; `env_allow` `["API_TOKEN"]`, which raises `SL_SECRET_ENV_NAME`; the key `rules`; the others raise `SL_BAD_SETTINGS`).
+Done means: every rule and exemption is written down in one text with its reason.
+Not checked: SOPS and age. Encrypting a secret file for storage is left to a later batch (Gaps): rule 29 and the hard limits keep secrets out of the repositories entirely.
+
+#### SL-1-02: CHECK_A_DIFF_BEFORE_COMMIT (source: S1, "Gitleaks"; rule 29)
+Function: `check_staged_diff(diff_text: str, settings: dict) -> dict`.
+Does: Read a unified diff (at most 5,000,000 characters). A file's path comes from its `+++ b/<path>` line; new line numbers come from each `@@ -a,b +c,d @@` header. Only added lines (starting `+`, but not `+++`) are checked, so a commit that removes a secret is never stopped. The built-in rules, the constant `SL_SECRET_RULES`, are all `BLOCK`:
+- `PRIVATE_KEY`: `-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----`;
+- `GITHUB_TOKEN`: `\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b` or `\bgithub_pat_[A-Za-z0-9_]{22,255}\b`;
+- `AWS_ACCESS_KEY`: `\b(?:AKIA|ASIA)[0-9A-Z]{16}\b`;
+- `GOOGLE_API_KEY`: `\bAIza[0-9A-Za-z_-]{35}\b`;
+- `SLACK_TOKEN`: `\bxox[abposr]-[A-Za-z0-9-]{10,}\b`;
+- `SK_STYLE_KEY`: `\bsk-[A-Za-z0-9_-]{20,}\b`;
+- `KEY_FILE_NAME`: a changed file named `.env`, `id_rsa`, `id_ed25519`, or ending `.pem`, `.key`, `.p12`, `.pfx`, `.jks` or `.keystore` (checked on the path, line 0).
+Then `gate.SECRET_MASK_PATTERNS` run as `WARN` rules `GATE_PATTERN_1` to `GATE_PATTERN_3`, in their order, because the first one also matches ordinary code such as `token = parse(...)`. Then the settings' `extra_rules`. Where two findings overlap on the same line, one is kept: `BLOCK` before `WARN`, then the earlier rule. Each finding is `{"path", "line", "rule_id", "level", "preview"}` (rule 29). Return `{"result"` (`BLOCK` when any `BLOCK` finding is not allowed; otherwise `WARN` when any `WARN` finding is left; otherwise `PASS`)`, "findings", "allowed", "files_checked", "lines_checked"}`.
+Refuses: `SL_BAD_DIFF` (not text, too long, an added line before any `+++` line); `SL_BAD_SETTINGS`.
+Tests: `test_sl1_02_blocks_added_secrets_only` (a made-up diff, its secret-like strings built at run time from pieces, adds the line `EXAMPLE = "<a GITHUB_TOKEN-shaped string>"` to `code/example.py` and removes a line holding another: the result is `BLOCK` with one finding on the right line; no returned value holds the whole string; the removed one is not found; a second diff whose only added line is `token = parse(text)` gives `WARN` with `GATE_PATTERN_1`); `test_sl1_02_allows_listed_findings_and_refuses_bad_diffs` (an `allow` entry for that path and rule turns the first result into `PASS` with one `allowed` item and its reason; a diff whose first line is `+x` raises `SL_BAD_DIFF`; an added file `deploy/.env` gives `KEY_FILE_NAME`).
+Done means: no key, token or password can be committed by an agent that runs this check first.
+Not checked: that every agent runs it. A git hook or a workflow step would make it automatic; `.github/` and hooks need the Owner's tap (Gaps). Gitleaks' own full rule set is not copied; its idea is.
+
+#### SL-1-03: CHECK_THE_LOG_CHAIN (source: S2, "the log hash chain")
+Function: `check_log_chain(chain_text: str) -> dict`.
+Does: `chain_text` is the chain file's text, read by the caller (rule 19). Each non-blank line must be one JSON object exactly `{"seq", "id", "prev_sha256", "record_text", "entry_sha256"}`. Check, from the first line, A204's own rules (`code/apccs_logs.py`, `append_and_verify_log_v2_chain`):
+- `seq` is 1, 2, 3, … in order;
+- `prev_sha256` is `GENESIS` for the first row and the previous row's `entry_sha256` after that;
+- `entry_sha256` is the SHA-256 of `str(seq) + "|" + prev_sha256 + "|" + record_text`, as UTF-8;
+- `logs.parse_and_check_log_v2_record(record_text)` gives `PASS`, and its `ID` field equals `id`; no `id` repeats.
+The first broken row stops the check. `chain_sha256` is the SHA-256 of every `entry_sha256`, joined with `\n`, in order: the one digest that stands for the whole chain. Return `{"status"` (`PASS` or `BROKEN`)`, "rows", "head_seq", "head_sha256", "chain_sha256"` (None when broken)`, "first_bad": {"seq", "reason"}` (None when it passes)`}`.
+Refuses: `SL_BAD_CHAIN` (not text, over 20,000,000 characters, or no rows).
+Tests: `test_sl1_03_passes_a_good_chain` (three made-up records built with `logs.build_eight_line_log_v2_record`, chained by a private test helper that follows A204's rule, give `PASS`, `head_seq` 3 and a 64-hex `chain_sha256`); `test_sl1_03_finds_the_first_broken_row` (one changed character in row 2's `record_text` gives `BROKEN` at `seq` 2; a repeated `id` gives `BROKEN`; an empty text raises `SL_BAD_CHAIN`).
+Done means: anyone can prove the log was not edited after it was written, from the text alone.
+Not checked: a chain file written by A204 on the phone; the tests rebuild A204's rule, because rule 28 lets no test write a file.
+
+#### SL-1-04: RECORD_A_TIMESTAMP_REQUEST_OR_PROOF (source: S2, "OpenTimestamps")
+Function: `record_chain_stamp(conn: sqlite3.Connection, chain_check: dict, stamp: dict | None, at: str) -> dict`.
+Does: `chain_check` must be an SL-1-03 result with `status` `PASS` (its fields are checked again). Create the add-only table `sl_chain_stamps(stamp_id INTEGER PRIMARY KEY, digest_sha256 TEXT NOT NULL, head_seq INTEGER NOT NULL, state TEXT NOT NULL, proof_sha256 TEXT, calendar TEXT, at TEXT NOT NULL)`.
+- `stamp` None → add a `REQUESTED` row for `chain_sha256`. The `line` says: `Timestamp request: give this SHA-256 to an OpenTimestamps client, then record the proof's SHA-256 here: <digest>.`
+- `stamp` exactly `{"proof_sha256", "calendar", "stamped_at"}` (a 64-hex SHA-256 of the proof file; the calendar's `https://` address, at most 200 characters; a time with an offset, not before the request) → the digest must have a `REQUESTED` row (`SL_NOT_REQUESTED`) and no `STAMPED` row yet (`SL_ALREADY_STAMPED`). Add a `STAMPED` row.
+Return `{"stamp_id", "state", "digest_sha256", "head_seq", "line", "checked": "NOT CHECKED: this code does not verify OpenTimestamps proofs; the ots client does."}`.
+Refuses: `SL_BAD_CHAIN_CHECK`; `SL_BAD_STAMP`; `SL_NOT_REQUESTED`; `SL_ALREADY_STAMPED`; `SL_BAD_TIME`; `SL_BAD_DB`.
+Tests: `test_sl1_04_requests_then_records_a_stamp` (an in-memory database: a `PASS` check gives `REQUESTED`, then a made-up proof SHA-256 with calendar `https://calendar.example.org` gives `STAMPED`, and the table holds two rows); `test_sl1_04_refuses_broken_or_unrequested_stamps` (a `BROKEN` check raises `SL_BAD_CHAIN_CHECK`; a stamp for a digest never requested raises `SL_NOT_REQUESTED`; stamping twice raises `SL_ALREADY_STAMPED`).
+Done means: the log's fingerprint can be anchored in public time, and the record says which proof belongs to which point of the log.
+Not checked: running the OpenTimestamps client, and its calendars, which need the network (rule 31).
+
+#### SL-1-05: CHECK_A_JOB_AGAINST_ITS_SANDBOX_POLICY (source: S3, "Wasmtime/WASI" (only folders handed over at the start can be reached); the ⬜ Flightdeck row, "Rules that block which tools an agent may use")
+Function: `check_job_sandbox(job: dict, settings: dict) -> dict`.
+Does: `job` is exactly `{"job_id", "agent", "tools", "dirs", "network", "env_names", "max_seconds", "max_memory_mb"}`, shaped like the policy entries in SL-1-01. Compare it with `settings["sandbox"]["agents"][agent]`. Deny, listing every reason, when:
+- the agent has no policy (`no policy for this agent`; nothing is allowed by default);
+- a tool is not in the agent's `tools`;
+- a folder is not inside one of the agent's folders, or asks `write` where the policy gives `read` (a folder is inside another when its parts start with the other's parts);
+- `network` is True and the policy's is False;
+- an environment name is not in `env_allow`, or contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`;
+- `max_seconds` or `max_memory_mb` is over the policy's.
+Return `{"job_id", "agent", "decision"` (`ALLOW` or `DENY`)`, "reasons", "preopen"` (the job's folders and access, sorted, which is what a WASI runtime would be handed; empty when denied)`}`.
+Refuses: `SL_BAD_JOB` (the shape); `SL_BAD_SETTINGS`.
+Tests: `test_sl1_05_allows_a_job_inside_its_policy` (agent `builder` asks `git` and `code` for `write`, no network, 600 seconds and 512 MB, under a policy giving 900 and 1,024: `ALLOW`, with `preopen` `[{"path": "code", "access": "write"}]`); `test_sl1_05_denies_each_way_out` (the tool `curl`; the folder `plan` (not given); network True; the environment name `GITHUB_TOKEN`; 1,000 seconds; and an unknown agent each give `DENY` with that reason).
+Done means: before a helper runs, plain code says exactly what it may touch, and anything not listed is refused.
+Not checked: a real Wasmtime run. Nothing here starts a sandbox; this is the policy check a later adapter calls first (rule 31).
+
+---
+
+### Batch SW-1 — Swarm setting: up to 20 threads under one coordinator, until the job is done
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** CMP-02 and SL-1 are merged.
+**New files:** `code/apccs2_swarm.py` and `code/test_apccs2_swarm.py`. Test class `ApccsBatchSW1Tests`.
+**Source:** NOV1 item 28, the Owner's words: "Swarm mode. Be able to run up to 20 threads when it's all coordinated with the main control panel brain giving instructions they all report back. Until the job is complete. Then close the threads."; slice 3 item "swarm setting, up to 20 threads under one coordinator"; the ideas "Paperclip org chart, budgets and heartbeats [17-01]; Agora per-agent cursors and de-duplication [14-031]; Herdr working/idle/blocked detection [14-013]; Multica squads [17-44]"; PRODUCT_MAP_SUPPLEMENT_2026-11-20 ⬜ row "You always talk to one router, with workers behind it"; W10 step 1.
+**Reuse, by exact name:** `apccs_research_agent.MAX_SWARM_THREADS` (20, RA3's own ceiling); `apccs2_usage_budget.run_with_budget(conn, request, settings, call_fn)` (CMP-02-05). Import as `import apccs_research_agent as research` and `import apccs2_usage_budget as budget`. RA3-04's `run_research_swarm` stays the research-only swarm; SW-1 is the general one and does not change it.
+**Errors:** `ValueError` whose message starts with an `SW_` code. `UB_` errors pass through unchanged.
+**Words used:** a *swarm* is one job split into tasks; a *thread* is one helper working on it (`t01` to `t20`); the *coordinator* is this module, the one place every thread reports to and takes its next instruction from. A thread's *cursor* is the number of the newest swarm event it has read.
+**Canary:** `Canary check: THREADS = CLOSED -> conductor`.
+
+#### SW-1-01: LOAD_SWARM_SETTINGS (source: NOV1 item 28, "up to 20 threads"; rule 20)
+Function: `load_swarm_settings(settings_json: str) -> dict`.
+Does: Read one JSON object, all keys optional:
+- `max_threads` (default 20): a whole number from 1 to `research.MAX_SWARM_THREADS`;
+- `quiet_after_minutes` (default 15): 1–1,440;
+- `stuck_after_minutes` (default 60): more than `quiet_after_minutes`, at most 10,080;
+- `max_tasks` (default 200): 1–1,000;
+- `max_calls_per_thread` (default 50): 1–10,000.
+Return the checked settings with `defaults_used`.
+Refuses: `SW_BAD_SETTINGS`.
+Tests: `test_sw1_01_reads_defaults` (`{}` gives 20, 15, 60, 200 and 50, all five in `defaults_used`); `test_sw1_01_refuses_bad_settings` (`max_threads` 21; `stuck_after_minutes` 15 with `quiet_after_minutes` 15; `max_tasks` true; the key `threads`; each raises `SW_BAD_SETTINGS`).
+Done means: the Owner's "up to 20" is a setting with a hard ceiling, and every other number can be changed in one text.
+Not checked: how many threads the phone or a free route can really carry; that is a live trial.
+
+#### SW-1-02: OPEN_A_SWARM (source: "coordinated with the main control panel brain"; Paperclip's org chart; Agora's de-duplication; Multica's squads)
+Function: `open_swarm(conn: sqlite3.Connection, plan: dict, settings: dict) -> dict`.
+Does: `plan` is exactly `{"swarm_id", "goal", "threads", "tasks", "at"}`:
+- `swarm_id` is a rule 25 id of at most 40 characters, so call ids fit (SW-1-04);
+- `goal` is 1–500 characters; `threads` is 1 to `max_threads`;
+- `tasks` holds 1 to `max_tasks` objects, each exactly `{"task_id", "text", "needs"}`: a rule 25 id; 1–2,000 characters; a list of `task_id`s that come earlier.
+Two tasks whose texts are equal after `casefold()` and collapsing runs of spaces are one task: the later is not added, and is listed in `duplicates` as `{"task_id", "same_as"}`. A task that needs a dropped one needs its twin instead. Create the add-only tables `sw_swarms(swarm_id TEXT PRIMARY KEY, goal TEXT NOT NULL, threads INTEGER NOT NULL, plan_json TEXT NOT NULL, plan_sha256 TEXT NOT NULL, at TEXT NOT NULL)` and `sw_events(event_no INTEGER PRIMARY KEY, swarm_id TEXT NOT NULL, thread_id TEXT, task_id TEXT, kind TEXT NOT NULL, note TEXT NOT NULL, at TEXT NOT NULL, event_sha256 TEXT NOT NULL)`, where `event_sha256` is the SHA-256 of the row's canonical JSON without `event_no` and `event_sha256`. Add the swarm, an `OPENED` event and one `TASK` event per kept task. The threads are named `t01` up to `t<threads>`, two digits. Return `{"swarm_id", "threads", "tasks"` (kept ids, in order)`, "duplicates", "ready"` (tasks that need nothing)`, "cursor"` (the newest `event_no`)`}`.
+Refuses: `SW_BAD_PLAN`; `SW_SWARM_EXISTS`; `SW_BAD_SETTINGS`; `SW_BAD_DB`.
+Tests: `test_sw1_02_opens_and_merges_duplicate_tasks` (an in-memory database: tasks `a` `Check the made-up file`, `b` `check  the MADE-UP file` and `c` `Write the made-up summary` needing `b`, with 3 threads, give tasks `a` and `c`, `duplicates` `[{"task_id": "b", "same_as": "a"}]`, `c` needing `a`, threads `t01` to `t03` and `ready` `["a"]`); `test_sw1_02_refuses_bad_plans` (21 threads; `needs` naming a later task; the same `swarm_id` twice, which raises `SW_SWARM_EXISTS`).
+Done means: one job is split into tasks once, with no task done twice by two threads.
+Not checked: how a person or the main brain splits a job into tasks; the plan is given.
+
+#### SW-1-03: REPORT_AND_TAKE_THE_NEXT_INSTRUCTION (source: "giving instructions they all report back. Until the job is complete. Then close the threads."; the ⬜ row "one router, with workers behind it"; Agora's per-agent cursors)
+Function: `report_to_coordinator(conn: sqlite3.Connection, swarm_id: str, report: dict) -> dict`.
+Does: `report` is exactly `{"thread_id", "state", "task_id", "note", "cursor", "at"}`:
+- `thread_id` is one of the swarm's threads, not closed (`SW_THREAD_CLOSED`);
+- `state` is `WORKING`, `BLOCKED`, `DONE` or `IDLE`. For the first three, `task_id` is the task this thread was told to work on and has not finished (`SW_NOT_YOUR_TASK`); for `IDLE` it is None and the thread holds no task;
+- `note` is 0–500 characters, and 1–500 for `BLOCKED` (say why);
+- `cursor` is a whole number, not below the thread's previous cursor and not above the newest `event_no` (`SW_BAD_CURSOR`);
+- `at` is not earlier than the thread's previous report.
+Record the report as an event of its state's name (`DONE` finishes the task). Then the coordinator answers, and records its answer as an event too:
+- `WORKING` → `CONTINUE`; `BLOCKED` → `WAIT` (the thread is listed as blocked until it reports again);
+- `DONE` or `IDLE` → `WORK` with the first task, in plan order, whose needs are all done and that no thread holds; else `WAIT` while any task is not done; else `CLOSE`. A `CLOSE` closes the thread (event `CLOSED`); when every thread is closed, the swarm gets a `SWARM_CLOSED` event.
+Return `{"event_no", "instruction", "task_id", "text"` (the task's text for `WORK`, else None)`, "news"` (the `DONE`, `BLOCKED` and `SWARM_CLOSED` events of other threads after this thread's cursor, each `{"event_no", "kind", "thread_id", "task_id"}`)`, "cursor_now"}`.
+Refuses: `SW_UNKNOWN_SWARM`; `SW_BAD_REPORT` (the shape, an unknown thread, a time); `SW_NOT_YOUR_TASK`; `SW_BAD_CURSOR`; `SW_THREAD_CLOSED`.
+Tests: `test_sw1_03_runs_a_two_task_job_to_the_end` (tasks `a` and `b`, where `b` needs `a`, and two threads: `t01` `IDLE` gets `WORK a`; `t02` `IDLE` gets `WAIT`; `t01` `DONE a` gets `WORK b`; `t02` `IDLE` gets `WAIT`, and its `news` holds `t01`'s `DONE`; `t01` `DONE b` gets `CLOSE`; `t02` `IDLE` gets `CLOSE`; the swarm has a `SWARM_CLOSED` event); `test_sw1_03_refuses_wrong_tasks_cursors_and_closed_threads` (`t02` reporting `WORKING` on `a` while `t01` holds it raises `SW_NOT_YOUR_TASK`; a cursor below the previous one raises `SW_BAD_CURSOR`; a report from a closed thread raises `SW_THREAD_CLOSED`; `BLOCKED` with an empty note raises `SW_BAD_REPORT`).
+Done means: every thread talks only to the coordinator, every report is kept, and the threads close when the job is done.
+Not checked: real helpers. Threads in the tests are plain calls; who runs a thread (a phone model, a CLI) is a later adapter.
+
+#### SW-1-04: A_THREADS_OUTSIDE_CALL_GOES_THROUGH_THE_BUDGET (source: Paperclip's budgets; CMP-02; rule 27)
+Function: `run_thread_call(conn: sqlite3.Connection, swarm_id: str, thread_id: str, request: dict, budget_settings: dict, call_fn: Callable[[str], dict], settings: dict) -> dict`.
+Does: The thread must hold a task (`SW_NO_TASK`). `request` is CMP-02's request (`{"call_id", "route", "model", "text", "expected_reply_tokens", "at"}`), and its `call_id` must start with `<swarm_id>:<thread_id>:` (`SW_BAD_CALL`). Count this thread's earlier `CALL_OK`, `CALL_FAILED` and `CALL_REFUSED` events: at `max_calls_per_thread` or more, record `CALL_REFUSED` with the note `thread <thread_id> used its <n> calls` and return `{"decision": "REFUSED", "called": False, "line"}` without calling anything. Otherwise call `budget.run_with_budget(conn, request, budget_settings, call_fn)` once, and record `CALL_OK`, `CALL_FAILED` or `CALL_REFUSED` by its `decision` (`OK`, `FAILED` or `REFUSED`), with the `call_id` as the note. When the budget refuses, also record a `BLOCKED` event for the thread with the note `budget used up`, so the coordinator lists it. Return CMP-02's result with `"event_no"` and `"thread_calls"` added.
+Refuses: `SW_UNKNOWN_SWARM`; `SW_NO_TASK`; `SW_BAD_CALL`; `SW_BAD_SETTINGS`; `UB_` errors unchanged.
+Tests: `test_sw1_04_spends_through_the_budget` (with one CMP-02 ceiling of 1,000 tokens and a stub returning `{"reply_text": "made-up answer"}`, `t01` holding task `a` gives `OK` and a `CALL_OK` event; with `max_calls_per_thread` 1 the next call gives `REFUSED`, and a stub that fails the test if called is never called); `test_sw1_04_blocks_the_thread_when_the_budget_is_used_up` (a request over the ceiling gives `REFUSED` from CMP-02 and a `BLOCKED` event with `budget used up`; a `call_id` without the `<swarm_id>:<thread_id>:` start raises `SW_BAD_CALL`; an idle thread raises `SW_NO_TASK`).
+Done means: twenty threads can't spend more than the ceilings the Owner set, and a thread that runs out says so.
+Not checked: any real route; every test uses a stub (rule 27).
+
+#### SW-1-05: SWARM_STATUS (source: Herdr's working, idle and blocked detection; Paperclip's heartbeats; rule 24)
+Function: `read_swarm_status(conn: sqlite3.Connection, swarm_id: str, settings: dict, at: str) -> dict`.
+Does: Read only. Each thread's state comes from its newest report or instruction: `WORKING`, `BLOCKED`, `WAITING` (told to wait, or idle), or `CLOSED`. A `WORKING` thread whose newest report is more than `quiet_after_minutes` before `at` is `QUIET`; more than `stuck_after_minutes`, `STUCK`. Each task is `READY`, `HELD` (with its thread), `WAITING` (needs not done) or `DONE`. `complete` is True when every task is `DONE`; `closed` when the swarm has `SWARM_CLOSED`. `next_step` is the first that fits: `nothing to do: the swarm is closed`; `close the threads: every task is done`; `look at: <threads that are BLOCKED or STUCK>`; `working`. Return `{"swarm_id", "threads": [{"thread_id", "state", "task_id", "minutes_since_report", "calls"}], "tasks": [{"task_id", "state", "thread_id"}], "complete", "closed", "next_step", "lines"}`, with one plain line per thread, for example `t01 | WORKING | a | last report 12 minutes ago | 3 calls`.
+Refuses: `SW_UNKNOWN_SWARM`; `SW_BAD_TIME`; `SW_BAD_SETTINGS`.
+Tests: `test_sw1_05_spots_quiet_and_stuck_threads` (`t01` reports `WORKING` at 09:00: at 09:20 it is `QUIET`, at 10:01 `STUCK`, and `next_step` is `look at: t01`); `test_sw1_05_shows_a_finished_swarm_and_refuses_bad_input` (the SW-1-03 job, run to the end, gives `complete` and `closed` True and `nothing to do: the swarm is closed`; swarm `nope` raises `SW_UNKNOWN_SWARM`; `at` without an offset raises `SW_BAD_TIME`).
+Done means: the Owner sees at a glance which threads work, which wait, which are stuck, and when the job is done.
+Not checked: a screen for it; a later control-panel batch shows these lines behind CMP-09's door.
+
+---
+
+### Batch LR-1 — Research agent on a free live search: a research board, the live step OFF by default, every result with its link and the date read
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** CMP-02 and SW-1 are merged (queue order; LR-1 uses CMP-02, not SW-1).
+**New files:** `code/apccs2_live_research.py` and `code/test_apccs2_live_research.py`. Test class `ApccsBatchLR1Tests`.
+**Source:** slice 3 item "research agent on a free live search"; W10 step 2 ("extends RA1–RA3. The live step is OFF by default and returns BLOCKED, as in BR-1. Every result keeps its link and the date read."); PRODUCT_MAP_SUPPLEMENT_2026-11-20 ⬜ row (5a, from arXiv 2510.08521, FlowSearch): "a question is split into smaller questions; each needs a source link before it counts; the report can't be finished while any question is open; for software the first question is 'has someone already built this?'"; ledger Q010, Q049 and Q055.
+**Reuse, by exact name:** `apccs_research_agent.build_research_brief(end, done_means, for_ref, known_items, settings)`, `apccs_research_agent.load_research_settings(settings_json)`, `apccs_research_agent.run_research_l0(brief, options, settings)` and `apccs_research_agent.PROOF_KINDS`; `apccs2_usage_budget.run_with_budget(conn, request, settings, call_fn)`; `apccs_gate.SECRET_MASK_PATTERNS`. Import as `research`, `budget` and `gate`. BR-1's `run_web_step` (uclrcde) is the pattern for the OFF switch; it is not imported (rule 7).
+**Errors:** `ValueError` whose message starts with an `LR_` code. `RA_` and `UB_` errors pass through unchanged.
+**Words used:** a *board* is one research brief with its smaller questions; a *source* is one free search or news service reached through a `search_fn` the caller gives; a *result* is one link it returned, kept with the date it was read.
+**Canary:** `Canary check: BOARD = SOURCED -> scout`.
+
+#### LR-1-01: LOAD_LIVE_RESEARCH_SETTINGS (source: "The live step is OFF by default"; Q049; rules 20, 21 and 23)
+Function: `load_live_research_settings(settings_json: str) -> dict`.
+Does: Read one JSON object, all keys optional:
+- `web_step` (default `OFF`): `OFF` or `ON`;
+- `sources` (default `[]`): 0–10 objects, each exactly `{"source", "route", "model", "kind", "terms", "route_record"}`: `source`, `route` and `model` are rule 25 names, `source` used once; `kind` is `search` or `news`; `terms` is 1–500 characters (`NOT CHECKED` until someone reads them: FreeSerp and freenewsapi, ledger R151–R153, stay `NOT CHECKED`, a label and not a block); `route_record` is the five-field record of rule 23, or None;
+- `proof_hosts` (default `{}`): 0–100 host names (lowercase, with a dot) mapped to one of `research.PROOF_KINDS`, which says what kind of proof a link on that host is;
+- `max_results` (default 10): 1–50;
+- `blocked_terms` (default `[]`): 0–200 words of 2–80 characters that must never go into a query.
+Return the checked settings with `defaults_used`.
+Refuses: `LR_BAD_SETTINGS`.
+Tests: `test_lr1_01_starts_with_the_live_step_off` (`{}` gives `web_step` `OFF`, no sources and `max_results` 10); `test_lr1_01_refuses_bad_settings` (`web_step` `on`; a source of kind `blog`; a proof kind `rumour`; the same source twice; the key `web`; each raises `LR_BAD_SETTINGS`).
+Done means: nothing is searched live until the Owner switches it on and names the source.
+Not checked: any real free search service's terms or limits.
+
+#### LR-1-02: OPEN_A_RESEARCH_BOARD (source: the ⬜ FlowSearch row; RA1-02)
+Function: `open_research_board(conn: sqlite3.Connection, brief: dict, questions: list, is_software: bool, at: str) -> dict`.
+Does: `brief` is `research.build_research_brief`'s result; its `brief_sha256` is worked out again by RA1-02's own rule (the SHA-256 of the canonical JSON without `brief_sha256`) and must match (`LR_BAD_BRIEF`). `questions` holds 1–20 objects, each exactly `{"question_id", "text"}` (a rule 25 id, not `q00`; 1–500 characters). When `is_software` is True, code puts `{"question_id": "q00", "text": "Has someone already built this?"}` first. Create the add-only tables `lr_boards(board_id INTEGER PRIMARY KEY, brief_json TEXT NOT NULL, brief_sha256 TEXT NOT NULL, at TEXT NOT NULL)`, `lr_questions(row_id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL, question_id TEXT NOT NULL, text TEXT NOT NULL, UNIQUE(board_id, question_id))`, `lr_results(result_id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL, question_id TEXT NOT NULL, source TEXT NOT NULL, call_id TEXT NOT NULL, title TEXT NOT NULL, link TEXT NOT NULL, snippet TEXT NOT NULL, read_on TEXT NOT NULL)` and `lr_answers(answer_id INTEGER PRIMARY KEY, board_id INTEGER NOT NULL, question_id TEXT NOT NULL, text TEXT NOT NULL, result_ids_json TEXT NOT NULL, at TEXT NOT NULL)`. Return `{"board_id", "questions", "open"` (every question id)`}`.
+Refuses: `LR_BAD_BRIEF`; `LR_BAD_QUESTIONS` (the shape, a repeated id, `q00` given by the caller); `LR_BAD_TIME`; `LR_BAD_DB`.
+Tests: `test_lr1_02_opens_a_software_board_with_q00_first` (a brief built with `research.build_research_brief` and two questions give three questions, `q00` first, all open); `test_lr1_02_refuses_changed_briefs_and_bad_questions` (a brief whose `END` was changed after it was built raises `LR_BAD_BRIEF`; a repeated question id and a caller's `q00` each raise `LR_BAD_QUESTIONS`).
+Done means: every research job starts as a list of small questions, and software research always asks first whether it already exists.
+Not checked: how good the questions are; a person or the brain writes them.
+
+#### LR-1-03: RUN_ONE_LIVE_SEARCH (source: "The live step is OFF by default and returns BLOCKED, as in BR-1. Every result keeps its link and the date read."; rules 21, 23 and 27)
+Function: `run_live_search(conn: sqlite3.Connection, board_id: int, question_id: str, request: dict, settings: dict, budget_settings: dict, search_fn: Callable[[str], dict]) -> dict`.
+Does: `request` is exactly `{"call_id", "source", "query", "at"}`; `query` is 1–300 characters. Return `{"status": "BLOCKED", "called": False, "reason"}`, without calling anything and without adding a row, when the first of these holds:
+- `the web step is OFF`;
+- `the source is not in sources`;
+- `no route record was given` (rule 23);
+- `the query holds private words`: a blocked term (whole words, any case), an email address, a run of 10 or more digits, or a match of any `gate.SECRET_MASK_PATTERNS` (rule 29: the words are not repeated in the reason).
+Otherwise call `budget.run_with_budget(conn, {"call_id", "route": <the source's route>, "model": <the source's model>, "text": query, "expected_reply_tokens": 0, "at"}, budget_settings, search_fn)` once. `search_fn(query)` follows CMP-02-05's `call_fn` rule: it returns `{"reply_text"}`, here the JSON text of a list of `{"title", "link", "snippet"}`. When the decision is `OK`, read that list: a reply that is not such a list keeps nothing and gives `status` `BAD_REPLY`; the first `max_results` items are kept and the rest counted in `dropped`; an item whose `link` does not start `https://`, is over 500 characters, or whose `title` is not 1–300 characters, is dropped and counted. Each kept result is added to `lr_results` with `read_on`, the date part of `at`, and the `call_id`. Return `{"status"` (`OK`, `BAD_REPLY`, or CMP-02's `FAILED` or `REFUSED`)`, "called", "results": [{"result_id", "title", "link", "read_on"}], "dropped", "receipt"}`.
+Refuses: `LR_UNKNOWN_BOARD`; `LR_UNKNOWN_QUESTION`; `LR_BAD_REQUEST`; `LR_BAD_SETTINGS`; `UB_` errors unchanged.
+Tests: `test_lr1_03_blocks_when_off_and_keeps_dated_links_when_on` (with `web_step` `OFF`, a stub that fails the test if called is never called and the status is `BLOCKED`; with `ON`, the source `made-search` (a route record with made-up values) and one CMP-02 ceiling of 10 `calls` for its route and model, a stub returning two items, one with an `http://` link, gives one result with `read_on` `2026-11-23` and `dropped` 1); `test_lr1_03_refuses_private_queries_and_used_up_budgets` (a query holding `person@example.com` gives `BLOCKED` with the private-words reason and the stub is not called; with a ceiling of 1 call, the second search gives `REFUSED`; question `nope` raises `LR_UNKNOWN_QUESTION`).
+Done means: the research agent can search a free source live, only when switched on, inside the budget, and every finding keeps where and when it was read.
+Not checked: any real search service; every test uses a stub, and this batch names none as working (rule 31).
+
+#### LR-1-04: ANSWER_A_QUESTION_ONLY_WITH_SOURCES (source: the ⬜ FlowSearch row, "each needs a source link before it counts")
+Function: `record_board_answer(conn: sqlite3.Connection, board_id: int, question_id: str, answer: dict, at: str) -> dict`.
+Does: `answer` is exactly `{"text", "result_ids"}`: 1–2,000 characters, and 1–20 result ids, each once, each a result of this board. An answer with no result is refused, so nothing counts without a link and a date. Add one row to `lr_answers`; the newest answer to a question is its answer. Return `{"question_id", "state": "ANSWERED", "sources": [{"link", "read_on"}]}`.
+Refuses: `LR_UNKNOWN_BOARD`; `LR_UNKNOWN_QUESTION`; `LR_NO_SOURCE` (an empty list); `LR_UNKNOWN_RESULT` (a result of another board, or none); `LR_BAD_ANSWER`; `LR_BAD_TIME`.
+Tests: `test_lr1_04_answers_with_a_dated_source` (after LR-1-03 keeps a result, answering `q00` with it gives `ANSWERED` and that link with its `read_on`); `test_lr1_04_refuses_answers_without_sources` (`result_ids` `[]` raises `LR_NO_SOURCE`; result 999 raises `LR_UNKNOWN_RESULT`).
+Done means: every answer on the board names where it came from and when that was read.
+Not checked: whether the source says what the answer claims; that check is RA2's critics, or a person.
+
+#### LR-1-05: BUILD_THE_BOARD_REPORT (source: the ⬜ FlowSearch row, "the report can't be finished while any question is open"; RA1-05)
+Function: `build_board_report(conn: sqlite3.Connection, board_id: int, research_settings: dict, live_settings: dict) -> dict`.
+Does: Read only. While any question has no answer, return `{"status": "OPEN_QUESTIONS", "open"}` and build nothing. Otherwise make one RA option per distinct link the answers cite: `{"name"` (the result's title)`, "link", "proof_link"` (the same link)`, "proof_kind"` (`live_settings["proof_hosts"]` for the link's host, or None)`}`. Call `research.run_research_l0(<the board's brief>, options, research_settings)`. Return `{"status": "READY", "answers": [{"question_id", "text", "sources": [{"link", "read_on"}]}], "focus_card"` (RA1-05's result, unchanged)`, "lines"}`, with one plain line per question, for example `q00 Has someone already built this? — 2 sources, read 2026-11-23`.
+Refuses: `LR_UNKNOWN_BOARD`; `RA_` errors unchanged.
+Tests: `test_lr1_05_builds_the_report_when_every_question_is_answered` (a board whose two questions are answered gives `READY`, and a link on a host mapped to `official_docs` counts as proof in the Focus Card: it is not in `UNKNOWN` as `no proof`); `test_lr1_05_waits_while_a_question_is_open` (one unanswered question gives `OPEN_QUESTIONS` naming it; board 999 raises `LR_UNKNOWN_BOARD`).
+Done means: the research report is finished only when every small question has a sourced, dated answer, and RA1's software checks the options as before.
+Not checked: RA2's loop with live helpers; LR-1 feeds level 0 only.
+
+---
+
+### Batch TR-1 — Phase 1 trial harness: the written pass/fail test first, results logged, and the loser kept in the toolbox
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/apccs`.
+**Build only after:** LR-1 is merged (queue order only; TR-1 uses nothing new).
+**New files:** `code/apccs2_trials.py` and `code/test_apccs2_trials.py`. Test class `ApccsBatchTR1Tests`.
+**Source:** BUILD_PLAN_V1 Phase 1: "First trials (pick one winner per pair) T1 Phone agent control: T3 Code vs Paseo. … T3 Worktrunk: separate code copy per job. T4 token-saver on outputs (raw logs kept). T5 SkillEvaluator before adopting any skill pack (Pocock, Osmani, superpowers, android/skills). T6 Official Codex CLI + Gemini CLI as builder connections; Muse through a web adapter. T7 Cryptomator vault for case files. T8 Legal research: Vane vs RAGFlow. Each trial: written pass/fail test first, result logged, loser kept in the toolbox library."; slice 3 item "Phase 1 trials T1 and T3–T8" (T2 is left out, as in that list; MB-1 to MB-3 cover memory); `plan/PRODUCT_MAP.md` (T6 ⏸, T8 "Trial T8 picks one. Our answer gate (BR-1) always sits on top"); W10 step 5; ledger Q024 and Q052.
+**Reuse:** none; SQLite on the caller's connection.
+**Errors:** `ValueError` whose message starts with a `TR_` code.
+**Words used:** a *trial* asks one question about 1–4 *candidates* (tools). In `PICK_ONE` trials one candidate wins; in `EACH` trials every candidate that passes is adopted. The *toolbox* keeps every candidate that lost or was not adopted, with the reason, so it is never researched again from nothing.
+**Canary:** `Canary check: TRIAL = LOGGED -> referee`.
+
+#### TR-1-01: LOAD_THE_TRIAL_PLAN (source: Phase 1; "written pass/fail test first")
+Function: `load_trial_plan(plan_json: str | None) -> dict`.
+Does: None means the constant `DEFAULT_TRIAL_PLAN`. A plan is exactly `{"trials"}`: 1–20 objects, each exactly `{"trial_id", "question", "candidates", "mode", "starter_tests"}`: `trial_id` is `T` and 1–2 digits, used once; `question` is 1–300 characters; `candidates` holds 1–4 names of 1–80 characters, each once; `mode` is `PICK_ONE` (at least 2 candidates) or `EACH`; `starter_tests` holds 0–10 objects exactly `{"test_id", "text", "must_pass"}` (a rule 25 id; 1–500 characters; a bool). `DEFAULT_TRIAL_PLAN` holds these seven trials. Each test is worded from Phase 1's own words; more can be added before the first result (TR-1-02):
+
+| Trial | Question | Candidates | Mode | Starter test (all must pass) |
+|---|---|---|---|---|
+| T1 | Phone agent control: which tool lets the phone start, watch and stop a builder agent? | T3 Code; Paseo | PICK_ONE | `t1-control`: From the phone, start one made-up job, see its status and stop it. |
+| T3 | Worktrunk: does each job get its own copy of the code? | Worktrunk | EACH | `t3-copies`: Two made-up jobs at once each work in their own copy, and neither sees the other's changes. |
+| T4 | token-saver on outputs: does the model read less while the raw logs are kept? | token-saver | EACH | `t4-raw-kept`: The raw log is kept unchanged. `t4-less`: The model reads less text than the raw log holds. |
+| T5 | SkillEvaluator: is a skill pack checked before it is adopted (Pocock, Osmani, superpowers, android/skills)? | SkillEvaluator | EACH | `t5-checked`: One skill pack gets a pass or fail before anything in it is used. |
+| T6 | Builder connections: can the official Codex CLI and Gemini CLI build a batch? | Codex CLI; Gemini CLI | EACH | `t6-builds`: A made-up batch is built and its tests run, with no browser. |
+| T7 | Cryptomator: are case files kept encrypted on the phone? | Cryptomator | EACH | `t7-locked`: A made-up case file can't be read without the vault's password. `t7-local`: Nothing is sent to a cloud. |
+| T8 | Legal research core: Vane or RAGFlow? | Vane; RAGFlow | PICK_ONE | `t8-cites`: Every answer to the made-up gold set cites a locked original, under BR-1's answer gate. |
+
+Return `{"trials"` (sorted by number)`, "plan_sha256"}`.
+Refuses: `TR_BAD_PLAN`.
+Tests: `test_tr1_01_reads_the_default_plan` (None gives T1, T3, T4, T5, T6, T7 and T8, with no T2, and T4 has two starter tests); `test_tr1_01_refuses_bad_plans` (`PICK_ONE` with one candidate; trial id `X1`; five candidates; the same trial twice; each raises `TR_BAD_PLAN`).
+Done means: the seven trials the Owner approved are written down with their tests before any tool is tried.
+Not checked: Muse's web adapter in T6 (it needs a live route record, Q049); it is not a candidate here (Gaps).
+
+#### TR-1-02: RECORD_THE_TESTS_FIRST (source: "written pass/fail test first")
+Function: `record_trial_tests(conn: sqlite3.Connection, plan: dict, trial_id: str, extra_tests: list, at: str) -> dict`.
+Does: `plan` is TR-1-01's result, checked again; `trial_id` is in it. Create the add-only tables `tr_tests(row_id INTEGER PRIMARY KEY, trial_id TEXT NOT NULL, test_id TEXT NOT NULL, text TEXT NOT NULL, must_pass INTEGER NOT NULL, test_sha256 TEXT NOT NULL, at TEXT NOT NULL, UNIQUE(trial_id, test_id))`, `tr_results(row_id INTEGER PRIMARY KEY, trial_id TEXT NOT NULL, candidate TEXT NOT NULL, test_id TEXT NOT NULL, outcome TEXT NOT NULL, evidence TEXT NOT NULL, checked_by TEXT NOT NULL, place TEXT NOT NULL, at TEXT NOT NULL)`, `tr_decisions(row_id INTEGER PRIMARY KEY, trial_id TEXT NOT NULL, decision TEXT NOT NULL, chosen_json TEXT NOT NULL, line TEXT NOT NULL, at TEXT NOT NULL)` and `tr_toolbox(row_id INTEGER PRIMARY KEY, trial_id TEXT NOT NULL, candidate TEXT NOT NULL, reason TEXT NOT NULL, at TEXT NOT NULL)`. On the trial's first call, add its starter tests; then add `extra_tests` (0–10, shaped like starter tests, new ids). `test_sha256` is the SHA-256 of the canonical JSON of `{"trial_id", "test_id", "text", "must_pass"}`. Once the trial has any result, new tests are refused: the tests come first. Return `{"trial_id", "tests": [{"test_id", "text", "must_pass", "test_sha256"}]}`.
+Refuses: `TR_UNKNOWN_TRIAL`; `TR_BAD_TEST` (the shape, a repeated id); `TR_TESTS_CLOSED`; `TR_BAD_TIME`; `TR_BAD_PLAN`; `TR_BAD_DB`.
+Tests: `test_tr1_02_records_starter_and_extra_tests` (an in-memory database: T8 with one extra test `t8-offline` (`Works with no network`, must pass) gives two tests, each with a 64-hex fingerprint); `test_tr1_02_refuses_tests_after_a_result` (after one T8 result, a new test raises `TR_TESTS_CLOSED`; trial `T2` with the default plan raises `TR_UNKNOWN_TRIAL`; a repeated test id raises `TR_BAD_TEST`).
+Done means: every trial's pass mark is fixed and fingerprinted before anyone sees a result.
+Not checked: whether the tests are the right ones; a person can add tests until the first result.
+
+#### TR-1-03: RECORD_A_RESULT (source: "result logged"; rule 31)
+Function: `record_trial_result(conn: sqlite3.Connection, trial_id: str, result: dict, at: str) -> dict`.
+Does: The trial's tests must be recorded (`TR_NO_TESTS`). `result` is exactly `{"candidate", "test_id", "outcome", "evidence", "checked_by", "place"}`: a candidate of this trial; one of its tests; `PASS` or `FAIL`; what was seen, 1–1,000 characters (a result without evidence is refused); who checked, 1–80; and where: `phone`, `server`, `github` or `other`. Add one row to `tr_results`; the newest result for a candidate and test counts. Return `{"trial_id", "candidate", "test_id", "outcome", "results_so_far", "missing"` (the candidate and must-pass test pairs still without a result)`}`.
+Refuses: `TR_UNKNOWN_TRIAL`; `TR_NO_TESTS`; `TR_BAD_RESULT`; `TR_BAD_TIME`.
+Tests: `test_tr1_03_logs_results_and_lists_what_is_missing` (T8's `t8-cites`: `Vane` `PASS` with made-up evidence leaves `RAGFlow` missing; a second `Vane` result `FAIL` replaces the first); `test_tr1_03_refuses_results_without_evidence_or_tests` (empty `evidence` and the candidate `Other tool` each raise `TR_BAD_RESULT`; a trial with no recorded tests raises `TR_NO_TESTS`).
+Done means: every result says what was seen, by whom and where, and nothing is a pass because someone said so without evidence.
+Not checked: the evidence itself; it is a person's or a run's words.
+
+#### TR-1-04: DECIDE_A_TRIAL (source: "pick one winner per pair", "loser kept in the toolbox library"; Q024)
+Function: `decide_trial(conn: sqlite3.Connection, plan: dict, trial_id: str, at: str) -> dict`.
+Does: Using the newest result for each candidate and test:
+- any candidate and must-pass test without a result → `NOT CHECKED`, listing the missing pairs; nothing else is decided;
+- `PICK_ONE`: the candidates that pass every must-pass test, then the most passes over all tests. One → `WINNER`. More than one with the same count → `TIE`: the first in the plan's order is used for now, the line says so, and the others stay in the toolbox (Q024: the safest choice that can be undone; a later result or decision replaces it). None → `NO_WINNER`;
+- `EACH`: every candidate that passes every must-pass test is `ADOPTED`; if none, `NONE_ADOPTED`.
+Every candidate not chosen gets a `tr_toolbox` row with its reason (`failed <test ids>`, or `lost to <winner>`, or `tie, <winner> used for now`). Add one `tr_decisions` row. Return `{"trial_id", "decision", "chosen"` (the list of chosen candidates)`, "toolbox": [{"candidate", "reason"}], "missing", "line"}`, for example `T8 Legal research core: Vane wins; RAGFlow kept in the toolbox (failed t8-cites).`
+Refuses: `TR_UNKNOWN_TRIAL`; `TR_NO_TESTS`; `TR_BAD_TIME`; `TR_BAD_PLAN`.
+Tests: `test_tr1_04_picks_a_winner_and_keeps_the_loser` (T8: `Vane` passes `t8-cites`, `RAGFlow` fails it: `WINNER` `Vane`, and `RAGFlow` is in the toolbox with `failed t8-cites`; T6: `Codex CLI` passes and `Gemini CLI` passes: both `ADOPTED`, toolbox empty); `test_tr1_04_waits_for_missing_results_and_handles_ties` (T1 with only `T3 Code` tested gives `NOT CHECKED` listing `Paseo`; both passing with equal counts gives `TIE` with `T3 Code` used for now and `Paseo` in the toolbox).
+Done means: each trial ends with a winner chosen by its written tests, and nothing tried is thrown away.
+Not checked: the Owner may prefer a different winner; a later decision row replaces this one, and nothing is deleted.
+
+#### TR-1-05: THE_TRIAL_BOARD (source: Phase 1; "loser kept in the toolbox library")
+Function: `read_trial_board(conn: sqlite3.Connection, plan: dict) -> dict`.
+Does: Read only. For each trial in the plan: its question, test count, result count and newest decision, or `NOT CHECKED` when there is none. Return `{"trials": [{"trial_id", "question", "tests", "results", "decision", "chosen"}], "toolbox"` (every `tr_toolbox` row, newest first)`, "not_checked"` (the count)`, "lines"}`, with one plain line per trial, for example `T7 Cryptomator: NOT CHECKED (no results yet; it needs the phone)` or the decision's line. A missing table counts as nothing recorded.
+Refuses: `TR_BAD_PLAN`; `TR_BAD_DB`.
+Tests: `test_tr1_05_shows_every_trial_and_the_toolbox` (with the default plan and T8 decided as in TR-1-04's first test, T8 shows `WINNER`, the six other trials show `NOT CHECKED`, `not_checked` is 6, and the toolbox holds `RAGFlow`); `test_tr1_05_reads_an_empty_database` (an empty database gives seven `NOT CHECKED` lines; plan `{}` raises `TR_BAD_PLAN`).
+Done means: the Owner can see which tools were tried, which won, and which wait for a test on the phone.
+Not checked: every trial needs the phone or a live tool, so all seven stay `NOT CHECKED` until someone records a result (rule 31).
+
+---
+
+### Gaps (what this wording could not check)
+
+1. **Wiring.** Nothing calls these guards yet: SL-2's release gate, DM-1's change log, SL-1's diff check, SW-1's coordinator and LR-1's live step are built as parts. Older files never change (slice 1 rule 1; uclrcde AGENTS.md rule 3), so UI-2's hand-off packet, UI-5's binder, BR-1's web step and the builder's commit step are wired to them by later batches, after each part is built and audited.
+2. **The secret check before every commit.** Making SL-1-02 run by itself needs a git hook or a step in `.github/workflows/`. Both are protected (RULEBOOK hard limits), so that step needs the Owner's one tap, explained once when the batch is built. Until then it runs when an agent calls it.
+3. **SOPS and age** (the second half of S1) are not worded. No record shows a secret that must be stored in a repository, and agents never handle keys, so there is nothing yet for them to encrypt. A later batch can add it if one appears.
+4. **Later database adapters.** SQLCipher (encryption at rest), Litestream, pgBackRest, Alembic and pgAdmin or CloudBeaver are named in B5 and are not worded: SQLCipher is not in the standard library, and the others need a server. The Block review withdrew K4 as an assumed machine; no free server exists in any record, so anything that needs one stays `NOT CHECKED`, a label and not a block (Q052).
+5. **Making the copy itself.** Python writes no file (rule 28), so the person copies the case folder to the SD card or USB stick with the phone's own file manager, and DM-2 fingerprints and checks the copy. The database is copied only as a P0-6 snapshot (`build_p0_sqlite_snapshot` into a connection opened on the card); a helper that does that step for him is a later batch.
+6. **The legal library on real Acts.** LL-1 is tested on made-up text only (rule 30). Before real BC Acts go in, someone must read the BC Laws licence (whether a free app may keep and show statute text, and with what credit); W3 read only the court forms licence. That stays `NOT CHECKED`. No BC Laws reader is worded, because no route record exists for one (Q049). Regulations, schedules and amendment notes are not covered. The Akoma Ntoso XML can't be checked against its schema with the standard library. Indigo's licence (LGPL-3+ or the README's GPL) stays `NOT CHECKED`; only its ideas are used.
+7. **The trials are live.** Every Phase 1 trial needs the Owner's phone or a live tool. TR-1 records results; it can't produce them. No agent can run a tool on his phone today, so all seven trials show `NOT CHECKED` until a run that can reach the phone (for example the Termux route of P0-3) records results. Muse's web adapter in T6 is not a candidate, because it needs a route record first (Q049). T2 is left out, as in the 2026-11-19 list (MB-1 to MB-3 cover memory).
+8. **Threads and live sources.** SW-1's threads and LR-1's sources are stubs in every test. Who runs a thread (a phone model, a CLI, a scheduled task) and which free search source is used are later adapters, each with its route record. Whether 20 threads fit on the phone is a live question. FreeSerp and freenewsapi stay `NOT CHECKED` (R151–R153), and X posts can't be read from here (R225).
+9. **Personal-information rules.** SL-2's recognizers know English words and Canadian number shapes. French text, other countries' formats and personal facts written in plain words are not caught by rules; the person's review in SL-2-05 is the real check.
+10. **Reused contracts.** Every reused name was read on apccs main `2388392` or uclrcde main `0e20fd5`, with the signature given, except CMP-02's (`apccs2_usage_budget`), which come from its audited wording in pull request #206 because it is not built yet. If a reused contract differs when a batch is built, the builder says so in its pull request instead of guessing (AGENTS.md rule 12 in apccs; rule 13 in uclrcde).
+11. **Folders the tests read.** DM-2's tests read the repository's own `ui/` folder, read only, and compare it with itself, so later changes to `ui/` don't break them.
+12. **Test run times** are NOT CHECKED until each batch is built. Each new test file should finish in a few seconds.
+
+UNDO: before merge, close the draft pull request. After merge, a later add-only section can hold, correct or replace any batch here. Nothing in this section changes code, runtime or any existing text.
