@@ -485,3 +485,12 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W7. W7 stays last
 - **Found while wording:** CP-1's control panel is closed to new screens (its PANEL_PLAN, its page's two sections and app.js's tab list), and its files can't change. CMP-09-04 adds a second page, more.html, on the same local server and behind all of CP-1's checks; the toolbox (CMP-09) and log (CMP-05) screens plug in there. CP-1's Home tab can't link to it, so it gets its own icon (the section's Gaps, item 1).
 - Next, in order: W10, W11, W7.
 - No email: nothing failed.
+
+## Status note 2026-11-23 10:50 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4, W5 and W9 are done; each Done-when was checked this run (W9: PR #206 is open from plan/cmp-batches-2026-11-23). This run did W10.
+- **W10:** slice 3 is worded as the new section at the end of plan/QUEUE.md, "Slice 3 — swarm, live research, database management, legal library, trials and safety layers": eight batches covering all six items. Build order: uclrcde SL-2, DM-1, DM-2, LL-1; apccs, after the compilation batches, SL-1, SW-1, LR-1, TR-1. The proof run is SAFE TO MERGE. The draft plan PR from plan/slice3-2026-11-23 goes to the wording auditor with that build order.
+- **Stacked on PR #206:** the branch starts from #206's head (6a1fbbc), because SW-1 and LR-1 spend through CMP-02 and both pull requests add to the end of the same two files. Until #206 merges, this PR's diff also shows #206's text; after that, only its own.
+- **Found while checking:** PR #206 is audited, green and out of draft, but not merged. The merge gate last ran at 08:03 UTC, before the auditor marked it ready at 08:11; the gate's next 6-hourly sweep (12:17 UTC) should merge it. Nothing to do.
+- Next, in order: W11, W7.
+- No email: nothing failed.
