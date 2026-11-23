@@ -372,3 +372,107 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W7.
   - R225, the X post: neither Claude nor Muse can read X.
 - **Next W7 pass:** check for research-ledger rows newer than R225. Nothing from Muse is pending for W7.
 - No email: no product-map decision changed, and nothing failed.
+
+## Status note 2026-11-23 04:25 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4 and W5 are done; each Done-when was checked this run. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225, and nothing from Muse is pending.
+- **Found: approved work is waiting, and nothing is set to word it.** Evidence:
+  - The daily update on apccs issue #71 (2026-11-22 16:43 UTC) says "Nothing is being built right now", "Waiting for wording: 10 items" and "nothing more to build until new wording is added to the queue". The last feature build is apccs #198 (CP-2).
+  - Every worded batch is built: slices 1 and 2, and the W1 corrections PAF-1, MAF-1 and UAF-1 (apccs code/apccs_p0_audit_fix.py and code/apccs_memory_audit_fix.py; uclrcde code/test_uclrcde_p0_audit_fix.py). Only CAF-1 is still held ("Held by the auditor" in plan/QUEUE.md).
+  - Still waiting for wording: CMP-01 to CMP-10 ("Approved features waiting for wording — from the product compilation"), the six slice 3 items ("Approved features waiting for wording", 2026-11-19) and the CAF-1 re-wording.
+  - No work order or scheduled task words them. W2 and W4 covered slices 1 and 2 only, and W7 writes no batch wording.
+- So, under ledger Q024 and Q052 (as with W8), this note adds W9, W10 and W11 below. The Owner or the architect may withdraw any of them with a later note.
+- No email: the gap is solved here, and nothing failed.
+
+## W9 — Wording for the compilation items CMP-01 to CMP-10 (added 2026-11-23 by the work-order runner)
+
+- **After:** nothing.
+- **Done when:** an open or merged apccs PR exists from branch plan/cmp-batches-2026-11-23, or plan/QUEUE.md on main has a heading starting "## Compilation batches —".
+- **Sources:**
+  - plan/QUEUE.md, "Approved features waiting for wording — from the product compilation": the ten items, their objectives and their idea sources;
+  - plan/PRODUCT_MAP.md, and in Drive › FULL_LOG_AUDIT_2026-11-19: PRODUCT_COMPILATION_2026-11-20_CORRECTED_2 (the current compilation), PRODUCT_MAP_DETAIL_2026-11-20 and PRODUCT_MAP_SUPPLEMENT_2026-11-20;
+  - Drive › Claude 2 › RESEARCH_O20_O21_LINKS_2026-11-20_CORRECTED, for the fix-history idea from arXiv 2611.18856 (CMP-04);
+  - ledger Q010, Q024, Q041, Q046, Q049, Q052 and Q056.
+- **Before wording:** read the docstrings of the functions you reuse, and grep that each one exists by name. New apccs files follow "Ruling: apccs module limit": `code/apccs2_<name>.py`, with tests in `code/test_apccs2_<name>.py`. Screens follow the web/panel pattern of CP-1 (code/apccs2_control_panel.py).
+- **Steps:** word the batches as "## Compilation batches — budget, route ladder, approval cards, failure loop, health watch, prompt brief, prior art, toolbox, logs, screen check", in this build order:
+  1. **CMP-02 (apccs) Usage budget ledger:**
+     - before every outside call, reserve usage against a ceiling per model and route (settings);
+     - keep a receipt in SQLite; release or reconcile it on failure;
+     - refuse when the budget is used up;
+     - reuses estimate_tokens.
+  2. **CMP-01 (apccs) Model route ladder and router, after CMP-02:**
+     - rates each job and proposes the cheapest route that can do it: phone model, then the Owner's own machine, then free cloud;
+     - a paid route is never picked, only flagged (Q010);
+     - watch-only first: it records proposed routes and how they did; a setting, OFF by default, lets it choose;
+     - a route needs its route record (Q049) before anything but made-up data goes through it;
+     - asks CMP-02 before proposing a route.
+  3. **CMP-03 (apccs) Approval cards:**
+     - plain-code rules mark the steps that truly need the Owner: the "needs your OK" list of Q024 (can't be undone, money, keys or accounts, protected files, hard limits);
+     - only those make a card, with approve, deny and an expiry; everything else goes ahead and is logged;
+     - cards reach the existing Approvals screen through build_p0_approval_request (code/apccs_p0_dashboard.py).
+  4. **CMP-04 (apccs) Failure loop:**
+     - reads supplied run-log text, groups repeated failures by cause, and ties each group to the commit it ran on;
+     - returns one fix item per cause;
+     - plain code does the grouping; any AI description of a group is a hand-off packet, with the AI switch OFF by default.
+  5. **CMP-07 (apccs) Health watch:**
+     - every scheduled job's heartbeat is a health receipt (reuse record_health_receipt in code/apccs2_architecture_registry.py);
+     - finds jobs that never ran, ran late or got stuck, against expected intervals that are settings;
+     - returns a plain-text status table.
+  6. **CMP-10 (apccs) Prompt brief builder:**
+     - turns a rough request into a brief: intent, context, expectations, done-when and limits;
+     - asks only about the missing parts;
+     - estimates the brief's size with estimate_tokens; no AI.
+  7. **CMP-06 (apccs) Prior-art check:**
+     - takes supplied search results: GitHub, and a free search or news source only when the web switch is ON (OFF by default, returning BLOCKED, as in BR-1);
+     - lists similar projects with their licences, and says how ours differs, from a supplied feature list;
+     - FreeSerp and freenewsapi stay labelled NOT CHECKED until read (a label, not a block).
+  8. **CMP-09 (apccs) Toolbox view:**
+     - reads a supplied CSV copy of PRODUCT_MAP_DETAIL_2026-11-20 and PRODUCT_MAP_SUPPLEMENT_2026-11-20;
+     - searchable by feature, decision and licence, as a screen on the control-panel page;
+     - never fetches the sheets.
+  9. **CMP-05 (apccs) Log viewer, only the part CP-2 does not cover:**
+     - CP-2-02 (read_project_log) already gives the four views and tag search for one project at a time;
+     - word only what is left, for example one search across all projects;
+     - if nothing is left, write "CMP-05: covered by CP-2-02" with the evidence, and word no batch.
+  10. **CMP-08 (apccs) Screen accessibility and plain-language check, last:**
+      - reads only the screen files it is given (uclrcde ui/ and apccs web/panel/), the way AM-1 covers every project without mixing them (Q016);
+      - checks labels, alt text, headings, keyboard order and reading level, with written exceptions for legal terms;
+      - reuses what check_panel_web_files already checks, and words only the rest.
+
+  End the section with "Gaps" and "UNDO". Run python3 -I tools/run_all_tests.py (SAFE TO MERGE). Open a DRAFT PR from plan/cmp-batches-2026-11-23, then hand it to the wording auditor (see Rules) with the build order above.
+
+## W10 — Slice 3 wording: swarm, live research, database management, legal library, trials and safety layers (added 2026-11-23 by the work-order runner)
+
+- **After:** nothing.
+- **Done when:** an open or merged apccs PR exists from branch plan/slice3-2026-11-23, or plan/QUEUE.md on main has a heading starting "## Slice 3 —".
+- **Sources:**
+  - plan/QUEUE.md: the "Slice 3" line of "Approved features waiting for wording" (2026-11-19), and "Ideas added to items already approved" under the compilation items;
+  - BUILD_PLAN_V1_2026-11-17 (Drive 1ybzH-MUNIEnceIrP5E7bfO1VpE7UugqnikK4ZH3axuo): Phase 1 (T1, T3–T8), Phase 2 (B2, B5) and Phase 3 (S1–S4);
+  - NOV1_CONTROL_PANEL_UPGRADE_LIST (17Pokg7sck-20XEIcvAq5tXh64nKQj5c3EJL5E8gPIwQ), item 28;
+  - PRODUCT_MAP_SUPPLEMENT_2026-11-20, for its ⬜ ideas that belong to these items (for example the three checked copies with a yearly match check, and the case-file backup to SD card or USB, under database management);
+  - what is already built and is reused, not rebuilt: RA1–RA3 (apccs PRs #110–#112, the research agent), BR-1's web step, and CMP-02 once W9's wording is built.
+- **Before wording:** as in W9: docstrings read, names grepped, `apccs2_` file names.
+- **Steps:** word at most 8 batches as "## Slice 3 — …". If an item needs more, word its first batch and list the rest under Gaps.
+  1. **Swarm setting (apccs):** up to 20 threads under one coordinator (a setting); working, idle and blocked detection; a cursor per agent, and de-duplication; budgets through CMP-02, so it builds after CMP-02. Ideas: Paperclip, Agora, Herdr, Multica.
+  2. **Research agent on a free live search (apccs):** extends RA1–RA3. The live step is OFF by default and returns BLOCKED, as in BR-1. Every result keeps its link and the date read.
+  3. **Database management (uclrcde, B5):** a migration plan with verify steps (the Sqitch idea), an append-only change log (the pgAudit idea), a read-only view (the Datasette idea), access roles per case, and three checked copies with a yearly match check. SQLCipher, Litestream and pgBackRest are named as later adapters. Anything that needs a server is labelled NOT CHECKED (blocker K4 in BUILD_PLAN_V1).
+  4. **Legal library pilot (uclrcde, B2):** records shaped like Akoma Ntoso for BC legislation, built from locked originals; Indigo and Peachjam lend ideas only. The Indigo licence question (LGPL-3+ or the README's GPL) stays labelled NOT CHECKED.
+  5. **Phase 1 trials (apccs):** a trial harness. Each trial (T1, T3–T8) gets its written pass/fail test first, its result logged in SQLite, and its loser kept in the toolbox. A trial that needs the phone or a live tool is worded as a check of supplied results, and stays NOT CHECKED until a result is recorded. T2 is left out, as in the 19 Nov list.
+  6. **Safety layers S1–S4, plain-code checks first:** S1 a secret-pattern check before any commit (made-up patterns only in tests); S2 a hash chain of the logs, ready for OpenTimestamps; S3 a sandbox policy check (the Wasmtime/WASI idea); S4 a personal-information check plus human review before anything leaves (the Presidio idea). Each goes in the repository whose data it guards (Q016).
+
+  End the section with "Gaps" and "UNDO". Run python3 -I tools/run_all_tests.py (SAFE TO MERGE). Open a DRAFT PR from plan/slice3-2026-11-23, then hand it to the wording auditor (see Rules) with the build order.
+
+## W11 — Re-word the held Corolla correction CAF-1 (added 2026-11-23 by the work-order runner)
+
+- **Why:** CAF-1 has been held since 19 Nov ("Held by the auditor" in plan/QUEUE.md), because that auditor run could not read corolla-obd. Its fix route is a run with corolla-obd access that re-words it, and no task is set to do that. The W1 audit graded CO-1 to CO-3 FAIL, so the clear-code path keeps its known faults until CAF-1 is built.
+- **After:** nothing.
+- **Done when:** plan/QUEUE.md on main has a heading starting "## CAF-1 re-worded", or an open or merged apccs PR exists from branch plan/caf1-reword-2026-11-23, or apccs issue #71 has two comments, on different days, whose note starts "W11 could not reach corolla-obd".
+- **Steps:**
+  1. Attach someonee12345678-hue/corolla-obd (add_repo; read access is enough) and clone it.
+     - If it can't be attached, send one daily-status note (see Rules) starting "W11 could not reach corolla-obd". Say what was tried, and the one step only the Owner can take: allowing the Claude GitHub app on corolla-obd (a login step; RULEBOOK, "Conflicts between these"). The next run retries.
+  2. Read CAF-1 and the "Held by the auditor" note, then the corolla-obd code they name. Quote the exact existing class and method names: CodeInput, the decoder, the ticket API, the report prefix and the generation counter.
+  3. Re-word CAF-1 in a new add-only section, "## CAF-1 re-worded (corolla-obd)", under corolla-obd's own rules (Java 17 and JUnit 4, as in "Post-merge audit corrections (independent)"). Settle each open choice the auditor named: CAF-1-02, CAF-1-04 and CAF-1-05. End with "Gaps" and "UNDO".
+  4. Run python3 -I tools/run_all_tests.py (SAFE TO MERGE). Open a DRAFT PR from plan/caf1-reword-2026-11-23, then hand it to the wording auditor (see Rules) with "Batches in build order: CAF-1 (corolla-obd)." Say in the hand-off that the audit needs corolla-obd access too.
+
+The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W7. W7 stays last, because it is never finished.
