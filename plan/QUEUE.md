@@ -10159,3 +10159,59 @@ Not checked: every trial needs the phone or a live tool, so all seven stay `NOT 
 12. **Test run times** are NOT CHECKED until each batch is built. Each new test file should finish in a few seconds.
 
 UNDO: before merge, close the draft pull request. After merge, a later add-only section can hold, correct or replace any batch here. Nothing in this section changes code, runtime or any existing text.
+
+### Wording audit of slice 3 (independent Claude auditor, 2026-11-23)
+
+Written by a separate Claude run that did not write the wording above (ledger Q039). It checked all eight batches against the template, the readability gate (Q036–Q038 and slice 1 rules 3–5), both repositories' AGENTS.md, the code on apccs main `414d9a1` (which holds `2388392` plus the merged CMP wording of #206) and uclrcde main `0e20fd5`, CMP-02's audited wording, and the sources the section cites (BUILD_PLAN_V1 Phase 1, B2, B5 and S1–S4, read in Drive on 2026-11-23 and quoted correctly; the slice 3 items and their ideas; W10). Every reused function, constant and signature exists on main as written, and every new file and function name is unused in both repositories. Prototype runs on 2026-11-23 confirmed: SL-2-02's test text gives exactly the counts stated; `core.open_uclrcde_db` leaves `-wal` and `-shm` files while open and none after close, and a later docket event changes the closed database file (DM-2-02 and DM-2-03 tests hold); DM-1-05's authorizer allows the built `SELECT`; DM-1-02's `BEGIN` … `ROLLBACK` leaves no table behind. Where a correction below differs from the wording above, the correction wins; everything else above stands.
+
+**Status: SL-2, DM-1, DM-2 and LL-1 (uclrcde), then SL-1, SW-1, LR-1 and TR-1 (apccs, after the compilation batches) are Ready to build**, in that order, with these corrections.
+
+#### SL-2
+
+- **SL-2-04, `line`, exactly.** Kinds are named in the order `NAME`, `TERM`, then `PV_KINDS`, only those with a count above 0, as `<n> <word>` with these words (one / more than one): `NAME` name / names; `TERM` listed word / listed words; `EMAIL` email address / email addresses; `PHONE` phone number / phone numbers; `POSTAL_CODE` postal code / postal codes; `SIN` SIN / SINs; `CARD` card number / card numbers; `BIRTH_DATE` birth date / birth dates; `STREET_ADDRESS` street address / street addresses. Items are joined with `, `, the last with ` and `. The line is `Before this leaves: <items> <was or were> found. A person must look at it first.`, with `was` when the counts add up to 1, otherwise `were`. With no findings it is the second line given above.
+
+#### DM-1
+
+- **DM-1-01, second test (uclrcde AGENTS.md rule 9).** No test may hold a destructive SQL statement, so the five refused plans are: a deploy statement `INSERT INTO dm_example_notes (note_id, case_id, body) VALUES (1, 'MATTER-SYNTH-0001', 'made-up');` (it does not start with an allowed `CREATE`); a `CREATE TABLE IF NOT EXISTS` whose column default is the text `'REPLACE'` (a banned whole word); a verify starting `PRAGMA`; `requires` naming a later change; one `change_id` twice. Each raises `DM_BAD_PLAN`. The module's word-ban list holds the single words only.
+- **DM-1-02, rows.** Only `VERIFIED` and `FAILED` add a `dm_deployed_changes` row; `SKIPPED` and `NOT_DEPLOYED` add none (so the first test's table holds two rows). A `FAILED` row has `verify_rows` 0. A change that `FAILED` earlier and has no `VERIFIED` row is tried again on the next run.
+- **DM-1-04, the change-log entry.** Its `by` is `granted_by` and its `at` is the grant's `at`.
+- **DM-1-05, time.** The function is `run_read_only_view(db_path: str, case_id: str, person: str, query: dict, at: str) -> dict`; `at` (rule 24, `DM_BAD_TIME` when off-shape) is the `READ` entry's `at`, and its `by` is `person`. The read runs on its own connection from `core.open_uclrcde_db`, closed before DM-1-03 records the read on a fresh one, so the read-only authorizer never meets the log's insert.
+
+#### DM-2
+
+- **"Newest"** manifest or check means the highest `manifest_id` or `check_id`.
+- **DM-2-04.** `NOT_ENOUGH_COPIES` keeps no `bk_checks` row. `line` is `All <n> copies match. Next check by <next_match_check>.`, `Copies differ: <places joined with ", ">. Next check by <next_match_check>.` or `Not enough copies yet: <places joined with ", "> have none.`; `next_match_check` is None when nothing ever matched.
+- **DM-2-05.** `last_test` is the date of the newest `RESTORE_TEST` row of the place (None if none) and `result` its result (None if none); `next_due` counts from the newest `RESTORE_TEST` row whose result is `PASS`, and is the date of `at` when there is none. `lines` holds one line per place: `<label>: last restore test <last_test or never> (<result or none>); next due <next_due><, overdue when overdue>.` When no place is `removable`, the note's `<labels>` is `a place away from the phone`.
+
+#### LL-1
+
+- **LL-1-02, section numbers.** `3.1` is compared as the pair (3, 1), so `3.10` comes after `3.9`; a section without a decimal part is (n, 0).
+- **LL-1-02, nesting.** A new part closes the current division, section, subsection and paragraph; a division closes the section and below; a section closes its subsection and paragraph; a subsection closes its paragraph. Levels, highest first: part, division, section, subsection, paragraph, subparagraph.
+- **LL-1-02, Roman numerals.** A lowercase Roman numeral here is a non-empty match of `x{0,3}(?:ix|iv|v?i{0,3})` (1 to 39). A bracketed label of lowercase letters is classified like this: a numeral of more than one letter (`(ii)`, `(iv)`) is a subparagraph when there is a current paragraph; a one-letter numeral (`(i)`, `(v)`, `(x)`) follows the rule above; any other label (`(c)`, `(aa)`), and any label with no current paragraph, is a paragraph.
+- **LL-1-02, `num`** is the label as written: `Part <n>`, `Division <n>`, the section number, or the bracketed label.
+- **LL-1-03, XML values.** `FRBRthis` and `FRBRuri` both take `value` = that level's URI (`work_uri`, `expression_uri`, `manifestation_uri`); `FRBRdate` takes `date` = `version_date` and `name` = `version`; `FRBRcountry` takes `value` = `ca-bc`; `FRBRlanguage` takes `language` = `eng`. A part's or division's `p` text also has a leading `—` or `-` and the spaces after it taken off. In the JSON record, `FRBRWork.name` is `short_title`, `FRBRExpression.date` is `version_date`, and the three `this` values are the three URIs.
+- **LL-1-04, test.** `record_law_section_dates` needs an `https://` source page, so the test gives `source_url` `https://example.org/made-up-example-act` and `entered_by` `Jane Roe`.
+
+#### SL-1
+
+- **SL-1-01, built-in rule ids** are the seven `SL_SECRET_RULES` ids and `GATE_PATTERN_1` to `GATE_PATTERN_3`.
+- **SL-1-02, order.** First all findings are found; then overlaps on the same line are resolved (`BLOCK` before `WARN`, then the earlier rule); then the `allow` list moves matching findings to `allowed`. So in the second test the `GATE_PATTERN_3` match under the allowed token is already gone, and the result is `PASS`. A file whose `+++` line is `+++ /dev/null` is being deleted: its name is not checked and it has no added lines.
+
+#### SW-1
+
+- **SW-1-04, the thread's own limit.** The `REFUSED` return also holds `event_no` (the `CALL_REFUSED` event) and `thread_calls`.
+- **SW-1-05.** A thread that has not reported yet is `WAITING`, with `minutes_since_report` None. `minutes_since_report` counts from the thread's newest report of any state.
+
+#### LR-1
+
+- **LR-1-02, the brief's fingerprint**, exactly as RA1-02's code computes it: `hashlib.sha256(json.dumps(<the brief without brief_sha256>, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()`. This is not rule 6's canonical JSON: RA1-02 leaves `ensure_ascii` at its default, and the two differ for non-ASCII text.
+- **LR-1-03, email address** means a match of `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`.
+- **LR-1-05, line.** `<question_id> <question text> — <n> source(s), read <newest read_on>`; `source` when n is 1, `sources` otherwise.
+
+#### TR-1
+
+- **TR-1-02, candidates are kept.** It also creates the add-only table `tr_trials(row_id INTEGER PRIMARY KEY, trial_id TEXT NOT NULL UNIQUE, question TEXT NOT NULL, mode TEXT NOT NULL, candidates_json TEXT NOT NULL, at TEXT NOT NULL)` and adds the trial's row on its first call. TR-1-03 reads the trial's candidates from it: a `trial_id` not shaped `T` and 1–2 digits gives `TR_UNKNOWN_TRIAL`; a well-shaped one with no `tr_trials` row gives `TR_NO_TESTS`.
+- **TR-1-04.** `NOT CHECKED` adds no row of any kind. A `tr_toolbox` row is added only when that trial, candidate and reason have no row yet. `line`, exactly: `<trial_id> <topic>: <chosen joined with " and "> <wins or adopted>` (`wins` for `WINNER` and `TIE`, `adopted` for `ADOPTED`) followed by `; <candidate> kept in the toolbox (<reason>)` for each toolbox candidate and a final `.`; `NO_WINNER` and `NONE_ADOPTED` give `<trial_id> <topic>: nothing chosen` with the same toolbox parts; `NOT CHECKED` gives `<trial_id> <topic>: NOT CHECKED (missing <candidate>/<test_id> pairs joined with ", ").`. `<topic>` is the question's text before its first `:` (the whole question when it has none). A `TIE` line ends ` (tie: <winner> used for now).` instead of `.`.
+- **TR-1-05, line** for a trial without a decision: `<trial_id> <topic>: NOT CHECKED (<results> results recorded)`; with one, the decision's line.
+
+UNDO: a later add-only section can hold or correct any batch here. This audit changes no code and no earlier text.
