@@ -508,3 +508,38 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W7. W7 stays last
 - **Steps:** W11's steps 2 to 4, unchanged.
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W7. W7 stays last, because it is never finished.
+
+## Status note 2026-11-24 10:25 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4, W5, W9, W10 and W11 are done; each Done-when was checked this run (W11: the two notes on apccs #71, 2026-11-23 16:20 and 2026-11-24 07:22 UTC). W12 waits for its After condition. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225, and nothing from Muse is pending.
+- **Found: the last two compilation batches are stalled, and nothing is set to word the fix.** So, under ledger Q024 and Q052 (as with W8), this note adds W13 below. The Owner or the architect may withdraw it with a later note.
+- No email: the builder already reported the stall to the Owner today (apccs #71, 09:36 UTC), and the fix is a wording job that W13 does.
+
+## W13 — Rule on the CMP-05 and CMP-09 test clash (added 2026-11-24 by the work-order runner)
+
+- **Why (evidence):**
+  - The builder's note on apccs #71 at 2026-11-24 09:36 UTC: CMP-05 (log viewer) is built and its own 10 tests pass, but adding it makes one CMP-09 test fail. The rules say tests only grow, so it stopped. The work is on branch held/CMP-05-toolbox-test-clash (commit 79720d9).
+  - This run re-ran the CMP-09 tests on that branch. `test_cmp09_05_toolbox_screen_searches_the_saved_copy` fails at code/test_apccs2_toolbox.py line 245, `self.assertEqual(sorted(handlers), ["toolbox"])`, because it gets `['logs', 'toolbox']`.
+  - The cause: `build_more_handlers` in code/apccs2_more_screens.py (CMP-09-04) imports `apccs2_log_search` by that name whenever the file exists (MORE_PLAN). The CMP-05 wording names exactly that file ("New files"), and CMP-05-05's test asks for `more.build_more_handlers()` to hold `logs`. The CMP-09-05 wording never asked for "only toolbox"; that pinned list came in with the CMP-09 build (PR #228).
+  - CMP-08 waits too: its "Build only after" is "CMP-05 is merged". Wording belongs to the work-order runner (plan/SYSTEM_MAP.md, "Word batches"), and no order covers this.
+- **After:** nothing.
+- **Done when:** apccs plan/QUEUE.md on main has a heading starting "## Ruling: CMP-05", or an open or merged apccs PR exists from branch plan/cmp05-ruling-2026-11-24.
+- **Steps:**
+  1. **Read before ruling:**
+     - code/apccs2_more_screens.py: MORE_PLAN, `build_more_handlers`, the `more_handlers` argument of `handle_more_request`, `run_more_server`, `_served_files` and `_screens_reply`;
+     - code/test_apccs2_toolbox.py, the cmp09_04 and cmp09_05 tests;
+     - the held branch, the CMP-09 and CMP-05 wording, the CMP-09 lines of "Wording audit of the compilation batches", and CMP-08's list of screen files;
+     - apccs AGENTS.md (rule 4, code files are append-only; rule 5, tests only grow) and code/apccs_readability_gate.py.
+  2. **Rule.** Choose the smallest change that leaves every existing byte and test unchanged, keeps every rule, still gives CMP-05's "Done means" (the Owner searches every project's log from the control panel), and also holds for any later screen behind the same door.
+     - One candidate: CMP-05's screen module takes a name the door does not import, so `build_more_handlers()` stays `["toolbox"]`. A new file then joins `build_more_handlers()` with the logs handler and runs the door with both, since `handle_more_request` already takes `more_handlers`. Check that `/api/more/screens` then shows `logs` built through the new entry, and that `screen_logs.js` is still served.
+     - Prove it: apply the ruling to a scratch copy of the held branch and run python3 -I tools/run_all_tests.py. Label anything unproven NOT CHECKED. Never edit test_apccs2_toolbox.py, or any existing byte of apccs2_more_screens.py.
+  3. **Word it.** Add one add-only section at the end of plan/QUEUE.md, "## Ruling: CMP-05 and the CMP-09 toolbox test (CMP-05, CMP-08 and later screens behind the door)".
+     - Its first line tells builders that it overrides the file names, import lines and test wording in Batch CMP-05, and in CMP-08 where they are named.
+     - It gives the new names exactly. It ends with "Gaps" and "UNDO".
+     - Run python3 -I tools/run_all_tests.py (SAFE TO MERGE).
+     - Open a DRAFT PR from plan/cmp05-ruling-2026-11-24 and hand it to the wording auditor (see Rules) with "Batches in build order: CMP-05, CMP-08."
+  4. **Answer the builder** with one comment on apccs #71: "Answer to the CMP-05 note of 2026-11-24 09:36 UTC: the ruling is in draft PR #<n> (work order W13). CMP-05 is built from the ruling once it merges, then CMP-08. Nothing for the Owner to do."
+  5. **Email only if** step 2 finds no change that keeps every rule. Then say what was tried and the options, in at most 5 lines.
+
+The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W7. W7 stays last, because it is never finished.
