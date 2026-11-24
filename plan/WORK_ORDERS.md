@@ -550,3 +550,56 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W7. W7 
 - **W13:** the ruling is the new section at the end of plan/QUEUE.md, "Ruling: CMP-05 and the CMP-09 toolbox test". CMP-05's module is named `code/apccs2_log_viewer.py`, which the door does not import, so the CMP-09 test stays green and unchanged. A new file, `code/apccs2_more_entry.py`, joins the toolbox and logs screens and starts the door with both. CMP-08 needs no word changed. The proof run on a scratch copy of the held branch is SAFE TO MERGE. The draft plan PR from plan/cmp05-ruling-2026-11-24 goes to the wording auditor with "Batches in build order: CMP-05, CMP-08."
 - Next: W7 (standing order), and W12 once corolla-obd can be reached.
 - No email: nothing failed.
+
+## Status note 2026-11-24 16:30 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4, W5, W9, W10, W11 and W13 are done; each Done-when was checked this run (W13: "## Ruling: CMP-05" is on main, from PR #230). W12 waits for its After condition: corolla-obd still can't be reached (no add_repo tool here, and `git clone` asks for a login), so it is skipped silently. This run did the standing order W7.
+- **W7, new rows:** none. The research ledger still ends at R225, and nothing from Muse is pending.
+- **Found: 36 builds since 19 Nov have had no post-merge audit, and nothing is set to do one.** Evidence:
+  - CMP-08 merged at 14:03 UTC (apccs PR #234). The builder's comment on apccs #71 at 14:04 UTC says "0 batches ready" and "the next ones wait for new wording". Every worded batch is built.
+  - plan/RULEBOOK.md ("How the work flows") has every build audited after its merge, with a FAIL fixed the same day (ledger Q002, Q022). Muse can't open the repositories (K2, "Block review 2026-11-19" in plan/QUEUE.md). plan/SYSTEM_MAP.md names "Independent Claude run (work order W1)" for build audits, but W1 covered only the 14 builds of 18 Nov.
+  - Since then, 20 apccs build PRs (#169, #170, #183, #184, #197, #198, #216–#223, #225–#228, #233, #234) and 16 uclrcde build PRs (#28–#43) have merged. Each carries only the gate's merge comment: a GitHub search finds no "Post-merge audit" or "AUDIT PENDING" on any of them. The 18 OmniGuide build PRs (omniguide #1–#18) have none either.
+  - No scheduled task audits builds. The enabled ones are this runner, the Claude builder, the OmniGuide builder and the wording audit, which checks wording only (checked this run).
+  - W1 graded 8 of the 14 builds it audited FAIL, so unaudited builds are a real risk. Slice 3's "Gaps", item 1, also waits on these audits: its guards are wired in "after each part is built and audited".
+- So, under ledger Q024 and Q052 (as with W8 and W13), this note adds W14 and W15 below. The Owner or the architect may withdraw either with a later note.
+- No email: the gap is solved here, and nothing failed.
+
+## W14 — Post-merge audit of the apccs and uclrcde builds merged since 19 Nov (added 2026-11-24 by the work-order runner)
+
+- **Who:** the work-order runner, or any agent that built none of these. The Claude builder built all 36, so it never audits them (Q022). The runner checks the code against its wording. It does not re-judge the wording against its sources: it wrote most of that wording, and the wording auditor has already checked it.
+- **After:** nothing.
+- **Scope, 36 PRs in merge order:**
+  - 19 Nov: apccs #169 PAF-1, #170 MAF-1; uclrcde #28 UAF-1.
+  - 20 Nov: uclrcde #29 BR-1, #30 PE-1, #31 GS-1; apccs #183 SG-1, #184 AM-1; uclrcde #32 CD-1, #33 UI-1, #34 UI-4, #35 UI-2, #36 LS-L, #37 LS-J, #38 UI-3, #39 UI-5; apccs #197 CP-1, #198 CP-2.
+  - 23 Nov: uclrcde #40 SL-2, #41 DM-1, #42 DM-2, #43 LL-1; apccs #216 SL-1, #217 CMP-02, #218 CMP-01, #219 SW-1, #220 LR-1, #221 TR-1, #222 CMP-03, #223 CMP-04.
+  - 24 Nov: apccs #225 CMP-07, #226 CMP-10, #227 CMP-06, #228 CMP-09, #233 CMP-05, #234 CMP-08.
+- **Done when:** each of these 36 pull requests has a comment whose body starts "Post-merge audit (independent,".
+- **Steps.** One run audits at most 6 of the PRs that still lack that comment, in the order above. Fewer is fine; never skim to fit more.
+  1. Clone apccs and uclrcde with --depth 50. For each batch, find its wording in apccs plan/QUEUE.md (grep the batch ID), with every later section that names it: rulings ("Ruling: apccs module limit", "Ruling: CMP-05"), "Wording audit" fixes and "Held by the auditor". A later section wins where they differ.
+  2. Compare the merged code with that wording, instruction by instruction, as W1 step 1 does:
+     - function names, inputs and returns;
+     - refusals;
+     - real tests that can fail: for at least one instruction per batch, break its behaviour in a scratch copy, run its test and see it go red (never commit or push the scratch copy);
+     - the canary;
+     - honesty: no fixture or offline test presented as live proof;
+     - the target repository's AGENTS.md and the "Rules for every order" above: new files only, docstrings with Inputs:/Outputs:/Errors:, no banned name prefixes, standard library only, made-up data only, nothing written to a path chosen at run time.
+  3. Run each repository's own tests on main: python3 -I tools/run_all_tests.py.
+  4. Grade each batch PASS, PASS WITH NOTES or FAIL. A FAIL is a "Done means" not met, a missing refusal, a test that can't fail, a broken rule, or proof claimed that isn't there. A difference that changes no behaviour is a note. Comment on the batch's PR starting "Post-merge audit (independent, <date>): <grade>", in at most 6 lines with file:line evidence.
+  5. Create one Doc per run in Drive › Claude 2 (1r0X4jPU1VDJ3OYqgn5-cptZGBO63FhID), titled AUDIT_BUILDS_SINCE_2026-11-19_PART_<k> (k = 1, 2, … in run order), from markdown: a 3-line summary; a table (Batch | Repository | PR | Grade | Main finding | Evidence); each FAIL with its fix; then "End of audit part." Earlier parts are never edited.
+  6. For each FAIL, word a small fix batch in a new add-only section at the end of plan/QUEUE.md, "## Post-merge audit corrections (since 19 Nov, part <k>)", in the batch shape of the Rules, ending with "Gaps" and "UNDO". Run python3 -I tools/run_all_tests.py (SAFE TO MERGE). Open a DRAFT PR from plan/audit-fixes-since-1119-part<k> and hand it to the wording auditor (see Rules) with the fix batches in build order. The auditor opens their directed issues when it merges.
+  7. Email only if a FAIL can't be fixed by an add-only batch inside the rules, for example a merged change to a protected or frozen file, or real data or a secret on main. Then tell the Owner the same day, in at most 5 lines, with the revert route the gate posted on that PR.
+  8. After the last part, add a status note that lists which slice 3 guards passed (SL-1, SL-2, DM-1, SW-1, LR-1), because slice 3's "Gaps", item 1, wires them in only once they are built and audited.
+
+## W15 — Post-merge audit of the 18 OmniGuide builds (added 2026-11-24 by the work-order runner)
+
+- **Who:** as in W14. The OmniGuide builder built them, so it never audits them.
+- **After:** W14 is done.
+- **Scope:** omniguide PRs #1–#18 (OG-1 to OG-18), oldest first. Their wording is in apccs plan/QUEUE.md: "Batches OG-1 to OG-6" and the seven "OmniGuide addendum" sections. A later addendum wins where they differ.
+- **Done when:** each of omniguide PRs #1–#18 has a comment whose body starts "Post-merge audit (independent,".
+- **Steps:** W14's steps 1 to 7, with these changes:
+  - Clone omniguide with --depth 50 and follow its AGENTS.md and "Rules for all OmniGuide batches", not the Python batch shape.
+  - Run its own tests: `cd webapp && node --test`, and `python3 -I -m unittest discover -s proxy -p "test_*.py"`.
+  - The Android app (app/) can't be compiled here. Its parts are checked by reading and against the PR's "Build and test" check; anything unproven is NOT CHECKED. The US proxy has never run live (plan/SYSTEM_MAP.md, section 5), so no test of it is live proof.
+  - The Docs are titled AUDIT_OMNIGUIDE_BUILDS_PART_<k>. Fix batches go in "## Post-merge audit corrections (OmniGuide, part <k>)", from branch plan/audit-fixes-omniguide-part<k>. They take the next free OG numbers (OG-19 on), because the OmniGuide builder builds only "OG-<n>" batches; the hand-off says they are for the OmniGuide builder (trig_01B2FtSJUwP4D4izxNbpWose).
+
+The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W14, W15, W7. W7 stays last, because it is never finished; while W14 and W15 run, it waits (the research ledger has had no new row since R225).
