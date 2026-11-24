@@ -10262,3 +10262,19 @@ Written by the Claude work-order runner on 2026-11-24 at 13:35 UTC, under work o
 4. **The build.** CMP-05 under these names has been run only in the scratch copy above. Its own audit happens after its merge, as for every batch.
 
 UNDO: before merge, close the draft pull request. After merge, a later add-only section can withdraw this ruling. Files built under it are new files, so taking one out later is a revert of its own pull request. Nothing in this section changes code, runtime or any existing text.
+
+### Wording audit of this ruling (independent Claude auditor, 2026-11-24)
+
+Written by a separate Claude run that did not write the ruling above (ledger Q039). Checked against AGENTS.md, BUILDER_RUNBOOK.md, plan/RULEBOOK.md, ledger Q024, Q036–Q038 and Q052, Batches CMP-09, CMP-05 and CMP-08 and their wording audit, and `code/apccs2_more_screens.py` and `code/apccs2_control_panel.py` on main `31faf1a`. Every line number and behaviour the ruling cites was read and matches: `build_more_handlers` (lines 189–212) imports `apccs2_log_search`, `_add_screen` (line 177) raises `MS_BAD_SCREEN`, and `_screens_reply`, `_screen_reply` and `_served_files` (lines 70–136) answer for `logs` whenever a `logs` handler is given and `screen_logs.js` exists. A check by this auditor on a scratch copy of `held/CMP-05-toolbox-test-clash` (`79720d9`): with `code/apccs2_log_search.py` renamed to `code/apccs2_log_viewer.py` and nothing else changed, `more.build_more_handlers()` gives `["toolbox"]` and `code/test_apccs2_toolbox.py` passes (10 tests). The full proof run is the ruling writer's, not this auditor's. `python3 -I tools/run_all_tests.py` on this plan branch gives SAFE TO MERGE.
+
+**Corrections (they add to points 2, 4 and 5; nothing else changes):**
+
+- **C1 (point 4, imports).** `code/apccs2_more_entry.py` also imports `from __future__ import annotations`, `import inspect`, `import threading` and `from http.server import ThreadingHTTPServer`, and nothing else beyond the three modules point 4 names. `http.server` is allowed by rule 22; `urllib.request`, `http.client`, `socket` and `ssl` are still never imported.
+- **C2 (point 4, `build_all_more_handlers`).** It raises `MS_BAD_SCREEN` also when `log_viewer.handle_screen_request` is not a function (`inspect.isfunction`), the same check `_add_screen` makes. The message names `apccs2_log_viewer`.
+- **C3 (point 4, readability).** The module and both functions have docstrings with `Inputs:`, `Outputs:` and `Errors:`, and every argument and return has a type hint (the slice 1 rules the compilation batches repeat, and the readability gate). No `importlib`, `__import__`, `getattr`, `eval` or `exec`.
+- **C4 (point 5, test imports).** The list in point 5 names the project modules and the three extra modules the live-server test needs. The test file also imports `unittest`, `sqlite3` and `pathlib` (and `tempfile` only to make an empty folder, correction A2), as the other CMP test files do. It writes no file.
+- **C5 (point 2, plain words).** Point 2 means: no batch ever adds a file named `code/apccs2_log_search.py`, and no batch adds a second module named `apccs2_toolbox` (`code/apccs2_toolbox.py` is CMP-09's and stays). Every screen added later needs the check in point 11 first.
+
+**Status: CMP-05 (under the ruling above, with C1–C5) and CMP-08 are Ready to build, in that order.** This replaces the line "Until then CMP-05 and CMP-08 are not ready to build" in the ruling. No batch is held.
+
+UNDO: a later add-only section can hold either batch again or correct C1–C5. This audit changes no code and no earlier text.
