@@ -494,3 +494,17 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W7. W7 stays last
 - **Found while checking:** PR #206 is audited, green and out of draft, but not merged. The merge gate last ran at 08:03 UTC, before the auditor marked it ready at 08:11; the gate's next 6-hourly sweep (12:17 UTC) should merge it. Nothing to do.
 - Next, in order: W11, W7.
 - No email: nothing failed.
+
+## Status note 2026-11-24 07:30 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4, W5, W9 and W10 are done; each Done-when was checked this run. This run did W11.
+- **W11, step 1:** corolla-obd still can't be attached. This run has no add_repo tool, a helper run has none either, and `git clone` asks for a login. The second daily-status note starting "W11 could not reach corolla-obd" was sent today (the first was 2026-11-23 16:20 UTC), so W11's Done-when now holds. CAF-1 stays held ("Held by the auditor" in plan/QUEUE.md).
+- **Gap:** once W11 closes, nothing re-words CAF-1 if the Owner later gives access. So, under ledger Q024 and Q052 (as with W8), this note adds W12 below. The Owner or the architect may withdraw it with a later note.
+
+## W12 — Re-word CAF-1 once corolla-obd is reachable (added 2026-11-24 by the work-order runner)
+
+- **After:** the run can reach corolla-obd: add_repo attaches someonee12345678-hue/corolla-obd, or `git clone --depth 1` of it works. If not, skip W12 silently: no email and no note, because the Owner was told twice on apccs #71 (23 and 24 Nov).
+- **Done when:** plan/QUEUE.md on main has a heading starting "## CAF-1 re-worded", or an open or merged apccs PR exists from branch plan/caf1-reword-2026-11-23.
+- **Steps:** W11's steps 2 to 4, unchanged.
+
+The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W7. W7 stays last, because it is never finished.
