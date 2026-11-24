@@ -10278,3 +10278,110 @@ Written by a separate Claude run that did not write the ruling above (ledger Q03
 **Status: CMP-05 (under the ruling above, with C1–C5) and CMP-08 are Ready to build, in that order.** This replaces the line "Until then CMP-05 and CMP-08 are not ready to build" in the ruling. No batch is held.
 
 UNDO: a later add-only section can hold either batch again or correct C1–C5. This audit changes no code and no earlier text.
+
+## Post-merge audit corrections (since 19 Nov, part 2) (Claude, work-order runner W14, 2026-11-24)
+
+Written by the Claude work-order runner on 2026-11-24 at about 22:30 UTC, under work order W14, step 6 (`plan/WORK_ORDERS.md`). It answers the one FAIL of audit part 2 (Drive › Claude 2 › AUDIT_BUILDS_SINCE_2026-11-19_PART_2): uclrcde PR #34 (Batch UI-4) changed one existing line of another batch's test file. This runner built none of the audited batches (ledger Q002, Q022). A separate Claude run audits this wording before it merges (Q039).
+
+**The finding (evidence).** UI-4's own five instructions match their wording and the slice 2 corrections. But PR #34 also changed `code/test_uclrcde_ui.py` line 92, in UI-1's `test_ui1_01_page_files_pass_the_checker`, from `self.assertEqual(result["files_checked"], sorted(ui.PAGE_FILES))` to `self.assertTrue(set(ui.PAGE_FILES) <= set(result["files_checked"]))`. Slice 1 rule 1 ("New files only. Never change an existing file"), slice 2 rule 12 ("No batch changes another batch's files") and the RULEBOOK hard limit "tests only grow" forbid that. The PR said so openly. The cause was a wording clash: UI-1's test pinned the exact six page files, while slice 2 rule 15 has every later screen add its own `ui/screen_<id>.js`. The uclrcde guard allows a test file to change as long as no test name disappears (`.github/workflows/uclrcde-guard.yml`, lines 9 and 86–90), so it did not stop the change. Since then the check only proves that the six page files are among the files checked: an extra or stray file in `ui/` no longer fails any test.
+
+**The fix.** One new batch, UAF-2, puts back an exact file check that follows `SCREEN_PLAN`, so it stays true when a later screen adds its module, script and plan entry together, and no later batch has to touch an older test again. The loosened line stays as it is (Gaps, item 1).
+
+**Build order:** UAF-2 (uclrcde). It needs nothing new.
+
+### Batch UAF-2 — An exact, plan-driven check of the legal page folder
+
+**Status:** Fully worded. NOT ready to build until the wording audit marks it ready (Q039).
+**Target repository:** `someonee12345678-hue/uclrcde`. Follow its AGENTS.md; never import any `apccs` module.
+**Build only after:** this plan is merged and the wording audit marks UAF-2 ready.
+**New files:** `code/uclrcde_ui_folder_check.py` and `code/test_uclrcde_ui_folder_check.py`. Test class `UclrcdeBatchUAF2Tests`. No other file changes.
+**Source:** audit part 2 (this section's finding); slice 2 rules 12, 13 and 15; UI-1-01 and UI-1-05.
+**Reuse, by exact name:** `uclrcde_ui.PAGE_FILES`, `uclrcde_ui.SCREEN_PLAN`, `uclrcde_ui.check_legal_ui_files(ui_dir)` and `uclrcde_ui.build_screen_handlers()`. Import as `import uclrcde_ui as ui`. Their private helpers (names starting `_`) are never imported.
+**Rules:** slice 1 rules 1–11 and slice 2 rules 12–23 apply. Python 3.11 standard library only. Nothing is written: results are returned. Files are read only where an instruction says so, and the code never follows a symbolic link. Tests make files only inside `tempfile.TemporaryDirectory()`, with `pathlib.Path.touch()` and `shutil.copyfile`; no test or code line is written as `.write(`.
+**Result shape:** every function returns a dict with `status` (`OK` or `FAIL` for UAF-2-01 and UAF-2-02; `PASS` or `FAIL` for the others) and `problems` (a list of plain lines, empty when nothing is wrong). Nothing raises for bad input, as with `check_legal_ui_files`.
+**No fixed counts in tests.** A test never pins the number of screens or the names of the screens that exist today. It works them out from `ui.SCREEN_PLAN` and `ui.build_screen_handlers()`, so a later screen batch never has to change it. This is the lesson of this finding.
+**Canary:** `Canary check: FOLDER = PLANNED -> exact`.
+
+#### UAF-2-01: LIST_UI_FOLDER (source: slice 2 rule 12, "Screen files are new files in `ui/`")
+Function: `list_ui_folder(ui_dir: str) -> dict`.
+Does: Read only the names of the entries directly inside `ui_dir`. No file is opened and no sub-folder is entered. Give each name one kind:
+- `PAGE`: a name in `ui.PAGE_FILES`;
+- `PLANNED_SCREEN`: the `script` of an entry of `ui.SCREEN_PLAN`;
+- `UNPLANNED_SCREEN`: a name that matches `screen_[a-z]+\.js` but is the script of no plan entry;
+- `OTHER`: anything else.
+A symbolic link, a folder or anything that is not a regular file is `OTHER`, whatever its name. Return `{"status": "OK", "entries": [{"name", "kind"}] sorted by name, "missing_pages": [the page files not present, in ui.PAGE_FILES order], "problems": []}`.
+Refuses: a `ui_dir` that is not text, or a folder that does not exist, gives `{"status": "FAIL", "entries": [], "missing_pages": list(ui.PAGE_FILES), "problems": ["ui_dir: folder not found"]}`.
+Tests: `test_uaf2_01_sorts_the_folder_names` (a temporary folder holding empty files `index.html`, `screen_route.js`, `screen_extra.js` and `notes.txt`, and a sub-folder `screen_dir.js`, gives the kinds `PAGE`, `PLANNED_SCREEN`, `UNPLANNED_SCREEN`, `OTHER` and `OTHER`, and `missing_pages` lists the five other page files in `ui.PAGE_FILES` order); `test_uaf2_01_missing_folder_fails` (a path inside the temporary folder that does not exist, and the value `5`, each give `FAIL` with `ui_dir: folder not found`).
+Done means: every name in the page folder has exactly one kind, and nothing is opened to find it.
+Not checked: hidden or system files a phone may add; they show as `OTHER`, which is the safe direction.
+
+#### UAF-2-02: EXPECTED_UI_FILES (source: UI-1-05, `build_screen_handlers`; slice 2 rule 15)
+Function: `expected_ui_files(handlers: dict) -> dict`.
+Does: Work out the exact names the page folder should hold for a set of screen handlers: the six `ui.PAGE_FILES`, plus the `script` of each `ui.SCREEN_PLAN` entry whose `screen_id` is a key of `handlers`. Return `{"status": "OK", "names": [sorted names], "screens": [the screen ids in SCREEN_PLAN order], "problems": []}`.
+Refuses: `FAIL`, with `names` and `screens` empty, for `handlers` that is not a dict (`handlers must be a dict of screen id to handler`); a key that is not a planned screen id (`<key> is not a planned screen`); or a value that is not a function, checked with `inspect.isfunction` (`the <key> handler is not a function`). Every broken key gets its own line.
+Tests: `test_uaf2_02_expected_names_follow_the_plan` (`{}` gives exactly the six page files; a dict with private test functions for `route` and `creator` gives those six plus `screen_creator.js` and `screen_route.js`, and `screens` `["route", "creator"]`; `ui.build_screen_handlers()` gives the six plus one script for each of its keys); `test_uaf2_02_refuses_unknown_or_broken_handlers` (a key `teleport`; a value `"not a function"`; a list instead of a dict: each gives `FAIL` with its line).
+Done means: the expected file list comes from the plan and the built modules, never from a number typed into a test.
+Not checked: whether a module's handler works; UI-1-05 and each screen's own tests check that.
+
+#### UAF-2-03: CHECK_UI_FOLDER_AGAINST_PLAN (source: this finding; UI-1-01 "the repository's own `ui/` folder gives PASS with the six names in `files_checked`")
+Function: `check_ui_folder_against_plan(ui_dir: str, handlers: dict) -> dict`.
+Does: Give `PASS` only when all three hold. Otherwise give `FAIL` with one plain line per broken rule, each naming the file or screen:
+1. **Nothing extra or missing.** UAF-2-01 gives `OK`. Each missing page file gives `<name> is missing from ui/`. Each `UNPLANNED_SCREEN` or `OTHER` entry gives `<name> is in ui/ but is not a page file or a planned screen script`. An extra name is reported once, here only.
+2. **Scripts match the built screens.** The `PLANNED_SCREEN` names present equal the scripts in UAF-2-02's `names` for `handlers`. A planned script with no handler gives `<script> is in ui/ but its screen module is not built`. A handler with no script gives `the <screen_id> screen is built but <script> is missing from ui/`. Bad handlers give UAF-2-02's lines unchanged.
+3. **The page checker read every file it should.** `ui.check_legal_ui_files(ui_dir)` gives `PASS`, and its `files_checked` equals the `PAGE`, `PLANNED_SCREEN` and `UNPLANNED_SCREEN` names present, exactly. Its own problem lines are copied in unchanged, each starting `checker: `.
+Return `{"status", "problems", "expected": UAF-2-02's names, "found": [the PAGE and PLANNED_SCREEN names present, sorted], "files_checked": the checker's list}`.
+Refuses: nothing is raised. A missing folder gives `FAIL` with `ui_dir: folder not found`.
+Tests: `test_uaf2_03_repository_folder_matches_the_plan` (the repository's own `ui/` folder, `Path(__file__).resolve().parents[1] / "ui"`, read only, with `ui.build_screen_handlers()`, gives `PASS` and `found` equal to `expected`. This puts back the exact file check that PR #34 loosened, and it stays true when a later screen batch adds its module, script and plan entry together); `test_uaf2_03_catches_extra_or_missing_files` (a temporary copy of every file in the repository's `ui/` folder plus an empty `notes.txt` gives `FAIL` with exactly one problem line, the one naming `notes.txt`; the same copy without `notes.txt` and without `screen_route.js`, checked with `ui.build_screen_handlers()`, gives `FAIL` with `the route screen is built but screen_route.js is missing from ui/`; the full copy checked with `{}` gives `FAIL` with one `is in ui/ but its screen module is not built` line for each planned script present).
+Done means: the legal page folder holds exactly the page files and the scripts of the built screens, every one of them is checked, and a stray file fails a test again.
+Not checked: how the page looks on the Owner's phone (as UI-1-01).
+
+#### UAF-2-04: CHECK_SCREEN_SCRIPT_REGISTERS (source: slice 2 rule 15, "Each screen script `ui/screen_<id>.js` calls `window.uclrcdeScreens.register("<id>", mount)`")
+Function: `check_screen_script_registers(ui_dir: str) -> dict`.
+Does: For each `PLANNED_SCREEN` script present (UAF-2-01), read its text as UTF-8, read only. Find every match of `uclrcdeScreens\.register\(`, and every match of `window\.uclrcdeScreens\.register\(\s*"([a-z]+)"\s*,`. The script passes when there is exactly one of each and the quoted id is its own plan `screen_id`. The work is done by a private helper `_check_register_texts(texts: dict) -> dict` (script name to text), which the public function also uses. Return `{"status": "PASS" or "FAIL", "problems", "checked": [{"script", "screen_id", "register_calls"}] in SCREEN_PLAN order}`. The problem lines are:
+- `<script> registers "<found>", not "<screen_id>"`;
+- `<script> calls register <n> times; it must call it once`;
+- `<script> does not register itself with window.uclrcdeScreens.register("<screen_id>", ...)`.
+Refuses: nothing is raised. A missing folder gives `FAIL` with `ui_dir: folder not found`. A script that is not valid UTF-8 gives `FAIL` with `<script> could not be read as UTF-8 text`.
+Tests: `test_uaf2_04_each_script_registers_its_own_id` (the repository's own `ui/` folder gives `PASS` with one `checked` entry for each planned script present, each with `register_calls` 1); `test_uaf2_04_catches_a_wrong_or_double_registration` (through `_check_register_texts`, with texts held in memory so no file is needed: `screen_route.js` text that registers `"creator"` gives `FAIL` with that line; text with two register calls gives `FAIL`; text with none gives `FAIL`).
+Done means: every screen script mounts under its own id, so one screen can never take another's place on the page.
+Not checked: running the scripts; this reads their text only, as UI-1-01 does.
+
+#### UAF-2-05: BUILD_UI_FOLDER_REPORT (source: RULEBOOK "Open standards", readable with standard tools; RULEBOOK preference 8, plain English)
+Function: `build_ui_folder_report(ui_dir: str, handlers: dict) -> dict`.
+Does: Run UAF-2-03 and UAF-2-04, then give one plain-text table any person can read:
+- the header line `file | kind | screen | built | checked`;
+- one line per name in UAF-2-03's `expected`, plus one per extra name in the folder, sorted by name. `kind` is UAF-2-01's kind, or `MISSING` for an expected name that is not there. `screen` is the plan's `screen_id`, or `-`. `built` is `yes` or `no` for a planned script (its id is a key of `handlers`), or `-`. `checked` is `yes` when the name is in the checker's `files_checked`, otherwise `no`;
+- then `Result: PASS`, or `Result: FAIL, problems: <n>` followed by each problem line of both checks, unchanged.
+Return `{"status", "text", "text_sha256" (lowercase hex SHA-256 of the text's UTF-8 bytes), "problems"}`. `status` is `PASS` only when both checks pass. Nothing is written; the text is returned.
+Refuses: nothing is raised. Bad input gives `FAIL` with the lines of UAF-2-03 and UAF-2-04.
+Tests: `test_uaf2_05_report_for_the_repository_folder` (the repository's own `ui/` folder with `ui.build_screen_handlers()` gives `PASS`; the first line is the header; there is one file line for each name in `expected`; the last line is `Result: PASS`; the same call twice gives the same `text_sha256`); `test_uaf2_05_report_shows_failures` (a temporary copy plus an empty `notes.txt` gives `FAIL`, a line starting `notes.txt | OTHER`, and `Result: FAIL, problems: 1`).
+Done means: anyone can see in one table which page files and screens exist, which are built and checked, and what is wrong.
+Not checked: wiring the report into the control panel or a scheduled check; that is a later batch if the Owner or the architect orders one.
+
+### Gaps (what this wording could not check)
+
+1. **The loosened line stays.** `code/test_uclrcde_ui.py` line 92 is not put back: changing it again would break the same rules, and its old form fails as soon as any screen script is in `ui/`. UAF-2-03's test restores the exact check instead. NOT CHECKED: whether the Owner wants that line put back by hand.
+2. **Rule for later batches.** A batch whose new files make an older test fail stops and reports it, as the CMP-05 builder did on 2026-11-24 (work order W13). It never edits the older test. UAF-2's tests follow the "No fixed counts in tests" rule above, so later screens never trip them.
+3. **The guard.** `.github/workflows/uclrcde-guard.yml` lets a test file change as long as no test name disappears, so a weakened assertion passes the server checks. Agents never change `.github/`. NOT CHECKED: whether the Owner wants the guard made stricter; that is his tap only.
+4. **Proof of the plan.** On uclrcde main `8a181aa`, `ui.check_legal_ui_files("ui")` gives `PASS`, its `files_checked` equals the 11 names in `ui/`, those names equal the six page files plus one script for each of the five keys of `ui.build_screen_handlers()`, and each of the five screen scripts calls `window.uclrcdeScreens.register("<its id>",` once (checked by this run, 2026-11-24). So UAF-2's repository tests are expected to pass on today's main. UAF-2 itself is not built: NOT CHECKED until it is.
+
+### UNDO
+
+Before merge, close the draft pull request. After merge, a later add-only section can withdraw UAF-2 or correct it. Files built from it are new files, so taking them out later is a revert of their own pull request. This section changes no code and no earlier text.
+
+### Wording audit of UAF-2 (Claude, wording auditor, 2026-11-24)
+
+Written by a separate Claude run that did not write this wording (Q039). Checked against AGENTS.md of both repositories, `plan/RULEBOOK.md`, the ledger, slice 1 rules 1–11, slice 2 rules 12–23, and uclrcde main `8a181aa`. The finding is confirmed: UI-1's commit `dd8ddb9` has the exact check at `code/test_uclrcde_ui.py` line 92, and UI-4's commit `cf1293b` loosened it. Every reused name exists with the signature given. The five function names pass the readability gate (Q036–Q038). The quotes from slice 1 rule 1 and slice 2 rules 12 and 15 match their text.
+
+Template, readability, buildable and faithful: PASS. Clear: five choices were left open. C1–C5 below close them, and they win where they say more than the instructions above. A throwaway sketch built to C1–C5 in the auditor's scratch space (not committed) gave every result the tests above expect, on today's uclrcde main. That sketch is not the build: UAF-2 stays NOT CHECKED until it is built and its own tests pass.
+
+- **C1 (UAF-2-01).** List the folder with `os.scandir(ui_dir)`. A regular file is an entry where `entry.is_file(follow_symlinks=False)` is true. Give the kind in this order: not a regular file → `OTHER`; else a name in `ui.PAGE_FILES` → `PAGE`; else a `script` of a `ui.SCREEN_PLAN` entry → `PLANNED_SCREEN`; else a name that fully matches `screen_[a-z]+\.js` (`re.fullmatch`) → `UNPLANNED_SCREEN`; else `OTHER`. "Folder not found" covers a `ui_dir` that is not a `str`, a path where `os.path.isdir(ui_dir)` is false, and `os.scandir` raising `OSError`.
+- **C2 (UAF-2-02).** Keys are checked in the dict's own order, and `<key>` is written with `str(key)`. A key that is not a planned screen id gets only the `is not a planned screen` line. Its value is not checked.
+- **C3 (UAF-2-03).** Problem lines come in this order. Rule 1: missing page files in `ui.PAGE_FILES` order, then extra names sorted by name. Rule 2: if UAF-2-02 gives `FAIL`, only its lines; otherwise the `is not built` lines and then the `is missing from ui/` lines, each in `SCREEN_PLAN` order. Rule 3: the checker's own lines, then, only if `files_checked` differs from the `PAGE`, `PLANNED_SCREEN` and `UNPLANNED_SCREEN` names present (sorted), the one line `checker: files_checked does not match the page and screen files in ui/`. That last line was added by this audit, because the wording gave no line for that case. For a missing folder, return only the folder line, with `expected` set to UAF-2-02's `names` (empty when UAF-2-02 fails), and `found` and `files_checked` set to `[]`.
+- **C4 (UAF-2-04).** For each planned script, let `n` be the number of `uclrcdeScreens\.register\(` matches, and `ids` the ids captured by the `window.` pattern. Give exactly one line per script: `n == 0`, or `n == 1` with no `ids` → the `does not register itself` line; `n > 1` → the `calls register <n> times` line; `n == 1` with `ids[0]` not the plan's `screen_id` → the `registers "<found>"` line. `_check_register_texts` ignores names that are not a planned script, since UAF-2-03 reports those. `checked` holds one entry, with `register_calls` set to `n`, for each planned script it was given, in `SCREEN_PLAN` order. In the public function, a script that cannot be read as UTF-8 gets only its UTF-8 line and no `checked` entry. A missing folder gives `checked` `[]`.
+- **C5 (UAF-2-05).** The file lines cover `sorted(set(expected) | set(every entry name in the folder))`. So a planned script present without a handler gets a line, with `built` `no`. Columns are joined with `" | "` exactly as in the header. `built` is `no` when `handlers` is not a dict. `<n>` is the number of UAF-2-03 lines plus UAF-2-04 lines, and they are listed in that order. Lines are joined with `"\n"`, with no newline at the end. `text_sha256` is taken over exactly that text.
+- **Also (slice 1 rules, restated so no builder has to look them up):** a module docstring in both new files; a docstring with `Inputs:`, `Outputs:` and `Errors:` on every public function and every test method; type hints on every parameter and return value (`-> None` on tests). The test class prints `Canary check: FOLDER = PLANNED -> exact` once when it runs.
+
+**Status: UAF-2 (with C1–C5) is Ready to build.** This replaces the line "NOT ready to build until the wording audit marks it ready (Q039)" in its wording. No batch is held.
+
+UNDO: a later add-only section can hold UAF-2 again or correct C1–C5. This audit changes no code and no earlier text.
