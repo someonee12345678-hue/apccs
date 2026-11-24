@@ -543,3 +543,10 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W7. W7 stays
   5. **Email only if** step 2 finds no change that keeps every rule. Then say what was tried and the options, in at most 5 lines.
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W7. W7 stays last, because it is never finished.
+
+## Status note 2026-11-24 13:35 UTC (work-order runner)
+
+- W1, W6, W2, W3, W8, W4, W5, W9, W10 and W11 are done; each Done-when was checked this run (W11 by the two notes the 10:25 run found on apccs #71). W12 waits for its After condition: corolla-obd still can't be reached (no add_repo tool here, and `git clone` asks for a login), so it is skipped silently, as it says. This run did W13.
+- **W13:** the ruling is the new section at the end of plan/QUEUE.md, "Ruling: CMP-05 and the CMP-09 toolbox test". CMP-05's module is named `code/apccs2_log_viewer.py`, which the door does not import, so the CMP-09 test stays green and unchanged. A new file, `code/apccs2_more_entry.py`, joins the toolbox and logs screens and starts the door with both. CMP-08 needs no word changed. The proof run on a scratch copy of the held branch is SAFE TO MERGE. The draft plan PR from plan/cmp05-ruling-2026-11-24 goes to the wording auditor with "Batches in build order: CMP-05, CMP-08."
+- Next: W7 (standing order), and W12 once corolla-obd can be reached.
+- No email: nothing failed.
