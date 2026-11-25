@@ -1,0 +1,47 @@
+name: Jules builder
+# Sends the next directed batch to Google's Jules, which builds it in Google's cloud
+# and opens the pull request; the auto-merge gate merges it when its checks are green.
+# Owner request, 2026-11-25 16:21 America/Vancouver: "Find a way to produce the same
+# results maybe with software running on the site." Merging the pull request that adds
+# this file is the Owner's approval. It needs the repository secret JULES_API_KEY,
+# which only the Owner sets; without it every run ends in one line and sends nothing.
+# Each run takes well under a minute: it reads GitHub, copies the batch wording out of
+# plan/QUEUE.md and sends it (see .github/jules_builder.py). One batch at a time.
+# STOP: an open issue whose title starts with STOP, or a STOP file on main, stops it.
+on:
+  issues:
+    types: [opened, labeled]
+  schedule:
+    - cron: "41 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+concurrency:
+  group: jules-builder
+  cancel-in-progress: false
+
+jobs:
+  send:
+    if: >-
+      github.event_name != 'issues' ||
+      (github.event.issue.user.login == github.repository_owner &&
+       contains(github.event.issue.labels.*.name, 'directed'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            plan/QUEUE.md
+            .github/jules_builder.py
+            STOP
+          sparse-checkout-cone-mode: false
+      - name: Send the next batch to Jules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: python3 -I .github/jules_builder.py
