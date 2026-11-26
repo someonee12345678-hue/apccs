@@ -19,3 +19,47 @@ Add-only: add a new dated section below when something changes; never edit old l
 
 ## Muse's own answer
 Pending. The Owner sends Muse one short request; Muse writes its answer to the Google Drive file MUSE_CAPABILITIES in the folder "Claude 2" (micahkoivumaki@gmail.com). The next Claude run that has the Drive connection copies it here as a new dated section, word for word, with the date it was read.
+
+## Muse's own answer — copied word for word from the Drive file MUSE_CAPABILITIES (Claude 2), written by Muse 2026-11-25, read by Claude 2026-11-26 00:00 America/Vancouver
+
+Written by Muse at Micah's request, 2026-11-25 (America/Vancouver). "Not sure" means I do not know — it is not a guess.
+
+1) What I can read and write
+- Drive (Claude 2, micahkoivumaki@gmail.com): Yes — I can read, create, upload and organise files there.
+- Google Sheets: Yes — I can read and write cells (I added the Vertex Memory Bank row to your master tool table on 2026-11-23).
+- Google Docs: Yes — I can read, create and edit documents.
+- Gmail: Yes — I can search and read your mail; I send only with your approval, exactly as shown to you first.
+- GitHub: Partly — I am connected, but I cannot read your apccs and uclrcde repositories until you select them for the Muse GitHub App; today I can only see the public aab-queue repository.
+- GitHub writing (pull requests): Not sure — never verified, because my reads are blocked first.
+- Web pages: Yes — I can search the web and read public pages, and work on websites in a browser when you ask.
+- Files on my own computer: Yes — I can read and write documents, spreadsheets, PDFs, text, code and archives, and build finished .docx, .xlsx and .pdf files for you.
+- File types: Yes for .docx, .xlsx, .pdf, .csv, .txt, .md, images and .zip archives — I extract and read archive contents; I do not run unknown code blindly.
+- Your Android phone: Partly — I can work in its in-app browser when you message me from it; direct access to the phone's own files: not sure.
+
+2) What can start me without you typing
+- A schedule: Yes — jobs you approved run on their own: the nightly BUILD_HISTORY at 21:00 and the hourly MUSE_INBOX check between 09:00 and 22:00.
+- An email arriving: No — nothing wakes me the moment an email lands; I notice mail during my scheduled looks (morning, afternoon, evening) or when you message me.
+- A Drive folder change: No instant trigger — the hourly MUSE_INBOX job polls the folder, so a new file is picked up within the hour, not the moment it lands. (The Gemini Task Runner folder flow is Google's tool, not me.)
+- A webhook: No — no webhook is set up to start me.
+- An API call from another program: Not sure — I have no verified way for an outside program to start me.
+
+3) My limits
+- Subscription: Power plan, CAD 22 per month — checked firsthand on 2026-11-25.
+- Usage limit: a weekly allowance, not a daily message count — 2% of it used when checked; it resets 27 November 2026 at 9:57 AM MST.
+- Messages per day: Not sure — no fixed daily number is given to me; the weekly allowance is what governs.
+- Exact token allowance: Not sure — my usage is reported as a percentage of the weekly limit, not as a token balance.
+- Context size: 350,000 tokens in one conversation; at about 272,000 tokens the older part is summarised so the work can continue.
+- Proactive messages: only between 06:30 and 21:30 your time, and only about the things you have said you want to hear about.
+
+4) What I am best at
+- Verifying other agents' work firsthand against the source — hashes, my own test runs — and stating plainly what is NOT CHECKED.
+- Auditing documents and spreadsheets against the spec that governs them, line by line.
+- Researching official sources and reporting findings with the evidence kept separate from the conclusion.
+- Keeping long records in your format (BUILD_HISTORY, conversation and change history) and carrying open items forward until they close.
+- Building documents, spreadsheets and small tools, then checking what I built before I hand it over.
+
+## Update 2026-11-26 00:00 (Claude, from Muse's answer above)
+- Muse now has an automatic route: a task file put in the Drive folder MUSE_INBOX (folder id 1BZ-NBLen9000QWvXjG7KH2KFY9SMbN8X, inside Claude 2) is picked up by Muse's hourly check, 09:00–22:00 Vancouver. Muse's row above ("Owner relay") is replaced by this.
+- Muse's weekly allowance was 2% used on 2026-11-25: Muse is the least used paid worker. Give it the line-by-line audits and verification first.
+- Muse can't read apccs, uclrcde or omniguide until those repositories are selected for the Muse GitHub App.
+- 2026-11-26: W15 (post-merge audit of omniguide PRs #1–#18) and the NOT CHECKED cells of this file were put in MUSE_INBOX as TASK_2026-11-26_W15_OMNIGUIDE_AUDIT. Reports come back as Google Docs AUDIT_OMNIGUIDE_BUILDS_PART_<k> (Claude 2 / Builder Reports) and WORKERS_FACTS_2026-11-26 (Claude 2).
