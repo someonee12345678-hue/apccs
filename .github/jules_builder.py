@@ -378,7 +378,8 @@ def run_tasks(issues: list[dict], now: datetime) -> None:
     Outputs: at most one new Jules session.
     Errors: none raised.
     """
-    tasks = sorted((i for i in issues if TASK in labels(i) and i["user"]["login"] == OWNER
+    # github-actions[bot] is this repository's own workflows (the Owner's email commands).
+    tasks = sorted((i for i in issues if TASK in labels(i) and i["user"]["login"] in (OWNER, "github-actions[bot]")
                     and not labels(i) & HOLD and STUCK not in labels(i)), key=lambda i: i["number"])
     running = 0
     for issue in tasks:

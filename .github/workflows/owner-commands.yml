@@ -1,0 +1,52 @@
+name: Owner commands
+# Lets the Owner run the system by replying to any GitHub email (Daily status, problems):
+# stop, go, task: <text>, status, help. Plain code, no AI (see .github/owner_commands.py).
+# Owner request, 2026-11-25 23:41 America/Vancouver: "You have email options ... Don't hand
+# the work back to me." Merging the pull request that adds this file is the Owner's approval.
+# Only the Owner's own comments that start with a command word start a run, so Claude's
+# Progress comments never do. A `task:` is sent to Jules straight away.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+concurrency:
+  group: owner-commands
+  cancel-in-progress: false
+
+jobs:
+  command:
+    if: >-
+      github.event.comment.user.login == github.repository_owner && (
+      startsWith(github.event.comment.body, 'stop') || startsWith(github.event.comment.body, 'go') ||
+      startsWith(github.event.comment.body, 'resume') || startsWith(github.event.comment.body, 'task') ||
+      startsWith(github.event.comment.body, 'jules') || startsWith(github.event.comment.body, 'status') ||
+      startsWith(github.event.comment.body, 'help'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            plan/QUEUE.md
+            .github/owner_commands.py
+            .github/jules_builder.py
+            STOP
+          sparse-checkout-cone-mode: false
+      - name: Do the command
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: python3 -I .github/owner_commands.py
+      - name: Send any new task to Jules now
+        if: startsWith(github.event.comment.body, 'task') || startsWith(github.event.comment.body, 'jules')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: python3 -I .github/jules_builder.py
