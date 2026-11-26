@@ -52,5 +52,5 @@ jobs:
       - name: Send the next batch to Jules
         env:
           GH_TOKEN: ${{ github.token }}
-          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY || secrets.JELUS || secrets.JULES || secrets.JULES_KEY }}
         run: python3 -I .github/jules_builder.py
