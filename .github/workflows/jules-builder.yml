@@ -9,9 +9,16 @@ name: Jules builder
 # plan/QUEUE.md and sends it (see .github/jules_builder.py). One batch at a time.
 # Also sends issues labelled jules-task (the task inbox), one at a time.
 # STOP: an open issue whose title starts with STOP, or a STOP file on main, stops it.
+# Event-driven (Owner's standing rule, 2026-11-10 and 2026-11-15: our own trigger, not a
+# clock): it also runs the moment any "APCCS tests" run finishes, which happens when a
+# pull request (Jules's included) is checked and right after every merge, so the next
+# batch goes out at once. The 3-hourly run is only a backup for a missed event.
 on:
   issues:
     types: [opened, labeled]
+  workflow_run:
+    workflows: ["APCCS tests"]
+    types: [completed]
   schedule:
     - cron: "41 */3 * * *"
   workflow_dispatch:
