@@ -5,8 +5,13 @@ results maybe with software running on the site." Jules (free plan: 15 tasks a d
 3 at once) builds the batch in Google's cloud and opens the pull request. The
 auto-merge gate then merges it when its checks are green, as for the Claude builder.
 One batch at a time, in "Directed at:" order. No AI runs here.
+Added 2026-11-25 23:19 (Owner: "Can't you manage everything better faster without
+using your limited so fast"): a second lane, the Jules task inbox. Any issue the Owner's
+account opens with the label `jules-task` is sent to Jules as written, one at a time,
+on the repository named in a "Repository: owner/repo" line (default: this one). Claude
+runs, Gemini or the Owner hand heavy reading, auditing or coding work to Jules this way.
 
-Inputs: GitHub issues labelled `directed`, plan/QUEUE.md, and the environment values
+Inputs: GitHub issues labelled `directed` or `jules-task`, plan/QUEUE.md, and the environment values
 GITHUB_REPOSITORY, GH_TOKEN and JULES_API_KEY (the key is set only by the Owner and
 is never printed).
 Outputs: at most one new Jules session per run, labels and comments on the directed
@@ -26,7 +31,7 @@ OWNER = REPO.split("/")[0]
 GH_TOKEN = os.environ.get("GH_TOKEN", "")
 KEY = os.environ.get("JULES_API_KEY", "")
 JULES = "https://jules.googleapis.com/v1alpha/"
-BUSY, SENT, STUCK = "jules-working", "jules-pr-open", "jules-stuck"
+BUSY, SENT, STUCK, TASK = "jules-working", "jules-pr-open", "jules-stuck", "jules-task"
 HOLD = {"hold", "do-not-merge", "do not merge"}
 WORK_HOURS, MERGE_HOURS = 8, 12
 SESSION_MARK, PR_MARK = "<!-- jules-session: ", "<!-- jules-pr: "
@@ -279,6 +284,10 @@ def follow_busy(issue: dict, now: datetime) -> bool:
     if state == "AWAITING_PLAN_APPROVAL":
         jules(session + ":approvePlan", "POST", {})
         return False
+    if state == "COMPLETED":
+        problem(issue, [f"Jules session {session} finished without opening a pull request.",
+                        "You need to do: nothing; Claude reads the session after the reset, or remove the label jules-stuck to resend it."])
+        return True
     if "FAIL" in state or "AWAITING_USER" in state or now - sent_at > timedelta(hours=WORK_HOURS):
         problem(issue, [f"Jules session {session} is '{state or 'unknown'}' with no pull request after {WORK_HOURS} hours or less.",
                         "What I tried: sent it once and checked it every few hours.",
@@ -320,11 +329,72 @@ def send(issue: dict) -> None:
     print(f"#{num}: Batch {batch} sent to Jules for {target}.")
 
 
+def send_task(issue: dict) -> None:
+    """Send one `jules-task` issue to Jules as written.
+
+    Inputs: the task issue; its body may name "Repository: owner/repo".
+    Outputs: a Jules session that opens a pull request, label jules-working and a
+    comment holding the session record.
+    Errors: a Jules refusal goes to problem().
+    """
+    num = issue["number"]
+    text = issue.get("body") or ""
+    found = re.search(r"Repository:\s*`?([\w.-]+/[\w.-]+)", text)
+    target = found.group(1) if found else REPO
+    closes = f'\n- Put the line "Closes {REPO}#{num}" in the pull request description.' if target == REPO else ""
+    prompt = f"""Do the task below for the Owner, exactly as written. Target repository: {target} (this repository). Task issue: {REPO}#{num}.
+
+Rules that override anything else:
+- Read AGENTS.md in this repository first and follow it.
+- Never touch .github/, tools/, AGENTS.md, CLAUDE.md, BUILDER_RUNBOOK.md or PROJECTS.md. Never change existing plan text: add only.
+- Made-up data only. No keys, passwords or personal details. Never say something was checked unless you checked it.
+- Always finish with one pull request against main. If the task is a check, audit or report, add it as a new file audit/JULES_<short-name>.md in plain English, with every finding tied to a file and line.{closes}
+
+=== Task: {issue["title"]} ===
+{text[:MAX_TEXT]}
+"""
+    body = {"prompt": prompt, "title": issue["title"][:120],
+            "sourceContext": {"source": f"sources/github/{target}", "githubRepoContext": {"startingBranch": "main"}},
+            "automationMode": "AUTO_CREATE_PR"}
+    code, data = jules("sessions", "POST", body)
+    if code != 200:
+        problem(issue, [f"Jules refused task #{num} for {target} (answer {code}).",
+                        "You need to do: in jules.google.com, give the Jules app access to " + target + ", then remove the label jules-stuck."])
+        print(str(data)[:300])
+        return
+    session = data.get("name") or ("sessions/" + str(data.get("id", "")))
+    add_label(num, BUSY)
+    comment(num, f"Sent to Jules for {target}.\n{SESSION_MARK}{session} target={target} -->")
+    print(f"#{num}: task sent to Jules for {target}.")
+
+
+def run_tasks(issues: list[dict], now: datetime) -> None:
+    """Follow the task in progress, or send the next `jules-task` issue.
+
+    Inputs: open issues and the current time.
+    Outputs: at most one new Jules session.
+    Errors: none raised.
+    """
+    tasks = sorted((i for i in issues if TASK in labels(i) and i["user"]["login"] == OWNER
+                    and not labels(i) & HOLD and STUCK not in labels(i)), key=lambda i: i["number"])
+    for issue in tasks:
+        tags = labels(issue)
+        if BUSY in tags:
+            if not follow_busy(issue, now):
+                return
+            continue
+        if SENT in tags:
+            continue
+        send_task(issue)
+        return
+    print("No task to send.")
+
+
 def main() -> None:
-    """Follow the batch in progress, or send the next one.
+    """Run both lanes: directed batches, then the task inbox.
 
     Inputs: none beyond the environment and the repository.
-    Outputs: one line of text on the run, plus the actions above.
+    Outputs: one line of text per lane, plus the actions above.
     Errors: none raised for GitHub or Jules refusals.
     """
     if not KEY:
@@ -341,11 +411,22 @@ def main() -> None:
     if any(i["title"].strip().upper().startswith("STOP") for i in issues):
         print("Open STOP issue.")
         return
+    now = datetime.now(timezone.utc)
+    run_batches(issues, now)
+    run_tasks(issues, now)
+
+
+def run_batches(issues: list[dict], now: datetime) -> None:
+    """Follow the batch in progress, or send the next directed batch.
+
+    Inputs: open issues and the current time.
+    Outputs: at most one new Jules session.
+    Errors: none raised.
+    """
     directed = sorted((i for i in issues
                        if "directed" in labels(i) and i["user"]["login"] == OWNER
                        and re.match(r"Directed:\s*(?!OG-)\S+", i["title"]) and not labels(i) & HOLD),
                       key=order_key)
-    now = datetime.now(timezone.utc)
     for issue in directed:
         tags = labels(issue)
         if STUCK in tags:

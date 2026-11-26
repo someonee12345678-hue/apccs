@@ -7,6 +7,7 @@ name: Jules builder
 # which only the Owner sets; without it every run ends in one line and sends nothing.
 # Each run takes well under a minute: it reads GitHub, copies the batch wording out of
 # plan/QUEUE.md and sends it (see .github/jules_builder.py). One batch at a time.
+# Also sends issues labelled jules-task (the task inbox), one at a time.
 # STOP: an open issue whose title starts with STOP, or a STOP file on main, stops it.
 on:
   issues:
@@ -29,7 +30,8 @@ jobs:
     if: >-
       github.event_name != 'issues' ||
       (github.event.issue.user.login == github.repository_owner &&
-       contains(github.event.issue.labels.*.name, 'directed'))
+       (contains(github.event.issue.labels.*.name, 'directed') ||
+        contains(github.event.issue.labels.*.name, 'jules-task')))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
