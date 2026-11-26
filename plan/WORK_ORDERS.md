@@ -625,3 +625,7 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W16, W1
 ## Note 2026-11-25 23:47 (Claude in chat, Owner's question about Muse)
 - W16's capacity table starts from plan/WORKERS.md, not from memory.
 - Before wording W16, search Google Drive (folder "Claude 2", micahkoivumaki@gmail.com) for a file named MUSE_CAPABILITIES. If it exists, add its text to plan/WORKERS.md under "Muse's own answer" as a new dated section, word for word, in the same pull request, and use it for Muse's row. If it doesn't exist yet, word W16 with Muse's row as it stands and say so under Gaps.
+
+## Note 2026-11-26 00:00 (Claude in chat): W15 handed to Muse
+- On the Owner's order to use every agent to capacity, W15 went to Muse through Drive MUSE_INBOX (see plan/WORKERS.md, "Update 2026-11-26"). Muse writes AUDIT_OMNIGUIDE_BUILDS_PART_<k> Docs in Claude 2 / Builder Reports.
+- A work-order run doing W15 first reads those Docs instead of re-auditing: it turns each FAIL into fix wording (OG-19 on, as W15 says) and, where Muse couldn't comment on GitHub, posts Muse's PASS/FAIL lines as the "Post-merge audit (independent, Muse)" comment on each PR.
