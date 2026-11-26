@@ -79,3 +79,8 @@ Muse is asked to fill these from official pages (MUSE_INBOX task of 26 Nov).
 - The Owner installed Meta Muse AI on his repositories (his message, 00:13). Block K2 ends: Muse can read apccs, uclrcde, omniguide and corolla-obd, so line-by-line post-merge audits go to Muse first (rule 20). Muse acts on GitHub as the Owner through GitHub's MCP server, and its GitHub actions may need the Owner's approval inside Muse: NOT CHECKED until Muse's first comment lands.
 - Muse can also post "@codex review" and "@codex fix it" as the Owner, which is how Codex (ChatGPT) gets pull requests without anyone typing.
 - Jules builder run 45773787687 (2026-11-26 07:14 UTC): "The JULES_API_KEY secret isn't set yet, so nothing was sent." Until the Owner saves it, nothing reaches Jules.
+
+## Correction 2026-11-26 00:20 (Claude, from the Owner's Jules settings screenshots)
+- Jules on the Owner's account is the free **basic plan**, not Ultra: 15 tasks a day, 3 at once (jules.google/docs/usage-limits). The Owner pays nothing for Jules; the API key is free. Default model shown: Gemini 3.8 Flash. His Gemini subscription is not linked to this Jules sign-in.
+- Jules exports every task as a pull request and answers comments on its own pull requests (the setting "Only respond to comments that mention @jules" is off), so a Codex review on a Jules pull request is fixed by Jules itself; nobody needs to ask "@codex fix it" there.
+- The Jules builder now keeps at most 3 Jules tasks running: one batch per repository (at most 2) and one inbox task.
