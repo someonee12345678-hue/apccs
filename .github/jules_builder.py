@@ -4,12 +4,15 @@ Owner request, 2026-11-25 16:21 America/Vancouver: "Find a way to produce the sa
 results maybe with software running on the site." Jules (free plan: 15 tasks a day,
 3 at once) builds the batch in Google's cloud and opens the pull request. The
 auto-merge gate then merges it when its checks are green, as for the Claude builder.
+One batch at a time, in "Directed at:" order. No AI runs here.
 
-One batch at a time, in "Directed at:" order. No AI runs here: this file only reads
-GitHub, copies the batch wording out of plan/QUEUE.md and sends it to Jules.
-It needs the repository secret JULES_API_KEY (set only by the Owner) and never prints it.
-It stops when an open issue title starts with STOP or a STOP file is on main.
-Problems go to the Owner by email through the Daily status workflow, once per issue.
+Inputs: GitHub issues labelled `directed`, plan/QUEUE.md, and the environment values
+GITHUB_REPOSITORY, GH_TOKEN and JULES_API_KEY (the key is set only by the Owner and
+is never printed).
+Outputs: at most one new Jules session per run, labels and comments on the directed
+issue, and at most one problem email per issue through the Daily status workflow.
+Errors: a missing key, a STOP issue or a STOP file ends the run in one line; GitHub or
+Jules answers other than success are reported on the issue, never raised.
 """
 import json
 import os
@@ -30,7 +33,13 @@ SESSION_MARK, PR_MARK = "<!-- jules-session: ", "<!-- jules-pr: "
 MAX_TEXT = 90000
 
 
-def call(url, method="GET", body=None, headers=None):
+def call(url: str, method: str = "GET", body: dict | None = None, headers: dict | None = None) -> tuple[int, object]:
+    """Send one HTTPS request.
+
+    Inputs: url, method, optional JSON body and headers.
+    Outputs: (status code, parsed JSON or an {"error": text} dict).
+    Errors: HTTP errors are returned as their code, not raised.
+    """
     data = None if body is None else json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
     req.add_header("Content-Type", "application/json")
@@ -42,33 +51,74 @@ def call(url, method="GET", body=None, headers=None):
         return err.code, {"error": err.read().decode("utf-8", "replace")[:400]}
 
 
-def gh(path, method="GET", body=None):
+def gh(path: str, method: str = "GET", body: dict | None = None) -> tuple[int, object]:
+    """Call the GitHub REST API with this run's own short-lived token.
+
+    Inputs: API path after https://api.github.com/, method, optional body.
+    Outputs: (status code, parsed JSON).
+    Errors: none raised; see call().
+    """
     return call("https://api.github.com/" + path, method, body,
                 {"Authorization": "Bearer " + GH_TOKEN, "Accept": "application/vnd.github+json"})
 
 
-def jules(path, method="GET", body=None):
+def jules(path: str, method: str = "GET", body: dict | None = None) -> tuple[int, object]:
+    """Call the Jules API with the Owner's key.
+
+    Inputs: path after the v1alpha base, method, optional body.
+    Outputs: (status code, parsed JSON).
+    Errors: none raised; see call().
+    """
     return call(JULES + path, method, body, {"X-Goog-Api-Key": KEY})
 
 
-def labels(issue):
+def labels(issue: dict) -> set[str]:
+    """Return the issue's label names in lower case.
+
+    Inputs: a GitHub issue record.
+    Outputs: set of label names.
+    Errors: none; missing labels give an empty set.
+    """
     return {lab.get("name", "").lower() for lab in issue.get("labels", [])}
 
 
-def comment(num, text):
+def comment(num: int, text: str) -> None:
+    """Post one comment on an issue.
+
+    Inputs: issue number and text.
+    Outputs: none.
+    Errors: GitHub refusals are ignored.
+    """
     gh(f"repos/{REPO}/issues/{num}/comments", "POST", {"body": text})
 
 
-def add_label(num, name):
+def add_label(num: int, name: str) -> None:
+    """Add one label to an issue.
+
+    Inputs: issue number and label name.
+    Outputs: none.
+    Errors: GitHub refusals are ignored.
+    """
     gh(f"repos/{REPO}/issues/{num}/labels", "POST", {"labels": [name]})
 
 
-def drop_label(num, name):
+def drop_label(num: int, name: str) -> None:
+    """Remove one label from an issue.
+
+    Inputs: issue number and label name.
+    Outputs: none.
+    Errors: GitHub refusals are ignored.
+    """
     gh(f"repos/{REPO}/issues/{num}/labels/{name}", "DELETE")
 
 
-def problem(issue, lines):
-    """Mark the issue stuck, explain on it, and email the Owner once."""
+def problem(issue: dict, lines: list[str]) -> None:
+    """Mark the issue stuck, explain on it, and email the Owner once.
+
+    Inputs: the directed issue and up to four plain lines.
+    Outputs: label jules-stuck, one comment, one Daily status email.
+    Errors: an issue already marked stuck is left alone, so it never emails twice.
+    """
     num = issue["number"]
     if STUCK in labels(issue):
         return
@@ -82,8 +132,13 @@ def problem(issue, lines):
        {"ref": "main", "inputs": {"note": note}})
 
 
-def marker(num, mark):
-    """Return (value, time) of the newest comment holding the marker, or (None, None)."""
+def marker(num: int, mark: str) -> tuple[str | None, datetime | None]:
+    """Find the newest comment holding a marker.
+
+    Inputs: issue number and marker text.
+    Outputs: (value after the marker, comment time), or (None, None).
+    Errors: a GitHub refusal gives (None, None).
+    """
     code, items = gh(f"repos/{REPO}/issues/{num}/comments?per_page=100")
     if code != 200:
         return None, None
@@ -95,7 +150,13 @@ def marker(num, mark):
     return None, None
 
 
-def order_key(issue):
+def order_key(issue: dict) -> tuple[datetime, int]:
+    """Sort key: the issue's "Directed at:" time, else its creation time.
+
+    Inputs: a GitHub issue record.
+    Outputs: (time with zone, issue number).
+    Errors: an unreadable time falls back to the creation time.
+    """
     found = re.search(r"Directed at:\s*(\S+)", issue.get("body") or "")
     stamp = found.group(1) if found else issue["created_at"]
     try:
@@ -107,8 +168,13 @@ def order_key(issue):
     return when, issue["number"]
 
 
-def section_end(lines, start, level):
-    """Index of the next heading at this level or higher, after start."""
+def section_end(lines: list[str], start: int, level: int) -> int:
+    """Find where a heading's section ends.
+
+    Inputs: plan lines, the heading's index and its level (number of #).
+    Outputs: index of the next heading at this level or higher, or the line count.
+    Errors: none.
+    """
     for k in range(start + 1, len(lines)):
         match = re.match(r"(#+)\s", lines[k])
         if match and len(match.group(1)) <= level:
@@ -116,8 +182,14 @@ def section_end(lines, start, level):
     return len(lines)
 
 
-def batch_text(batch, issue_body, path="plan/QUEUE.md"):
-    """Return (wording, target repository) for a batch, or ("", "") if not found."""
+def batch_text(batch: str, issue_body: str, path: str = "plan/QUEUE.md") -> tuple[str, str]:
+    """Copy a batch's wording and find its target repository.
+
+    Inputs: batch name, the directed issue's body, and the plan path.
+    Outputs: (parent intro + newest batch section + later headings naming the batch,
+    target "owner/repo"), or ("", "") when no "### Batch <name>" heading exists.
+    Errors: a missing plan file raises OSError, which fails the run visibly.
+    """
     with open(path, encoding="utf-8") as handle:
         lines = handle.read().split("\n")
     name = re.compile(r"\b" + re.escape(batch) + r"\b")
@@ -147,7 +219,13 @@ def batch_text(batch, issue_body, path="plan/QUEUE.md"):
     return text, target
 
 
-def prompt_for(batch, num, target, text):
+def prompt_for(batch: str, num: int, target: str, text: str) -> str:
+    """Build the task text Jules receives.
+
+    Inputs: batch name, directed issue number, target repository, batch wording.
+    Outputs: the full task text, rules first and wording last.
+    Errors: none.
+    """
     closes = f' and the line "Closes {REPO}#{num}"' if target == REPO else ""
     plan = ("The whole plan is in plan/QUEUE.md if the wording refers to a rule by name."
             if target == REPO else
@@ -169,11 +247,16 @@ Rules that override anything else:
 """
 
 
-def follow_busy(issue, now):
-    """Check the batch Jules is working on. Return True only if it is now stuck."""
+def follow_busy(issue: dict, now: datetime) -> bool:
+    """Check the batch Jules is working on.
+
+    Inputs: the directed issue marked jules-working and the current time.
+    Outputs: True only if the issue is now stuck (so the next batch may be sent).
+    Errors: a Jules answer other than 200 waits for the next run.
+    """
     num = issue["number"]
     value, sent_at = marker(num, SESSION_MARK)
-    if not value:
+    if not value or sent_at is None:
         problem(issue, ["It is marked as sent to Jules, but the session record is missing.",
                         "You need to do: nothing; remove the label jules-stuck to retry."])
         return True
@@ -205,7 +288,14 @@ def follow_busy(issue, now):
     return False
 
 
-def send(issue):
+def send(issue: dict) -> None:
+    """Send one directed batch to Jules.
+
+    Inputs: the directed issue.
+    Outputs: a Jules session that opens a pull request, label jules-working and a
+    comment holding the session record.
+    Errors: missing wording or a Jules refusal goes to problem().
+    """
     num = issue["number"]
     batch = re.match(r"Directed:\s*(\S+)", issue["title"]).group(1)
     text, target = batch_text(batch, issue.get("body") or "")
@@ -230,7 +320,13 @@ def send(issue):
     print(f"#{num}: Batch {batch} sent to Jules for {target}.")
 
 
-def main():
+def main() -> None:
+    """Follow the batch in progress, or send the next one.
+
+    Inputs: none beyond the environment and the repository.
+    Outputs: one line of text on the run, plus the actions above.
+    Errors: none raised for GitHub or Jules refusals.
+    """
     if not KEY:
         print("The JULES_API_KEY secret isn't set yet, so nothing was sent.")
         return
