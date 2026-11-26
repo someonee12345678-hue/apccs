@@ -63,3 +63,14 @@ Written by Muse at Micah's request, 2026-11-25 (America/Vancouver). "Not sure" m
 - Muse's weekly allowance was 2% used on 2026-11-25: Muse is the least used paid worker. Give it the line-by-line audits and verification first.
 - Muse can't read apccs, uclrcde or omniguide until those repositories are selected for the Muse GitHub App.
 - 2026-11-26: W15 (post-merge audit of omniguide PRs #1–#18) and the NOT CHECKED cells of this file were put in MUSE_INBOX as TASK_2026-11-26_W15_OMNIGUIDE_AUDIT. Reports come back as Google Docs AUDIT_OMNIGUIDE_BUILDS_PART_<k> (Claude 2 / Builder Reports) and WORKERS_FACTS_2026-11-26 (Claude 2).
+
+## Update 2026-11-26 00:04 (Claude): more workers already connected to the Owner's GitHub
+From his GitHub settings screenshots: installed GitHub Apps are ChatGPT Codex Connector, Claude, Cline Cloud, Cursor and Google Labs Jules. "Meta Muse AI" is authorized (acts as him through GitHub's official MCP server) but "has not been installed on any accounts", which is why Muse can't read the private repositories yet. He also named GitHub Copilot.
+
+| Worker | Owner's plan | How the system could reach it | Limits | Source, date |
+|---|---|---|---|---|
+| GitHub Copilot | NOT CHECKED (no Copilot plan stated) | Assign an issue to Copilot, if his plan includes the coding agent: NOT CHECKED | NOT CHECKED | Owner, 26 Nov |
+| Cursor | No paid plan stated | Cursor's GitHub app is installed; cloud agents: NOT CHECKED on a free plan | NOT CHECKED | screenshot, 26 Nov |
+| Cline Cloud | No plan stated | Cline Cloud's GitHub app is installed; what it can do for free: NOT CHECKED | NOT CHECKED | screenshot, 26 Nov |
+
+Muse is asked to fill these from official pages (MUSE_INBOX task of 26 Nov).
