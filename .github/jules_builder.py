@@ -8,7 +8,7 @@ One batch at a time per target repository, in "Directed at:" order. No AI runs h
 Added 2026-11-25 23:19 (Owner: "Can't you manage everything better faster without
 using your limited so fast"): a second lane, the Jules task inbox. Any issue the Owner's
 account opens with the label `jules-task` is sent to Jules as written, one at a time,
-on the repository named in a "Repository: owner/repo" line (default: this one), up to five at once. Claude
+on the repository named in a "Repository: owner/repo" line (default: this one), one at a time. Claude
 runs, Gemini or the Owner hand heavy reading, auditing or coding work to Jules this way.
 
 Inputs: GitHub issues labelled `directed` or `jules-task`, plan/QUEUE.md, and the environment values
@@ -36,9 +36,10 @@ HOLD = {"hold", "do-not-merge", "do not merge"}
 WORK_HOURS, MERGE_HOURS = 8, 12
 SESSION_MARK, PR_MARK = "<!-- jules-session: ", "<!-- jules-pr: "
 MAX_TEXT = 90000
-# Owner has Google AI Ultra (Jules: 300 tasks a day, 60 at once). GitHub minutes, not Jules,
-# are the tighter limit, so batches run one per target repository and tasks five at once.
-MAX_TASKS = 5
+# The Owner's Jules account is on the free basic plan (his screenshot, 2026-11-26 00:19):
+# 15 tasks a day, 3 at once. Batches run one per target repository (apccs and uclrcde, so at
+# most 2) and the task inbox one at a time, so no more than 3 run together.
+MAX_TASKS = 1
 
 
 def call(url: str, method: str = "GET", body: dict | None = None, headers: dict | None = None) -> tuple[int, object]:
