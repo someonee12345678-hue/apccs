@@ -74,3 +74,8 @@ From his GitHub settings screenshots: installed GitHub Apps are ChatGPT Codex Co
 | Cline Cloud | No plan stated | Cline Cloud's GitHub app is installed; what it can do for free: NOT CHECKED | NOT CHECKED | screenshot, 26 Nov |
 
 Muse is asked to fill these from official pages (MUSE_INBOX task of 26 Nov).
+
+## Update 2026-11-26 00:13 (Claude): Muse can read the repositories; Jules key still missing
+- The Owner installed Meta Muse AI on his repositories (his message, 00:13). Block K2 ends: Muse can read apccs, uclrcde, omniguide and corolla-obd, so line-by-line post-merge audits go to Muse first (rule 20). Muse acts on GitHub as the Owner through GitHub's MCP server, and its GitHub actions may need the Owner's approval inside Muse: NOT CHECKED until Muse's first comment lands.
+- Muse can also post "@codex review" and "@codex fix it" as the Owner, which is how Codex (ChatGPT) gets pull requests without anyone typing.
+- Jules builder run 45773787687 (2026-11-26 07:14 UTC): "The JULES_API_KEY secret isn't set yet, so nothing was sent." Until the Owner saves it, nothing reaches Jules.
