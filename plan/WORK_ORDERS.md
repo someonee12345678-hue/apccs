@@ -621,3 +621,7 @@ The Owner, 2026-11-25 23:33 America/Vancouver: "Why are you not using everything
   - Gaps to list as NOT CHECKED, not invent: how Muse and the Gemini app can be reached without the Owner copying; Codex's own usage numbers on ChatGPT Plus.
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W16, W14, W15, W7. W7 stays last, because it is never finished.
+
+## Note 2026-11-25 23:47 (Claude in chat, Owner's question about Muse)
+- W16's capacity table starts from plan/WORKERS.md, not from memory.
+- Before wording W16, search Google Drive (folder "Claude 2", micahkoivumaki@gmail.com) for a file named MUSE_CAPABILITIES. If it exists, add its text to plan/WORKERS.md under "Muse's own answer" as a new dated section, word for word, in the same pull request, and use it for Muse's row. If it doesn't exist yet, word W16 with Muse's row as it stands and say so under Gaps.
