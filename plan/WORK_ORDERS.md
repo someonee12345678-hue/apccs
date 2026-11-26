@@ -603,3 +603,21 @@ The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W7. W7 
   - The Docs are titled AUDIT_OMNIGUIDE_BUILDS_PART_<k>. Fix batches go in "## Post-merge audit corrections (OmniGuide, part <k>)", from branch plan/audit-fixes-omniguide-part<k>. They take the next free OG numbers (OG-19 on), because the OmniGuide builder builds only "OG-<n>" batches; the hand-off says they are for the OmniGuide builder (trig_01B2FtSJUwP4D4izxNbpWose).
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W14, W15, W7. W7 stays last, because it is never finished; while W14 and W15 run, it waits (the research ledger has had no new row since R225).
+
+## W16 — Capacity router: keep every paid AI busy, Claude last (added 2026-11-25 by Claude in chat, on the Owner's order)
+The Owner, 2026-11-25 23:33 America/Vancouver: "Why are you not using everything up to its own capacity. ... I am using you as a master architect. I'm using Gemini as an architect to keep Muse and chat GDP busy." His role order of 14 Nov: ChatGPT builds, Muse tests and verifies, Gemini keeps them busy, Claude only finds gaps and audits, saving its usage.
+- **After:** nothing. Do it before W14 and W15. Hand the remaining audit reading of W14 and W15 to Jules with jules-task issues (work-order runner step 4b).
+- **Done when:** plan/QUEUE.md on main has a heading starting "## Capacity router —" and an apccs issue labelled `directed` exists for each of its batches.
+- **Sources:**
+  - plan/PRODUCT_MAP.md feature 1, "Main brain — decides, splits the work, keeps everyone busy", and its 90% rule (ledger Q046);
+  - the live lanes on main: `.github/jules_builder.py` (directed batches and the jules-task inbox, both sent to Jules), Codex code review on pull requests, and the Daily status email;
+  - the Owner's plans, as he stated them: Google AI Ultra (Jules: 300 tasks a day, 60 at once), ChatGPT Plus (Codex cloud tasks and pull-request reviews), Claude (weekly limit, reset Tuesday 13:00 Vancouver), Muse (paid plan, 500 million tokens; can't open the repositories, block K2), GitHub Free (2,000 Actions minutes a month for private repositories: the tightest limit, about 8 checked pull requests a day).
+- **Before wording:** as in W9: docstrings read, names grepped, `apccs2_` file names.
+- **Steps:** word at most 4 batches as "## Capacity router — …", target apccs, new files only, standard library only, made-up numbers in every test:
+  1. **Capacity table:** one row per worker: name, the job kinds it can take (build, audit, read-and-summarize, review, wording, decision), its limit per period, when that period resets, and how it is reached (GitHub issue label, API, Drive folder, or the Owner's relay), stored in SQLite.
+  2. **Usage counter:** records each job sent to and finished by each worker, and works out what is left before each reset.
+  3. **Router:** given a job, picks the worker with free capacity that can take that kind: cheapest first, Claude last, Owner relay only when nothing else can reach the work, and never a decision that is the Owner's. Plain code, no AI.
+  4. **Plan of the day:** from the open jobs and the capacity left, lists which worker gets what today so none sits idle, as at most 6 plain lines the Daily status email can carry.
+  - Gaps to list as NOT CHECKED, not invent: how Muse and the Gemini app can be reached without the Owner copying; Codex's own usage numbers on ChatGPT Plus.
+
+The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W16, W14, W15, W7. W7 stays last, because it is never finished.
