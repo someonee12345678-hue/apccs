@@ -4,11 +4,11 @@ Owner request, 2026-11-25 16:21 America/Vancouver: "Find a way to produce the sa
 results maybe with software running on the site." Jules (free plan: 15 tasks a day,
 3 at once) builds the batch in Google's cloud and opens the pull request. The
 auto-merge gate then merges it when its checks are green, as for the Claude builder.
-One batch at a time, in "Directed at:" order. No AI runs here.
+One batch at a time per target repository, in "Directed at:" order. No AI runs here.
 Added 2026-11-25 23:19 (Owner: "Can't you manage everything better faster without
 using your limited so fast"): a second lane, the Jules task inbox. Any issue the Owner's
 account opens with the label `jules-task` is sent to Jules as written, one at a time,
-on the repository named in a "Repository: owner/repo" line (default: this one). Claude
+on the repository named in a "Repository: owner/repo" line (default: this one), up to five at once. Claude
 runs, Gemini or the Owner hand heavy reading, auditing or coding work to Jules this way.
 
 Inputs: GitHub issues labelled `directed` or `jules-task`, plan/QUEUE.md, and the environment values
@@ -36,6 +36,9 @@ HOLD = {"hold", "do-not-merge", "do not merge"}
 WORK_HOURS, MERGE_HOURS = 8, 12
 SESSION_MARK, PR_MARK = "<!-- jules-session: ", "<!-- jules-pr: "
 MAX_TEXT = 90000
+# Owner has Google AI Ultra (Jules: 300 tasks a day, 60 at once). GitHub minutes, not Jules,
+# are the tighter limit, so batches run one per target repository and tasks five at once.
+MAX_TASKS = 5
 
 
 def call(url: str, method: str = "GET", body: dict | None = None, headers: dict | None = None) -> tuple[int, object]:
@@ -377,17 +380,20 @@ def run_tasks(issues: list[dict], now: datetime) -> None:
     """
     tasks = sorted((i for i in issues if TASK in labels(i) and i["user"]["login"] == OWNER
                     and not labels(i) & HOLD and STUCK not in labels(i)), key=lambda i: i["number"])
+    running = 0
     for issue in tasks:
         tags = labels(issue)
         if BUSY in tags:
             if not follow_busy(issue, now):
-                return
+                running += 1
             continue
         if SENT in tags:
             continue
+        if running >= MAX_TASKS:
+            break
         send_task(issue)
-        return
-    print("No task to send.")
+        running += 1
+    print(f"Tasks with Jules now: {running}.")
 
 
 def main() -> None:
@@ -427,13 +433,17 @@ def run_batches(issues: list[dict], now: datetime) -> None:
                        if "directed" in labels(i) and i["user"]["login"] == OWNER
                        and re.match(r"Directed:\s*(?!OG-)\S+", i["title"]) and not labels(i) & HOLD),
                       key=order_key)
+    busy_repos: set[str] = set()
     for issue in directed:
         tags = labels(issue)
         if STUCK in tags:
             continue
+        if BUSY in tags or SENT in tags:
+            value, _ = marker(issue["number"], SESSION_MARK)
+            target = (value or "").partition(" target=")[2] or REPO
         if BUSY in tags:
             if not follow_busy(issue, now):
-                return
+                busy_repos.add(target)
             continue
         if SENT in tags:
             _, opened_at = marker(issue["number"], PR_MARK)
@@ -441,11 +451,15 @@ def run_batches(issues: list[dict], now: datetime) -> None:
                 problem(issue, [f"Jules's pull request for #{issue['number']} isn't merged after {MERGE_HOURS} hours.",
                                 "You need to do: nothing if Jules is fixing its checks; otherwise Claude looks at it after the reset."])
                 continue
-            print(f"#{issue['number']}: waiting for the gate to merge Jules's pull request.")
-            return
+            busy_repos.add(target)
+            continue
+        batch = re.match(r"Directed:\s*(\S+)", issue["title"]).group(1)
+        _, want = batch_text(batch, issue.get("body") or "")
+        if (want or REPO) in busy_repos:
+            continue
         send(issue)
-        return
-    print("Nothing to send.")
+        busy_repos.add(want or REPO)
+    print(f"Repositories with a batch in progress: {len(busy_repos)}.")
 
 
 if __name__ == "__main__":
