@@ -84,3 +84,11 @@ Muse is asked to fill these from official pages (MUSE_INBOX task of 26 Nov).
 - Jules on the Owner's account is the free **basic plan**, not Ultra: 15 tasks a day, 3 at once (jules.google/docs/usage-limits). The Owner pays nothing for Jules; the API key is free. Default model shown: Gemini 3.8 Flash. His Gemini subscription is not linked to this Jules sign-in.
 - Jules exports every task as a pull request and answers comments on its own pull requests (the setting "Only respond to comments that mention @jules" is off), so a Codex review on a Jules pull request is fixed by Jules itself; nobody needs to ask "@codex fix it" there.
 - The Jules builder now keeps at most 3 Jules tasks running: one batch per repository (at most 2) and one inbox task.
+
+## Update 2026-11-27 00:04 (Claude): phone chat bridge, a no-API route to DeepSeek and Claude
+Built by ChatGPT for the Owner (someonee12345678-hue/deepseek-phone-bridge, PR #10 merged, app 0.4.8). Work order W17 adds it to the Builder's toolbox.
+
+| Worker | Owner's plan | Best used for | How the system reaches it | Limits | Source, date |
+|---|---|---|---|---|---|
+| DeepSeek via Android UI bridge | Free DeepSeek web chat, Owner signed in | Text answers; code as a unified diff that becomes a draft PR for review | An issue titled [DeepSeek] or [DeepSeek-Code] in the private bridge queue repo, written by the Owner's account (Claude runs and Muse act as him); needs the phone app open and Termux running | Consumer limits unknown; not unattended; no tests run, no merge | Owner's screenshots (text worked; one diff became a draft PR, merged); source check 2026-11-27 |
+| Claude via Android UI bridge | Owner's Claude plan, signed in on the phone | Same as above | [Claude] or [Claude-Code] issue, same queue | Live phone flow NOT CHECKED; uses the Owner's Claude allowance | Source check 2026-11-27 |
