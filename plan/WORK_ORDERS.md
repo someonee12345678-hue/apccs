@@ -652,3 +652,18 @@ Muse's W14 audit (2026-11-27, AUDIT_LOG_MUSE in Claude 2 / Builder Reports) clos
 - **Steps:** read Muse's CP-1 point 2 entry in AUDIT_LOG_MUSE and the CP-1 code it names (by grep), then word one batch, add-only, target apccs, new files only.
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W14, W18, W16, W17, W15, W7. W7 stays last, because it is never finished.
+
+## W19 — GitHub Actions minutes: catch up after the reset, cut the waste, add a tripwire (added 2026-11-27 by Claude in chat, on the Owner's order)
+On 27 Nov the Owner's account used up its 2,000 free Actions minutes for November (GitHub's email). Actions in the private repositories stop until the reset on 1 Dec. Claude's count from the repo run history (each job rounded up to a minute; the billing API isn't reachable from sessions) is about 1,800 to 2,000 job-minutes:
+- apccs about 1,270: tests about 690, auto-merge gate about 330, guard about 155, daily status 55, others about 40;
+- uclrcde about 250;
+- omniguide about 180;
+- corolla-obd about 60.
+
+Each apccs change costs about 9 job-minutes: tests on the pull request, the guard, the gate after each of those two, the tests again on main after merging, and the gate again.
+- **After:** nothing. **Done when:** the three steps are done.
+- **Step 1, catch-up (first, as soon as Actions runs again):** in apccs, uclrcde, omniguide and corolla-obd, for every open pull request whose checks never ran or stopped for the minutes limit, re-run them. Use `POST /repos/{owner}/{repo}/actions/runs/{id}/rerun`, or dispatch the tests workflow on the pull request's branch. Then the auto-merge gate does the rest. Read the Owner's comments made during the outage that start with `stop`, `go`, `resume`, `status`, `task:` or `jules:`, and carry them out as owner_commands.py would.
+- **Step 2, trim (one pull request in .github/, so the Owner taps merge):** (a) the auto-merge gate wakes only after "APCCS tests", not after "APCCS guard" (it already requires both checks green, and the guard always finishes first); (b) the gate re-runs the tests on main after merging only when a merged pull request changed a file outside `plan/` or one not ending in `.md`; (c) the tests workflow gets `concurrency` per pull request with `cancel-in-progress: true`. Do the same in the other three repositories where the same pattern exists. Target: about 5 job-minutes or fewer per apccs change. Run tools/run_all_tests.py and the readability gate before opening it.
+- **Step 3, tripwire (software, no AI):** new `code/apccs_actions_budget.py` with its test. It counts this month's job minutes in the four private repositories from the repo runs and jobs API. Daily status runs it. From 1,500 (75%) it opens one issue a month, "Actions minutes at N%", labelled `needs-claude`, and the gate skips the re-test on main until the 1st (saver mode).
+
+The order of work is now W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W14, W19, W18, W16, W17, W15, W7. W7 stays last, because it is never finished.
