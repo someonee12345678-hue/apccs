@@ -645,3 +645,10 @@ The Owner, 2026-11-27 00:04: "I got chatgdp to make bridge interface for deepsee
 - **What only the Owner can do, when he chooses:** install 0.4.8 on the phone as an update, choose Claude in the app, sign in to claude.ai inside the app, and dispatch one harmless made-up [Claude] request; then one [Claude-Code] request against a separate test repository, not the bridge repository. Note for that step: Google often blocks "Sign in with Google" inside app WebViews, so the email sign-in code is the reliable way to sign in to claude.ai there (NOT CHECKED on his phone).
 
 The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W16, W17, W14, W15, W7. W7 stays last, because it is never finished.
+
+## W18 — Fix CP-1 point 2, the panel showing "Ready." when opened offline (added 2026-11-27 by Claude in chat; architect's ruling, no Owner tap needed)
+Muse's W14 audit (2026-11-27, AUDIT_LOG_MUSE in Claude 2 / Builder Reports) closed the backlog: 41 merged Batch pull requests since 19 Nov, all audited, all PASS except one open FAIL, CP-1 point 2: the panel can still show "Ready." when it is opened offline. Muse held it because CP-1's files never change. Ruling (RULEBOOK item 27: questions come to Claude, not Micah): the FAIL is real, and CP-1's files stay untouched. The fix goes in new files only, the same way code/apccs2_toolbox_fixes.py corrected the Toolbox through a new handler builder: wrap the CP-1 panel's status answer so that when it can't reach its data it says "Offline: showing what was known at <time>" instead of "Ready.", with a normal-use and a bad-input test.
+- **After:** nothing. **Done when:** plan/QUEUE.md on main has a heading starting "## CP-1 offline fix —" and its batch is directed.
+- **Steps:** read Muse's CP-1 point 2 entry in AUDIT_LOG_MUSE and the CP-1 code it names (by grep), then word one batch, add-only, target apccs, new files only.
+
+The order of work is W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W14, W18, W16, W17, W15, W7. W7 stays last, because it is never finished.
