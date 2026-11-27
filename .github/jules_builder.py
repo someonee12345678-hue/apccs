@@ -31,6 +31,7 @@ OWNER = REPO.split("/")[0]
 GH_TOKEN = os.environ.get("GH_TOKEN", "")
 KEY = os.environ.get("JULES_API_KEY", "")
 JULES = "https://jules.googleapis.com/v1alpha/"
+SOURCES: list[str] = []
 BUSY, SENT, STUCK, TASK = "jules-working", "jules-pr-open", "jules-stuck", "jules-task"
 HOLD = {"hold", "do-not-merge", "do not merge"}
 WORK_HOURS, MERGE_HOURS = 8, 12
@@ -79,6 +80,41 @@ def jules(path: str, method: str = "GET", body: dict | None = None) -> tuple[int
     Errors: none raised; see call().
     """
     return call(JULES + path, method, body, {"X-Goog-Api-Key": KEY})
+
+
+def candidate_keys() -> list[str]:
+    """List every saved Jules key, so a key saved under another name still works.
+
+    Inputs: environment values JULES_KEYS (one per line) and JULES_API_KEY.
+    Outputs: distinct non-empty keys, in the order given.
+    Errors: none; nothing saved gives [].
+    """
+    found = [line.strip() for line in os.environ.get("JULES_KEYS", "").splitlines() if line.strip()]
+    found.append(os.environ.get("JULES_API_KEY", "").strip())
+    unique: list[str] = []
+    for key in found:
+        if key and key not in unique:
+            unique.append(key)
+    return unique
+
+
+def choose_key() -> tuple[list[str], int]:
+    """Try each saved key against Jules and keep the first one Jules accepts.
+
+    Inputs: the candidate keys.
+    Outputs: (source names Jules can see, last answer code); sets KEY, or "" if none works.
+    Errors: none raised; a refused key is skipped.
+    """
+    global KEY
+    last = 0
+    for key in candidate_keys():
+        KEY = key
+        code, data = jules("sources?pageSize=100")
+        last = code
+        if code == 200:
+            return [src.get("name", "") for src in data.get("sources", []) or []], code
+    KEY = ""
+    return [], last
 
 
 def labels(issue: dict) -> set[str]:
@@ -316,14 +352,17 @@ def send(issue: dict) -> None:
         problem(issue, [f"No wording headed 'Batch {batch}' was found in plan/QUEUE.md.",
                         "You need to do: nothing; the wording run or Claude fixes the plan."])
         return
+    if SOURCES and f"sources/github/{target}" not in SOURCES:
+        problem(issue, [f"Jules can't see {target}.",
+                        "You need to do: open https://github.com/settings/installations, tap Configure next to Google Labs Jules, add " + target.split("/")[1] + " under Repository access, and tap Save; then remove the label jules-stuck."])
+        return
     body = {"prompt": prompt_for(batch, num, target, text), "title": f"Batch {batch}",
             "sourceContext": {"source": f"sources/github/{target}", "githubRepoContext": {"startingBranch": "main"}},
             "automationMode": "AUTO_CREATE_PR"}
     code, data = jules("sessions", "POST", body)
     if code != 200:
         problem(issue, [f"Jules refused Batch {batch} for {target} (answer {code}).",
-                        "If the answer says the source isn't found, the Jules GitHub app needs access to that repository.",
-                        "You need to do: in jules.google.com, give the Jules app access to " + target + ", then remove the label jules-stuck."])
+                        "You need to do: nothing yet; Claude reads the answer in the run log."])
         print(str(data)[:300])
         return
     session = data.get("name") or ("sessions/" + str(data.get("id", "")))
@@ -357,13 +396,17 @@ Rules that override anything else:
 === Task: {issue["title"]} ===
 {text[:MAX_TEXT]}
 """
+    if SOURCES and f"sources/github/{target}" not in SOURCES:
+        problem(issue, [f"Jules can't see {target}.",
+                        "You need to do: open https://github.com/settings/installations, tap Configure next to Google Labs Jules, add " + target.split("/")[1] + " under Repository access, and tap Save; then remove the label jules-stuck."])
+        return
     body = {"prompt": prompt, "title": issue["title"][:120],
             "sourceContext": {"source": f"sources/github/{target}", "githubRepoContext": {"startingBranch": "main"}},
             "automationMode": "AUTO_CREATE_PR"}
     code, data = jules("sessions", "POST", body)
     if code != 200:
         problem(issue, [f"Jules refused task #{num} for {target} (answer {code}).",
-                        "You need to do: in jules.google.com, give the Jules app access to " + target + ", then remove the label jules-stuck."])
+                        "You need to do: nothing yet; Claude reads the answer in the run log."])
         print(str(data)[:300])
         return
     session = data.get("name") or ("sessions/" + str(data.get("id", "")))
@@ -405,9 +448,6 @@ def main() -> None:
     Outputs: one line of text per lane, plus the actions above.
     Errors: none raised for GitHub or Jules refusals.
     """
-    if not KEY:
-        print("The JULES_API_KEY secret isn't set yet, so nothing was sent.")
-        return
     if os.path.exists("STOP"):
         print("STOP file on main.")
         return
@@ -418,6 +458,18 @@ def main() -> None:
     issues = [i for i in issues if "pull_request" not in i]
     if any(i["title"].strip().upper().startswith("STOP") for i in issues):
         print("Open STOP issue.")
+        return
+    global SOURCES
+    SOURCES, last = choose_key()
+    if not KEY:
+        print(f"No saved Jules key was accepted (last answer {last}), so nothing was sent.")
+        title = "Jules key not accepted"
+        if last and not any(i["title"] == title for i in issues):
+            gh(f"repos/{REPO}/issues", "POST", {"title": title, "body": (
+                f"Jules refused every saved key (answer {last}). The key must be the long code from the "
+                "API key section of https://jules.google.com/settings#api, saved at "
+                f"https://github.com/{REPO}/settings/secrets/actions/new as JULES_API_KEY. "
+                "Close this issue once it's saved; the Jules builder checks again on its next run.")})
         return
     now = datetime.now(timezone.utc)
     run_batches(issues, now)
