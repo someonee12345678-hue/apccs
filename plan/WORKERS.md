@@ -102,3 +102,8 @@ Built by ChatGPT for the Owner (someonee12345678-hue/deepseek-phone-bridge, PR #
   - **GitHub Copilot Free:** can't take an issue and open a PR, because the cloud agent is for paid plans only. Free gives 2,000 completions a month and limited chat.
   - **Cursor Free:** `@cursor` on an issue works only on Premium and up. Not usable free.
   - **Cline Cloud:** free with ClineFree models. You describe a task on a connected repo in the browser, and it returns a branch and a PR. There is no assign-an-issue route. Limits: 10 sessions at once, 50 new a day. Its sign-in is the Owner's (NOT CHECKED whether he has one).
+
+## Update 2026-11-27 11:05 (Claude): DeepSeek phone bridge, test 1 passed
+- deepseek-phone-bridge #12 "[DeepSeek] Bridge test 1: echo and capabilities" was answered by the phone at 2026-11-27 02:02 America/Vancouver and closed by the bridge with its result marker. DeepSeek's own answers: web search yes, DeepThink yes, reads links yes, reads attached files yes; one unified diff in one fence yes; replies up to a few thousand words; message limit per day or hour "not sure" (NOT CHECKED).
+- So the **text lane is live**: a [DeepSeek] issue gets an answer with no API and no cost, while the phone app is running. Use it for second opinions, research and drafting that need no repository access.
+- **Code lane: wait.** [DeepSeek-Code] applies the diff to the one checkout configured on the phone. Choosing the target project is still to be built (handoff A, item 4, "must not silently go to the wrong ... code repository"). So no code request goes out until W17 and ChatGPT's bridge work add that choice. DeepSeek also sees only what the request text carries, not the repository.
