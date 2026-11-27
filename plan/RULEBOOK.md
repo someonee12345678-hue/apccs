@@ -140,3 +140,11 @@ Added at the end of the file because this file only grows at the end. Owner, 202
 23. **When a step truly needs him** (his own login only), give the exact link, exactly what to tap, and why, in one short line; never a vague "configure it". (26 Nov 00:04: "I'm not sure what you're asking me to do.")
 24. **Usage lasts the week.** Plan Claude's weekly allowance to reach the Tuesday 13:00 reset; heavy work goes to the other workers first. (24 Nov 23:31)
 25. **Fresh chats are not his job.** He works on four projects in long, connected conversations; the system carries context through the logs, the rulebook and memory, so he never has to manage chats or re-explain. (25 Nov 23:33)
+
+## Owner's standing preferences 26 to 30 (added 2026-11-27, from his message of 01:05)
+
+26. **Claude is oversight first.** Claude audits, checks, rules and designs; it is not the builder. Building goes to the builders in plan/WORKERS.md (Jules, Codex, the DeepSeek phone bridge); Claude builds only when no builder can. ("I need you to optimize for audits. To be oversight not necessarily a builder.")
+27. **Questions don't go to Micah.** An agent that is stuck asks for help in this order: Muse → Gemini → Claude. Claude is reached through an apccs issue labelled `needs-claude`, which every Claude run answers first. Micah is asked only for his own logins, money or passwords, or a decision that only he can make. ("Muse is still asking me questions I don't need. It should bounce it to Gemini and ask for help if it can't figure out and if Gemini can't do it should bounce it too you.")
+28. **He doesn't review each job before it runs.** Results are always recorded (logs, audit comments, AUDIT_LOG_MUSE) so nothing is lost. ("I don't want to see it.")
+29. **No Gemini optimization for now.** Gemini is only the help step for Muse; don't build around it. ("Nothing has ever been optimized for Gemini. I'm not about to try at this time.")
+30. **The agents configure themselves.** When a tool or plan changes, the agents find out and update plan/WORKERS.md, their own settings and the work routing; Micah doesn't relearn the system. ("You guys are going to have to figure out how to configure yourselves for the optimal results.")
