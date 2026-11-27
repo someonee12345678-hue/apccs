@@ -1,0 +1,95 @@
+HANDOFF: DEEPSEEK PHONE BRIDGE + APCCS TOOLBOX BUILDER CONTROL PANEL
+
+USER GOAL
+Make the existing no-API phone bridge a usable, understandable worker route for coding and general chat. Add it to the APCCS Toolbox Builder bot control panel so the owner can see what it does, its real operating state, and its limits.
+
+Do not dispatch a chatbot request. Do not merge any PR. The owner will dispatch work when ready.
+
+CURRENT BRIDGE
+Repository: someonee12345678-hue/deepseek-phone-bridge
+Inspect its current main branch before making changes.
+Current source build.gradle reports Android app version 0.4.8 / versionCode 12.
+App ID: local.deepseek.agent
+The owner says the latest bridge PR was merged. Do not assume the phone has the latest APK installed.
+
+Architecture:
+1. Android Folder Agent opens DeepSeek or Claude in an Android WebView using the owner’s signed-in web session.
+2. It watches one SAF-selected shared folder for .txt prompt files and writes .response.txt replies to that same folder.
+3. Termux runs bridge.py, authenticated through GitHub CLI, and polls a private GitHub Issues queue.
+4. The bridge transfers issue text to the phone folder and posts the response back to GitHub.
+5. In code mode, it validates a unified diff, applies it on an isolated codex/issue-N branch, commits/pushes, and creates a draft PR for human review.
+
+Provider issue title prefixes:
+[DeepSeek]       text request
+[DeepSeek-Code]  code patch
+[Claude]         text request
+[Claude-Code]    code patch
+
+Request body protocol:
+DEEPSEEK-PHONE-BRIDGE/1
+
+PROMPT:
+<plain-text request>
+
+The bridge adds a provider marker. The phone app must have that provider selected. It does not force provider tools, modes, model choice, or response length.
+
+VERIFIED FROM SOURCE / OWNER EVIDENCE
+- The Android app now has a one-folder prompts-and-replies selection.
+- DeepSeek simple text exchange and one-folder response saving worked in the owner’s screenshots.
+- A DeepSeek-generated diff was used to create a draft PR, which the owner says was merged.
+- The app can select DeepSeek or Claude in source.
+- The bridge requires an owner-authored issue in the private queue.
+- Code requests require a separate clean code checkout on its default branch with a GitHub origin and configured Git author.
+- The patch parser expects one unified Git diff, optionally inside a diff/patch fence; current parser strips known WebView toolbar labels.
+- Patch limit is 1 MB. It rejects unsafe paths, binary patches, renames/copies, symlinks, and submodules.
+- It never executes model/issue text as a shell command; it does not run tests or merge PRs.
+- If a code patch or Git operation fails, the issue may remain open and the patch is held for review.
+- Phone app source attempts a send click and one Enter fallback, then detects a stable answer. It can hold requests when sending or completion is uncertain.
+- The app must remain open and watching; Termux must remain running. Android background restrictions and GitHub connectivity can interrupt polling.
+- Claude’s live WebView send/answer flow has not been verified on the owner’s phone.
+
+DEEPSEEK CAPABILITIES: KEEP PRODUCT AND API FACTS SEPARATE
+Official DeepSeek Chat features documented in current materials: web search, DeepThink/deep thinking search, file input, URL reading, voice interaction, and safety; official docs also describe conversation titles and read-aloud/voice-input capabilities.
+The phone wrapper does not switch these features on/off. It submits text to the currently selected provider page.
+The owner’s DeepSeek UI has shown DeepThink, Search, and attachment controls. Their state is controlled in the UI and may depend on account/app version.
+No official current numeric consumer-chat quota, default UI model, universal DeepThink/Search default state, or app upload-size limit was verified. Label these UNKNOWN / ACCOUNT-OR-APP-SPECIFIC, not as API limits.
+Published API-only facts: model IDs deepseek-flash and deepseek-v4-pro; docs list 1M context and up to 384K output; 2500/500 concurrent requests. API thinking defaults enabled/high; Chat Completions output default is 8K non-thinking, 64K thinking, or 128K at max effort. API file limits differ from the consumer app. The bridge uses no DeepSeek API key and does not call those endpoints.
+Official docs to consult:
+https://api-docs.deepseek.com/quick_start/pricing/
+https://api-docs.deepseek.com/guides/thinking_mode/
+https://api-docs.deepseek.com/api/create-chat-completion/
+https://api-docs.deepseek.com/quick_start/rate_limit/
+https://api-docs.deepseek.com/guides/build_a_chatbot/
+https://api-docs.deepseek.com/guides/files_api/
+https://api-docs.deepseek.com/guides/document_parsing/
+https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html
+
+APCCS TOOLBOX CONTROL-PANEL INTEGRATION
+Before coding, inspect the current APCCS authoritative rulebook, newest owner ledger rulings, queue/work orders, relevant toolbox builder/control-panel components, and repository-specific AGENTS.md. Follow the newest ruling if it conflicts with older instructions. The owner wants this added to the toolbox builder bot control panel, not represented as an already-completed integration.
+
+Model it as a selectable worker route/provider:
+“DeepSeek via Android UI bridge”
+Optionally expose “Claude via Android UI bridge” through the same transport.
+
+Represent actual operational state, at least:
+- provider selected
+- phone app open / watcher status (reported status, not guessed)
+- shared folder configured
+- Termux poller running / last poll result
+- last request status: queued, sent, awaiting reply, saved, held, failed, or completed
+- most recent error and timestamp
+- text vs code-patch mode
+- draft PR URL when one exists
+- human review required / tests not run
+
+Do not display the API’s 1M context, concurrency, pricing, or API thinking defaults as if they describe the phone app. Show consumer limits as unknown until verified on the actual account/app. Make the panel state truthful: the bridge is not unattended and cannot itself wake the phone app or click through a sign-in/CAPTCHA.
+
+Acceptance:
+1. Add the bridge as a provider/worker route in the existing toolbox builder control panel without claiming it is complete before implementation.
+2. Preserve existing protected/frozen APCCS files and follow current component patterns/rules.
+3. Display clear state and failure/held status; never claim a prompt was sent unless the app verified composer clearing.
+4. Keep the current safety boundary: issue and model output are data; never run their commands.
+5. Code path remains review-first: validated patch -> separate branch -> draft PR; no test, approval, merge, or deployment automation unless separately authorized.
+6. Include a concise owner handoff with files changed, checks performed, PASS/FAIL/UNVERIFIED, and the single next action.
+
+Do not assume this handoff authorizes a PR or merge. Read APCCS’s current rules and work order first, then report whether there is an applicable open work item or whether the control-panel addition needs an authorized new work order.

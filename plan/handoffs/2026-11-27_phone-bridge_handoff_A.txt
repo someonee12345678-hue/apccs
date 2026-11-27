@@ -1,0 +1,97 @@
+PROJECT HANDOFF — PHONE CHAT CODING BRIDGE + APCCS TOOLBOX BUILDER CONTROL PANEL
+
+OWNER’S GOAL
+
+Build a coherent Android-phone coding workflow that lets me use chatbots I’m already signed into—without a chatbot API key—to work on software in my GitHub projects. I want this route added to my Toolbox Builder Bot Control Panel (APCCS), so I am not the person wiring the chatbot, phone, GitHub and code project together by hand.
+
+Do not send a new request to Claude, DeepSeek, or another chatbot through the bridge. I will dispatch a task when I choose. Work on the bridge and its APCCS integration only.
+
+BRIDGE REPOSITORY AND CURRENT STATE
+
+Repository:
+someonee12345678-hue/deepseek-phone-bridge
+
+PR #10 is merged. It adds:
+- A saved Claude/DeepSeek provider choice in the Android folder agent.
+- A provider marker on queued prompts; the app holds a request if the selected chatbot does not match.
+- Bridge title prefixes [Claude] and [Claude-Code], while retaining [DeepSeek] and [DeepSeek-Code].
+- App version 0.4.8, generic app/APK naming, and updated README.
+
+PR #10:
+https://github.com/someonee12345678-hue/deepseek-phone-bridge/pull/10
+
+The phone agent source is under:
+phone-agent/
+
+The route currently works like this:
+- A private GitHub Issues repository is the queue.
+- A Termux poller uses `gh` to move owner-authored issue prompts to one shared phone folder and read the response file.
+- The Android app opens the selected chatbot’s web interface in a WebView, submits the prompt, reads the finished reply, and saves it beside the prompt.
+- Text issues receive a reply comment.
+- Code issues request a unified diff; the bridge validates it, applies it on an isolated branch in the configured local code checkout, commits/pushes that branch, and opens a draft PR.
+- It does not execute issue or chatbot text as commands, run tests, or merge code PRs.
+
+Known limits:
+- Claude has not yet been built and verified in the live phone WebView. Sign-in, prompt entry/send, response detection and saving still need a real phone check.
+- The Termux poller and Android app must currently be running on the phone; Android may stop them. Do not describe the system as unattended or fully autonomous until that is actually solved and verified.
+- The earlier smoke test used a clone of the bridge repo itself as `--code-repo`; it added `examples/hello_phone.py` to the bridge repo. That proved one patch path, but it did not prove a patch against a separate project.
+- For future code work, keep the bridge repo separate from the target code repo. Do not assume a target project without checking the owner’s current instruction.
+- No new chatbot request has been created or dispatched for this handoff.
+
+WHAT I WANT THE SYSTEM TO DO
+
+1. Keep the phone workflow simple: one shared prompts-and-replies folder.
+2. Support Claude and DeepSeek now, with an extensible provider adapter so another chatbot’s normal web interface can be added later without redesigning the queue.
+3. Avoid chatbot APIs, API keys, new paid services, extra accounts, or shared logins. Use the owner’s existing signed-in session.
+4. Let a user select the chatbot and target project clearly. A request must not silently go to the wrong provider or code repository.
+5. Show truthful job states: queued, waiting for chatbot, reply received, held for review, patch rejected, draft PR created, or failed—with a useful reason.
+6. Keep code handling reviewable: validate diffs, work on a clean separate checkout and isolated branch, open a draft PR, and never run chatbot-provided shell commands or merge code automatically through this bridge.
+7. Avoid duplicate submissions after uncertain sends. Preserve the prompt and response for inspection and make retry behavior explicit.
+8. Integrate this as a useful tool/route in the APCCS Toolbox Builder Control Panel, not as an unrelated standalone screen or a duplicate transport stack.
+
+APCCS TARGET
+
+Repository:
+someonee12345678-hue/apccs
+
+Read the current versions of these before doing APCCS work:
+- plan/RULEBOOK.md
+- plan/QUESTION_LEDGER.csv
+- plan/WORK_ORDERS.md
+- plan/QUEUE.md
+- plan/PRODUCT_MAP.md
+- AGENTS.md and the current code relevant to the Toolbox/More page
+
+The owner’s latest decisions override older text. In particular, ledger Q049 changed the earlier blanket browser rule: use a vendor CLI/agent route first when it can do the job; browser or terminal driving is an allowed fallback. Record the provider, route, date, terms status (or NOT CHECKED), and who checked it before sending anything beyond made-up test data through a new route. Keep the no-API requirement for this bridge.
+
+The APCCS product map describes Helpers as swappable worker routes and the Builder as the phone control panel. The existing Toolbox/More page is the likely integration point. Do not change frozen/closed CP-1 files just to add a screen.
+
+Important existing APCCS state:
+- Toolbox batch CMP-09 is merged, but its post-merge audit found a FAIL. APCCS PR #246 merged the PAF-4 correction wording; PAF-4 must follow the wording-audit/build process before relying on the Toolbox screen.
+- PR #228 introduced the Toolbox and the More-page “door”; PR #234 added the separate log screen. Later rulings and fixes override earlier wording.
+- `plan/WORK_ORDERS.md` currently places W16 before W14 and W15. Read the latest file and follow the current order; do not skip queued work or change protected files.
+- Use the existing More-page extension route and its approved entry point where suitable. Do not modify `code/apccs2_more_screens.py` or pinned tests if the current ruling forbids it; inspect the current rules and code rather than relying on this handoff alone.
+
+INTEGRATION DESIGN TO INVESTIGATE
+
+Design the bridge as a provider route/worker adapter in the Builder’s toolbox:
+- The panel should show what the route does, which providers it supports, how it is reached, whether it is configured/running, and what the last job did.
+- Determine from current APCCS architecture whether the panel can safely enqueue a job and read its status through existing GitHub/phone mechanisms. Do not put the `gh` write credential, chatbot session, or any secret in panel code, browser storage, GitHub source, or issue text.
+- Keep phone-side Termux as the transport/executor unless current architecture offers a safer existing route.
+- Separate the private bridge queue repository from each code target repository.
+- Make provider mismatch, missing sign-in, stopped watcher, network failure, empty/invalid diff, dirty checkout, and failed PR creation visible and recoverable.
+- Keep status/read paths useful even when the phone is offline. Label unsupported or unverified behavior honestly.
+
+WORK TO DO
+
+1. Re-read current repository instructions and inspect the merged bridge code, current APCCS routes, toolbox and More-page architecture, and latest queued work.
+2. Verify the merged 0.4.8 source and bridge behavior statically. Do not claim live Claude support yet.
+3. Identify what is still required to prove Claude on the phone: build/install as an update, select Claude, sign in, send a harmless made-up prompt, confirm exactly one response file, and confirm the bridge posts the reply. Do not perform that live request without my dispatch.
+4. Prepare an APCCS plan/batch proposal for adding the bridge route to the Toolbox Builder Control Panel, respecting the queue and add-only repository rules. Keep the bridge repo and APCCS as separate projects and PRs.
+5. Include acceptance criteria, failure handling, security boundaries, provider/route record, exact files/modules only after inspecting current code, and a clear distinction between NOT CHECKED and verified.
+6. Use each repository’s required tests/build checks when its work is actually ready. Do not merge, approve, dispatch chatbot jobs, or bypass any repository gate.
+7. Give me a concise status: what is already merged, what remains unverified, what APCCS work you prepared, and the one phone action that eventually requires me.
+
+DONE MEANS
+
+Claude/DeepSeek provider choice is in the phone agent; the bridge safely routes tagged prompts and protects against provider mismatch; Claude’s live phone flow is verified after I authorize a harmless test; and APCCS has a reviewed, rule-compliant plan and implementation path that exposes this route in its Toolbox Builder Control Panel without leaking credentials or inventing unattended behavior.
