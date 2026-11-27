@@ -10921,3 +10921,37 @@ Template, readability, faithful: PASS. Buildable and clear: one instruction coul
 **Status: PAF-4 (with D1–D6) is Ready to build.** This replaces the line "NOT ready to build until the wording audit marks it ready (Q039)" in its wording. No batch is held. That is a wording check only: PAF-4 is NOT CHECKED until it is built and its own tests pass.
 
 UNDO: a later add-only section can hold PAF-4 again or correct D1–D6. This audit changes no code and no earlier text.
+
+## Ruling: the two open OmniGuide FAILs from Muse's W15 audit — new Batch OAF-1 (Claude, 2026-11-27)
+
+**Source.** Muse's W15 completion record (Drive › Claude 2 › Builder Reports › `MUSE_REPLY_TASK_2026-11-26_W15_OMNIGUIDE_AUDIT_COMPLETION_2026-11-27`) and its "Post-merge audit (independent, Muse)" comments on omniguide #6 and #11. Totals for omniguide #1–#18: PASS 95 / FAIL 2 / NOT CHECKED 13. Claude checked both FAILs against omniguide `main` at `3f9defc` and confirms them:
+- **OG-6-02 (omniguide #6).** `webapp/src/state.js` has `saveSnapshot` (line 71) and `snapshotDue` (line 78), but no code outside the tests calls `saveSnapshot`. `main.js` `start()` (line 43) never takes a snapshot and nothing runs on exit. So "Taken every 50 entries and on clean exit" is not done.
+- **OG-11-06 and the latency scores (omniguide #11, addendum 6).** `webapp/src/recovery.js` has `fallbackQueue`, `nextInQueue` and `tryingText` (lines 39–79), but `webapp/src/player_view.js` still switches with `nextFallback` (line 164): no session lock, no 30-second wait and second pass, no "Trying <service> (n of m)..." overlay. `latencyGrade` does not exist, and `pickBestSource` (`channels.js` line 108) ignores latency. The follow-up PR "Batch OG-11 update (addendum 6)" that addendum 6 asked for was never opened.
+
+The NOT CHECKED lines (all of OG-10 Android, the OG-1-05 writer table, OG-17-03's cadence, live proxy and Drive sign-in) need a device or a live account. They stay NOT CHECKED; no batch is worded for them.
+
+### Batch OAF-1 — Snapshots actually taken, the fallback queue wired into the player, latency grades
+
+**Status: Ready to build.** OmniGuide group: the omniguide "Build and test" check is the gate; no wording audit (Owner, 2026-11-13 15:04).
+**Target repository:** `someonee12345678-hue/omniguide`. Canary: `Canary check: AUDIT = FIXED -> wired`. **Build only after:** this plan is merged. Pull request title: `Batch OAF-1: snapshots taken, fallback queue wired, latency grades`.
+**Files:** changes to `webapp/src/state.js`, `webapp/src/main.js`, `webapp/src/channels.js`, `webapp/src/recovery.js`, `webapp/src/player_view.js` and `webapp/src/us_view.js`; new test file `webapp/test/oaf1.test.js`. No other file changes. Every existing test keeps passing without being edited.
+
+#### OAF-1-01: autoSnapshotStore(store, getState) -> store, and cleanExitSnapshot(store, getState) (state.js, main.js)
+`autoSnapshotStore` returns an object with the same `storage`, `agent`, `all`, `replaceAll` and `verify` as `store`. Its `append(entry)` first calls `store.append(entry)`; then, unless that entry's `kind` is `state_snapshot`, if `snapshotDue(store.all())` is true it calls `saveSnapshot(store, getState())`. It returns the sealed entry from the first call. `getState` that is not a function throws `OG_BAD_STATE`. If the state fails `saveSnapshot`'s check, that error is thrown, and the triggering entry is already saved.
+`cleanExitSnapshot(store, getState)` calls `saveSnapshot(store, getState())` and returns its entry.
+`main.js` `start()`: builds its store as `autoSnapshotStore(createLedgerStore(storage, 'app'), () => current)`, where `current` starts as the state from `recover`. `start()` keeps every key it returns today and adds `store` and `setState(s)` (replaces `current`). In the browser block, register once: `pagehide`, and `visibilitychange` when `document.visibilityState === 'hidden'`, each calling `cleanExitSnapshot` (errors are caught; exit is never blocked).
+Tests: `oaf1_01_no_snapshot_before_50`; `oaf1_01_snapshot_after_50_entries` (fresh in-memory storage, 50 appends through the wrapped store give exactly one `state_snapshot` as entry 51; `snapshotFrom` returns the state; `verify` passes); `oaf1_01_snapshot_on_clean_exit` (then `recover` restores from that snapshot).
+
+#### OAF-1-02: latencyGrade(ms) and latency in pickBestSource (channels.js, us_view.js)
+Exactly addendum 6. `latencyGrade(ms)`: under 100 -> `"excellent"`; 100 to 500 -> `"good"`; over 500 -> `"fair"`; a value that is not a finite number 0 or more -> `null` (no grade). Health entries keep their key and gain `latencyMs`. `pickBestSource` sorts by failures, then quality, then grade (`"fair"` after `"excellent"` and `"good"`; no grade counts as `"good"`), then the `SOURCES` order. The player sets `health[key].latencyMs` to the time from `load` to the first `loadedmetadata`.
+`us_view.js`: when "Test US proxy" gets a `/health` reply with a number in `upstream_ms`, it also shows `Proxy speed: <grade> (<ms> ms)`.
+Tests: `latency_grade_thresholds` (99 excellent, 100 good, 500 good, 501 fair, -1 and NaN null); `fair_sources_sorted_last` (same quality: good before fair; a fair HD source still comes before a good SD one).
+
+#### OAF-1-03: queueStep(queue, failedSource, queueState) and the player wiring (recovery.js, player_view.js)
+`queueStep` calls `nextInQueue` and returns `{action, next, waitMs, text, state}`: `action` is `"switch"` (waitMs 0), `"wait_then_switch"` (waitMs `CYCLE_WAIT_MS`, `next` is `queue[0]`) or `"give_up"` (`next` null). `text` is `tryingText(queue, next)`, or null when `next` is null.
+`player_view.js`: `startPlayer` takes `options.channelEntry`, and every caller of `startPlayer` in `webapp/src` passes it. A module-level `sessionLock = {}` lives for the page's session and is never saved. The player keeps `queue = fallbackQueue(options.channelEntry, health, sessionLock)`. A queue source is played by building its plan with `playbackPlan({ ...options.channelEntry, sources: [source] }, health, options.canPlay || (() => true))`. In `onTrouble`, the reset decision stays as it is; after it, the player uses `queueStep`, not `nextFallback`:
+- `"switch"`: show `text` in the overlay, then `switchTo`.
+- `"wait_then_switch"`: show `text`, wait `waitMs`, then switch.
+- `"give_up"`: the existing "All sources failed" path, unchanged.
+When a source reaches `playing`, set `sessionLock[channelKey]` to `<source>:<sourceChannelId>`. Every switch is still logged as a `stream_event`. `player.js` and `georoute.js` are not changed.
+Tests: `oaf1_03_queue_step_switch_wait_give_up` (3-source queue: two switches, one wait of 30000, then give up after the second pass); `oaf1_03_text_names_position` (`Trying <label> (2 of 3)...`). Also `oaf1_03_player_view_uses_queue`. DOM code is not unit-tested in this repository, so this test reads `player_view.js` as text. It checks that `fallbackQueue` and `queueStep` are imported from `./recovery.js`, that `sessionLock` and `channelEntry` appear, and that `nextFallback(` is not called.
