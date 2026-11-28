@@ -54,3 +54,43 @@ CHANGED: New handoff proposal only; UNDO: revert this plan-only PR.
 SOURCE: APCCS main fae8f14f0e031e8dd1d1298b0e742caa3ec13c13; PB-1 to PB-3 in PR #275; bridge PR #31; Owner-provided Termux screenshot.
 OPEN: PB-1 to PB-3 implementation status, PR #31 checks/review, live Termux recovery, and final PB batch wording are NOT CHECKED here.
 NEXT: Claude reviews this proposal and adds the accepted PB batch wording to plan/QUEUE.md.
+## Addendum — universal workers, not a Termux-only design (2026-11-28)
+
+The Owner's correction: the goal is a universal builder-bot control path. No bot vendor, Android terminal, or runtime should be required. Any bot with explicitly granted GitHub access should be able to submit the same job format; a worker can be selected by capability.
+
+### Recommended architecture
+
+Use **GitHub as the durable queue and status ledger**, with a small versioned job contract and replaceable workers. This avoids exposing a listening shell on the phone, avoids new paid services, and lets bots use the GitHub access they already have. The worker only performs allowlisted job types and target repositories; it does not execute commands supplied in free-form prompt text.
+
+Suggested job fields: protocol version, unique job ID, project/repository, task kind, pinned base SHA, allowed paths, idempotency key, requesting bot/account, attempt count, lease owner/expiry, status, safe error category, and result/PR link. Keep prompt or patch payload separate from status receipts; never put private case material or credentials in GitHub.
+
+Use one state machine across workers: QUEUED → CLAIMED → RUNNING → REVIEW → DONE, or FAILED / HELD. Every claim has an expiry and every write uses the job ID as an idempotency key. A retry after a lost connection must return the existing job/PR or safely resume its pinned patch; it must not submit to the chatbot again or create duplicate work.
+
+### Worker choices and fit
+
+| Worker | Use | Trade-off |
+|---|---|---|
+| GitHub-hosted Actions runner | **Default for code checks, tests, and build jobs.** It wakes from repository events; standard hosted runners are free and unlimited for public repositories. | It cannot operate a signed-in chatbot app on the phone. Keep each workflow scoped to its own repository and grant only the permissions that job needs. |
+| Android app worker | Optional adapter only for tasks that require the phone's signed-in chatbot UI or local files. Use the same job contract, durable unique work, retry state, and a visible health receipt. | WorkManager survives app/process restarts and reboot, but periodic work has a 15-minute minimum and may run later due to OS power controls. Fast continuous polling needs a foreground service and a persistent notification, which consumes visible phone resources. It is not the quick default. |
+| Termux worker | Compatible adapter for existing installs and local scripts. | Keep it replaceable; do not make the universal protocol depend on shell commands, pgrep, a particular path, or a Termux boot add-on. |
+| Existing free Linux server/runner | Optional adapter if one is already available. | No such server is confirmed in this task; the design must not require one. |
+
+### Security and recovery rules
+
+- Accept jobs only from an allowlisted GitHub account/repository and a strict schema. Treat issue text as untrusted data: never interpolate it into shell commands or treat it as an instruction to the worker.
+- Pin the target base SHA, enforce a per-repository path allowlist, use an isolated checkout, and publish only a branch/PR. The server gate remains the only merger.
+- Give Actions' GITHUB_TOKEN the minimum permissions required for that job. Do not expose it, phone tokens, or chatbot session data to a model or job payload.
+- Retry only transient transport failures, with a cap and idempotency check. Missing timezone data (the observed America/Vancouver ZoneInfo failure), invalid patches, permission failures, and failing tests are classified and held with a plain next action; they do not loop-retry or claim success.
+- A worker heartbeat expires. If the phone worker is absent or stale, the control panel says OFFLINE / NOT CHECKED and offers the cloud route when the task supports it. It never says Ready from a saved old heartbeat.
+- A phone-specific job may wait for the phone worker. Ordinary code building, tests, and repository checks continue on GitHub Actions without waiting for Termux.
+
+### Official documentation checked
+
+- GitHub Actions runner choice and public-repository standard runner availability: https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job
+- GitHub Actions token permissions and untrusted workflow input safety: https://docs.github.com/en/actions/reference/security/secure-use
+- GitHub issue events and the default-branch workflow requirement: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
+- Android WorkManager persistence, retry, and constraints: https://developer.android.com/develop/background-work/background-tasks/persistent
+- Android periodic WorkManager minimum interval: https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work
+- Android foreground-service visibility and start restrictions: https://developer.android.com/develop/background-work/services/foreground-services
+
+**Recommendation to Claude:** revise the next PB batch around the shared job contract and worker capability routing. Make GitHub Actions the ordinary-worker path and keep phone/Termux as an optional UI adapter. First inspect the actual merged PB-1 to PB-3 code; keep this proposal implementation-neutral where those APIs are not yet present. Do not add a new server dependency or direct remote-shell command channel.
