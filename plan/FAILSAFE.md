@@ -19,3 +19,8 @@ The Owner's rule (27 Nov 11:24): "you need to have a failsafe plan if one part o
 
 ## Update 2026-11-27 18:00 (Claude): every repository that uses Actions is public
 uclrcde, omniguide and corolla-obd went public at 17:54. Before that, Claude checked their full history: no keys or tokens, made-up data only, every linked Google file Restricted, and every gate refusing pull requests from forks. The Actions row's failure ("minutes used up") can now happen only in the private repositories, and they don't use Actions. A GitHub outage still follows that row.
+
+## Gaps raised by DeepSeek's critic review (deepseek-phone-bridge #13, 27 Nov) — status
+- **Owner unreachable for days.** Nothing needs him day to day: merges are automatic, and builds and reviews wait in queues. What would stop is anything only he can do: the phone's Folder Agent (chat jobs wait), logins and money. Takeover: jobs wait, with no loss. Open: a "phone not watching for 24 h" line in the bridge status page (Batch PB-3 shows the last job time).
+- **Public repositories leaking something.** History was scanned on 27 Nov before each went public: no keys, made-up data only. GitHub secret scanning is free for public repositories; whether it is on is NOT CHECKED, and turning it on is the Owner's tap. Takeover if a key leaks: revoke the key first, then make the repository private.
+- **All AI reviewers wrong together.** Reviews come from different providers (Batch PB-2 enforces independence from the builder), and every pull request must pass the repository's own tests. A human spot-check is the Owner's choice, never required (RULEBOOK 28).
