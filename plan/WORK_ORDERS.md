@@ -670,3 +670,10 @@ The order of work is now W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W14
 
 ## Note on W19 (2026-11-27 18:00, Claude in chat): done by another route
 Every repository that uses Actions is now public: apccs, uclrcde, omniguide and corolla-obd (Owner, 27 Nov 12:50 and 17:54). Standard GitHub-hosted runners are free in public repositories, so the monthly minutes no longer limit anything. Step 1 is done: #267 re-ran and merged, and the other three repositories had no waiting pull requests. Steps 2 and 3 are no longer needed. The private repositories (deepseek-phone-bridge, elite-kit, genesis, aab-keystore-diagnostic-build) used 0 minutes in November. **W19 counts as done.** Skip it.
+
+## Note on W17 (2026-11-27 20:10, Claude in chat, from apccs issue #274)
+The bridge is live at Folder Agent 0.4.10 (evidence: deepseek-phone-bridge #22 and #23, phone-bridge-smoke-test PR #2). The wording is in plan/QUEUE.md: "## Phone chat bridge route —", Batches PB-1, PB-2 and PB-3. It adds the Owner's 27 Nov goal: automatic review routing to an independent enabled reviewer, with Claude optional and AUDIT PENDING when nobody can take the review.
+- **Who builds:** DeepSeek through the phone bridge (RULEBOOK 33). It replaces "Jules or Codex" above.
+- **No wording audit run:** the built pull requests get an independent review from Codex (Muse's standing "@codex review") before merge and from Muse after merge (RULEBOOK 28 and 33).
+- **Dispatch:** PB-1 and PB-2 on 27 Nov. PB-3 once both are merged, with FILES naming their modules.
+- W17 is done when the three directed issues exist, as its "Done when" says.

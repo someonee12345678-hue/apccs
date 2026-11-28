@@ -10955,3 +10955,149 @@ Tests: `latency_grade_thresholds` (99 excellent, 100 good, 500 good, 501 fair, -
 - `"give_up"`: the existing "All sources failed" path, unchanged.
 When a source reaches `playing`, set `sessionLock[channelKey]` to `<source>:<sourceChannelId>`. Every switch is still logged as a `stream_event`. `player.js` and `georoute.js` are not changed.
 Tests: `oaf1_03_queue_step_switch_wait_give_up` (3-source queue: two switches, one wait of 30000, then give up after the second pass); `oaf1_03_text_names_position` (`Trying <label> (2 of 3)...`). Also `oaf1_03_player_view_uses_queue`. DOM code is not unit-tested in this repository, so this test reads `player_view.js` as text. It checks that `fallbackQueue` and `queueStep` are imported from `./recovery.js`, that `sessionLock` and `channelEntry` appear, and that `nextFallback(` is not called.
+
+## Phone chat bridge route — worker route, job status and independent review routing (Claude, 2026-11-27, W17)
+
+**Why.** Work order W17, and the Owner's handoff of 27 Nov 19:48 (apccs issue #274). The phone bridge is an optional, replaceable worker route in the Builder Toolbox. DeepSeek works through the Owner's signed-in phone chat, with no API credits. Reviews go automatically to an enabled reviewer that is independent of the builder. Claude is optional. When nobody can take the review, the system records **AUDIT PENDING** with the reason. The Owner never picks a reviewer or copies prompts.
+
+**Verified, with evidence:**
+- Folder Agent 0.4.10 was built and its APK signature verified (deepseek-phone-bridge #22, source 8b701a3).
+- Termux:Boot started one worker after a reboot (Owner's output).
+- Live job #23 used TARGET and FILES, captured DeepSeek's whole patch, and opened draft PR phone-bridge-smoke-test #2. That draft adds only the proof file with the synthetic canary; the four project repositories were untouched.
+- From the bridge source and README at 8b701a3:
+  - TARGET may only be apccs, uclrcde, omniguide or corolla-obd.
+  - FILES lists up to 32 paths. Their context is capped at 48,000 bytes, and absent paths are marked NEW.
+  - The pull request opens in the target repository from branch `deepseek/<issue>`, as a draft unless the request has `READY: yes`.
+  - Job states are posted to the queue issue as hidden markers: `<!-- phone-bridge:<n>:<state>:<hex> -->` with states picked-up, sent, applied, failed, apk-start and apk-result; `<!-- deepseek-phone-bridge-code-result:<n>:<hex> -->` for a code result; `<!-- deepseek-phone-bridge-result:<n>:<hex> -->` for a text reply.
+  - The visible text of the failed comment is, for example, "Failed to prepare job: Target checkout has local changes."
+
+**NOT CHECKED:**
+- Other bots' posting access to the private queue.
+- Automatic network retry.
+- Automatic review fallback.
+- DeepSeek's consumer message limits.
+- DeepSeek's terms for driving its web chat (Q049).
+- Failure texts other than the one above.
+
+**Operating limits:**
+- Chat jobs need the Folder Agent open and watching; APK builds need only the Termux worker.
+- The queue takes requests only from the Owner's GitHub identity.
+
+**Rules for all three batches:**
+- Target repository: someonee12345678-hue/apccs. New files only; no existing file changes, and frozen files and pinned tests stay as they are.
+- Python 3.11 standard library only. Made-up data in every test. No network, no AI model, no key, token or password anywhere.
+- Each instruction has a normal-use test and a bad-input test. One test class per batch. The test file prints the batch's canary line and ends with `if __name__ == "__main__": unittest.main()`. Tests import modules by bare name, as code/test_apccs2_toolbox_fixes.py does.
+- Readability gate (Q036–Q038):
+  - every function and method, tests included, has type hints and a docstring with `Inputs:`, `Outputs:` and `Errors:`;
+  - snake_case names;
+  - no function name starts with export, write_, save, persist, serialize or to_, and none contains dump;
+  - no file is written; results are returned, or go into a SQLite connection passed in;
+  - no pickle, marshal, shelve or struct.
+- Errors are ValueError whose message starts with the batch's code prefix and a colon.
+- `python3 -I tools/run_all_tests.py` must print SAFE TO MERGE.
+- Projects stay separate: nothing here imports or changes the bridge repository.
+
+### Batch PB-1 — Bridge route record, job-status reader and request format
+**Status: Ready to build.** Builder lane: DeepSeek through the phone bridge (RULEBOOK 33). **Build only after:** nothing. New files: `code/apccs2_bridge_route.py`, `code/test_apccs2_bridge_route.py`. Test class `ApccsBridgeRouteTests`. Canary: `Canary check: BRIDGE = ROUTE -> status`. Error prefix `BR_`.
+- **PB-1-01 `route_record(provider: str, queue_repo: str, checked_on: str, terms_status: str = "NOT CHECKED", checked_by: str = "Claude") -> dict`.**
+  - Provider is "DeepSeek" or "Claude".
+  - queue_repo matches `owner/name` (letters, digits, `.`, `_`, `-`).
+  - checked_on is YYYY-MM-DD.
+  - Returns those values, plus these fixed fields: route "Android UI bridge: phone WebView with the Owner's signed-in session, no API key"; unattended "no (chat jobs need the Folder Agent open and watching)"; runs_tests "no"; merges "no"; consumer_limits "unknown"; review "by an independent reviewer (Batch PB-2)".
+  - The record never holds context size, concurrency or pricing keys.
+  - Errors: BR_BAD_PROVIDER, BR_BAD_REPO, BR_BAD_DATE.
+- **PB-1-02 `read_bridge_markers(text: str) -> list`.**
+  - Finds every hidden marker in the formats above and returns `{"issue": int, "state": str}` in text order.
+  - A code-result marker gives state "code-result" and a text-reply marker gives "reply".
+  - Unknown or malformed markers are skipped.
+  - Errors: BR_BAD_TEXT when text is not a string.
+- **PB-1-03 `job_status(evidence: dict) -> dict`.**
+  - evidence is `{"title": str, "open": bool, "comments": [{"body": str, "time": str}]}`.
+  - Returns `{"state", "reason", "time", "pr_link"}`. The state is one of: queued, picked up, sent to chatbot, reply received, diff applied, pull request created, failed, unknown.
+  - The last marker in comment order decides the state, and its comment's time is the time.
+  - A code-result comment gives "pull request created" with the first `https://github.com/<owner>/<repo>/pull/<n>` link in it.
+  - "failed" takes its reason from PB-1-04.
+  - No markers: an open issue is "queued"; a closed one is "unknown".
+  - The state is never "sent to chatbot" without a sent marker.
+  - Errors: BR_BAD_EVIDENCE.
+- **PB-1-04 `failure_reason(text: str) -> dict`.** Returns `{"kind", "detail"}`, where detail is the first visible line with markers removed. Kinds:
+  - "dirty checkout" for "Target checkout has local changes" (verified);
+  - "bad target" for "TARGET";
+  - "files too large" for "48,000" or "FILES";
+  - "pull request not created" for "PR creation" or "push";
+  - "held for review" for "held";
+  - "other" for anything else.
+
+  Only the first kind's text is verified; the others are keyword matches, and the docstring says so. Errors: BR_BAD_TEXT.
+- **PB-1-05 `request_text(kind: str, title: str, target: str, files: list, prompt: str, ready: bool) -> dict`.** Builds the exact queue issue `{"title", "body"}` that the panel shows; it sends nothing.
+  - kind "code": title `[DeepSeek-Code] <title>`; body `DEEPSEEK-PHONE-BRIDGE/1`, `TARGET: someonee12345678-hue/<target>`, `FILES: a, b`, `READY: yes` only when ready, a blank line, `PROMPT:` and the prompt.
+  - kind "text": title `[DeepSeek] <title>`, and the body has no TARGET or FILES.
+  - The target must be one of the four allowed. Files: up to 32 distinct relative paths, none absolute, none containing `..` or `.git`.
+  - Errors: BR_BAD_KIND, BR_BAD_TARGET, BR_BAD_FILES, BR_EMPTY_PROMPT, and BR_SECRET when the title or prompt contains `ghp_`, `github_pat_`, `AIza`, `sk-` or `-----BEGIN`.
+
+### Batch PB-2 — Independent review routing, with AUDIT PENDING
+**Status: Ready to build.** Builder lane: DeepSeek through the phone bridge. **Build only after:** nothing. New files: `code/apccs2_review_router.py`, `code/test_apccs2_review_router.py`. Test class `ApccsReviewRouterTests`. Canary: `Canary check: REVIEW = ROUTED -> independent`. Error prefix `RR_`.
+- **PB-2-01 `DEFAULT_REVIEWERS` and `reviewer_table(overrides: dict | None = None) -> list`.** The default table, in this order:
+  - "codex": provider OpenAI, stage "before merge", how "a pull request comment: @codex review", enabled True;
+  - "deepseek": provider DeepSeek, stage "before merge", how "a [DeepSeek] text request in the phone bridge queue with the pull request link (the four repositories are public)", enabled True;
+  - "muse": provider Meta, stage "after merge", how "Muse's standing post-merge audit", enabled True;
+  - "claude": provider Anthropic, stage "either", how "an apccs issue labelled needs-claude", enabled False (Claude is optional).
+
+  Every reviewer has reachable "unknown" until told otherwise. overrides maps a reviewer id to any of `{"enabled": bool, "reachable": "yes"|"no"|"unknown", "note": str}`. Returns new dictionaries; the constant is never changed. Errors: RR_BAD_REVIEWER for an unknown id, RR_BAD_OVERRIDE for a bad value.
+- **PB-2-02 `builder_provider(builder: str) -> str`.** Maps "deepseek" and "deepseek-bridge" to DeepSeek; "codex" and "chatgpt" to OpenAI; "jules" to Google; "claude" to Anthropic; "muse" to Meta. Errors: RR_BAD_BUILDER.
+- **PB-2-03 `choose_reviewer(builder: str, reviewers: list, stage: str) -> dict`.** stage is "before merge" or "after merge". A reviewer is eligible when:
+  - enabled is True;
+  - its provider differs from the builder's provider (independence);
+  - its stage equals the stage or is "either";
+  - reachable is not "no".
+
+  The first eligible reviewer with reachable "yes" wins. Otherwise the first eligible one with "unknown" wins, with confirmed False.
+  - Result when one is found: `{"status": "ROUTED", "reviewer", "provider", "confirmed": bool, "skipped": [{"id", "why"}]}`.
+  - When none is eligible: `{"status": "AUDIT PENDING", "reason": <one plain sentence naming each reviewer and why it was skipped>, "skipped": [...]}`.
+
+  Errors: RR_BAD_STAGE, and RR_BAD_BUILDER from PB-2-02.
+- **PB-2-04 `review_request(reviewer: str, repo: str, pr_number: int) -> dict`.** Returns `{"channel", "title", "body"}`; nothing is sent:
+  - codex: channel "pr-comment", body exactly `@codex review`.
+  - deepseek: channel "bridge-queue", title `[DeepSeek] Review <repo> PR #<n>`, and a body in the bridge protocol (`DEEPSEEK-PHONE-BRIDGE/1`, blank line, `PROMPT:`) that asks DeepSeek to read `https://github.com/someonee12345678-hue/<repo>/pull/<n>/files` and to be a critic: give each problem with file and line, PASS or FAIL for each instruction the pull request names, and NOT CHECKED for anything it couldn't read.
+  - muse: channel "standing-job" with empty title and body (Muse audits after merge by itself).
+  - claude: channel "apccs-issue", title `Review: <repo> PR #<n>`.
+
+  repo is one of apccs, uclrcde, omniguide or corolla-obd; pr_number is a whole number of 1 or more, not a bool. Errors: RR_BAD_REVIEWER, RR_BAD_REPO, RR_BAD_PR.
+- **PB-2-05 `record_review_route(db: sqlite3.Connection, repo: str, pr_number: int, builder: str, decision: dict, time: str) -> int` and `pending_reviews(db: sqlite3.Connection) -> list`.**
+  - record_review_route creates the table `review_routes(id INTEGER PRIMARY KEY, repo, pr, builder, status, reviewer, reason, time)` if it is missing, inserts one row with parameters only (no string-built SQL), and returns its id.
+  - pending_reviews returns the AUDIT PENDING rows as dictionaries, oldest first.
+  - Errors: RR_BAD_DB, RR_BAD_DECISION (status not ROUTED or AUDIT PENDING), and RR_BAD_REPO and RR_BAD_PR as in PB-2-04.
+
+### Batch PB-3 — Read-only "Phone chat bridge" page in the panel
+**Status: Ready to build after PB-1 and PB-2 are merged.** Builder lane: DeepSeek through the phone bridge. New files: `code/apccs2_bridge_panel.py`, `code/test_apccs2_bridge_panel.py`. Test class `ApccsBridgePanelTests`. Canary: `Canary check: BRIDGE = PAGE -> read only`. Error prefix `BP_`. The page is added the way PAF-2 added the offline files: wrap `apccs2_panel_offline.handle_offline_request`, and answer only its plain 404 for the new paths. The door's MORE_PLAN and code/apccs2_more_screens.py are not touched.
+- **PB-3-01 `bridge_page_data(config: dict) -> dict`.**
+  - config may name `bridge_status_file`, a JSON file inside the repository, checked the way `apccs2_toolbox_fixes.check_copy_path` checks a path, and read only. It holds `{"route": {...route_record arguments}, "jobs": [evidence as PB-1-03], "reviews": [{"repo", "pr", "builder", "stage"}]}`.
+  - Returns:
+    - route, from `route_record`;
+    - last_job, from `job_status` on the last job;
+    - last_error, the last failed job's reason, or none;
+    - reviews, one `choose_reviewer` result each, with `reviewer_table()` defaults;
+    - notes, fixed: "Human review required. The bridge runs no tests.", "Chat jobs need the Folder Agent open and watching.", "This page sends nothing."
+  - No file, or no config key: status "NOT CHECKED" with reason "no bridge status file". Nothing is guessed.
+  - Errors: BP_BAD_CONFIG, BP_BAD_FILE (not JSON or wrong shape); BR_ and RR_ errors pass through.
+- **PB-3-02 `bridge_page_html(data: dict) -> str`.**
+  - One static HTML page with no script, every value escaped with `html.escape`.
+  - It shows: what the route does, its providers, how it is reached, the last job (state, reason, time, pull request link), the last error, each review route (ROUTED with the reviewer, or AUDIT PENDING with the reason), the exact queue issue title format from `request_text`, and the notes.
+  - Errors: BP_BAD_DATA.
+- **PB-3-03 `handle_bridge_request(config: dict, request: dict, panel_handlers: dict | None = None, more_handlers: dict | None = None) -> dict`.**
+  - First calls `apccs2_panel_offline.handle_offline_request` with the same arguments; more_handlers defaults to `apccs2_toolbox_fixes.build_fixed_more_handlers()`.
+  - Only when that answer is the plain 404 with body `apccs2_more_screens.NOT_FOUND`:
+    - GET `/bridge.html` gives 200 with the page, Content-Type `text/html; charset=utf-8` and `Content-Security-Policy` `apccs2_control_panel.CSP_LINE`;
+    - GET `/api/bridge/status` gives 200 with the JSON of `bridge_page_data(config)`;
+    - any other verb on those two paths gives 405 with `Allow: GET`.
+  - Every other answer is returned unchanged. Exceptions become 500 `{"status": "ERROR", "reason": "internal error"}`; no traceback is shown.
+- **PB-3-04 `run_bridge_server(config: dict, host: str = "127.0.0.1", port: int = apccs2_control_panel.DEFAULT_PORT, ready_event: threading.Event | None = None) -> None`.**
+  - Works like `apccs2_panel_offline.run_offline_server`, but every request is answered through `handle_bridge_request`.
+  - Only `apccs2_control_panel.ALLOWED_HOSTS` are accepted, and port is 0 to 65535.
+  - Errors: BP_HOST_REFUSED, BP_BAD_PORT and BP_BAD_CONFIG, raised before any socket opens.
+  - The test serves on 127.0.0.1 port 0, fetches `/bridge.html` and `/api/bridge/status` with urllib from 127.0.0.1 only, and shuts down.
+- **PB-3-05 `bridge_secret_check(texts: dict) -> dict`.**
+  - texts maps a name to source or page text.
+  - FAIL lists every text holding `ghp_`, `github_pat_`, `AIza`, `sk-`, `-----BEGIN`, `Authorization:`, `urllib.request.urlopen(`, `http.client` or `socket.create_connection`. Otherwise the result is PASS.
+  - The test reads `code/apccs2_bridge_panel.py` read-only, plus a built page, and asserts PASS. A made-up text holding `ghp_` must FAIL.
+  - Errors: BP_BAD_TEXTS.
