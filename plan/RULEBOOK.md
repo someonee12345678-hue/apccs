@@ -156,3 +156,10 @@ Added at the end of the file because this file only grows at the end. Owner, 202
 ## Rule 32 (added 2026-11-27, from the Owner's message of 11:24)
 
 32. **Every part has a failsafe.** plan/FAILSAFE.md lists each part of the system, how it fails, what notices, what takes over, and what prevents it. A new part or worker isn't live until it has a row there. When a part fails, the system switches to the takeover in that row by itself, and Micah hears only if a decision is his. (27 Nov 11:24, after GitHub's email that the month's Actions minutes were used up: "you need to have a failsafe plan if one part of the project starts to fail.")
+
+## Rule 33 (added 2026-11-27, Owner's answer at 18:00)
+
+33. **Claude never builds code. ChatGPT/Codex and DeepSeek build.** ("Why are you using Claude builder ... You have chatgdp and deepseek to build. I have never asked you to do building.") This replaces item 26's fallback: when no ChatGPT or DeepSeek lane can take a batch, the batch waits; it does not go to a Claude builder. Claude's work is oversight: rulings, wording, audits of results, failsafe and routing. The Claude builder (trig_01XdLR5PQ479Z8vha6j6ZKh8) stays off. The Dec 1 restart task now brings back only the work-order runner. The OmniGuide builder (trig_01B2FtSJUwP4D4izxNbpWose) acts only on "Directed: OG-" issues, and none will be opened. Turning it off needs the Owner's tap; Claude's request to do it was refused by the safety check. Lanes:
+- **DeepSeek** takes building through [DeepSeek-Code] bridge issues once deepseek-phone-bridge #14 (target repository and files) is built.
+- **ChatGPT** builds the bridge itself and anything the Owner hands it. Codex reviews every pull request.
+- **Muse** audits after each merge.
