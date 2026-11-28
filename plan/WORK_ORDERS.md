@@ -667,3 +667,6 @@ Each apccs change costs about 9 job-minutes: tests on the pull request, the guar
 - **Step 3, tripwire (software, no AI):** new `code/apccs_actions_budget.py` with its test. It counts this month's job minutes in the four private repositories from the repo runs and jobs API. Daily status runs it. From 1,500 (75%) it opens one issue a month, "Actions minutes at N%", labelled `needs-claude`, and the gate skips the re-test on main until the 1st (saver mode).
 
 The order of work is now W1, W6, W2, W3, W8, W4, W5, W9, W10, W11, W12, W13, W14, W19, W18, W16, W17, W15, W7. W7 stays last, because it is never finished.
+
+## Note on W19 (2026-11-27 18:00, Claude in chat): done by another route
+Every repository that uses Actions is now public: apccs, uclrcde, omniguide and corolla-obd (Owner, 27 Nov 12:50 and 17:54). Standard GitHub-hosted runners are free in public repositories, so the monthly minutes no longer limit anything. Step 1 is done: #267 re-ran and merged, and the other three repositories had no waiting pull requests. Steps 2 and 3 are no longer needed. The private repositories (deepseek-phone-bridge, elite-kit, genesis, aab-keystore-diagnostic-build) used 0 minutes in November. **W19 counts as done.** Skip it.

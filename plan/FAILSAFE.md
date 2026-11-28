@@ -16,3 +16,6 @@ The Owner's rule (27 Nov 11:24): "you need to have a failsafe plan if one part o
 - The 2,000 free minutes now cover only the private repositories: uclrcde, omniguide and corolla-obd, about 500 a month. W19's trim and tripwire still apply to those three.
 - The checks on #267 were re-run at 19:49 UTC and passed, and the gate merged it. The other repositories wait for the 1 Dec reset (issue #268).
 - A public repository's gate still merges only pull requests whose branch is inside apccs itself (gate rule 5). A pull request from a fork waits for the Owner.
+
+## Update 2026-11-27 18:00 (Claude): every repository that uses Actions is public
+uclrcde, omniguide and corolla-obd went public at 17:54. Before that, Claude checked their full history: no keys or tokens, made-up data only, every linked Google file Restricted, and every gate refusing pull requests from forks. The Actions row's failure ("minutes used up") can now happen only in the private repositories, and they don't use Actions. A GitHub outage still follows that row.
